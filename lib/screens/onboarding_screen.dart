@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
+import 'dart:async' show unawaited;                // ⬅️ nuevo
 
 import '../widgets/bottom_nav_bar.dart';
 import '../services/achievement_service.dart';
@@ -35,13 +36,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       'substance': _substance,
     });
 
-    await AchievementService.scheduleMilestones(_startDateTime!);
-
     if (!mounted) return;
+
+    // 1️⃣ Navegamos inmediatamente
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const BottomNavBar()),
     );
+
+    // 2️⃣ Programamos los hitos SIN esperar
+    unawaited(AchievementService.scheduleMilestones(_startDateTime!));
   }
 
   /* ───────── Selección fecha y hora ───────── */
@@ -76,6 +80,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
+  /* ───────── UI ───────── */
   @override
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme.primary;
@@ -85,7 +90,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         controller: _pageCtrl,
         physics: const NeverScrollableScrollPhysics(),
         children: [
-          /* ── PASO 1 ── */
+          /* PASO 1 */
           _StepContainer(
             headline: 'Selecciona la fecha y hora\nde tu sobriedad',
             center: ElevatedButton.icon(
@@ -100,7 +105,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     '${_startDateTime!.minute.toString().padLeft(2, '0')}',
           ),
 
-          /* ── PASO 2 ── */
+          /* PASO 2 */
           _StepContainer(
             headline: '¿Cuál es tu sustancia principal?',
             center: Wrap(
@@ -112,7 +117,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     (e) => ChoiceChip(
                       label: Text(e),
                       selected: _substance == e,
-                      selectedColor: color.withAlpha(0x26), // 15 %
+                      selectedColor: color.withAlpha(0x26),
                       onSelected: (_) => setState(() => _substance = e),
                     ),
                   )
@@ -129,15 +134,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ),
 
-          /* ── PASO 3 ── */
+          /* PASO 3 */
           _StepContainer(
             headline: '¡Todo listo!',
             subhead: 'Recibirás frases motivacionales cada mañana.',
-            center: Icon(
-              Icons.celebration_rounded,
-              size: 96,
-              color: color.withAlpha(0xCC), // 80 %
-            ),
+            center: Icon(Icons.celebration_rounded,
+                size: 96, color: color.withAlpha(0xCC)),
             bottom: ElevatedButton(
               onPressed:
                   (_startDateTime != null && _substance != null) ? _finish : null,
