@@ -1,0 +1,31 @@
+name: Cleanup old artifacts
+
+on:
+  schedule:
+    # Cada domingo a las 03:00 UTC (ajusta a tu gusto)
+    - cron: '0 3 * * 0'
+  workflow_dispatch:      # Permite lanzarlo manualmente
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write        # necesario para borrar artefactos
+    steps:
+      - name: Borrar artefactos > 14 días
+        env:
+          DAYS: 14
+        run: |
+          CUTOFF=$(date -d "-$DAYS days" --iso-8601=seconds)
+          echo "Eliminando artefactos anteriores a $CUTOFF"
+
+          gh api -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/actions/artifacts |
+            jq -r '.artifacts[]
+                   | select(.expired==false)
+                   | select(.created_at < "'$CUTOFF'")
+                   | .id' |
+            while read -r id; do
+              echo "Borrando artifact $id"
+              gh api -X DELETE /repos/${{ github.repository }}/actions/artifacts/$id
+            done

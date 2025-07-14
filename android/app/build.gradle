@@ -1,0 +1,66 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+import java.util.Properties
+import java.io.FileInputStream
+
+/** Carga segura de credenciales de firma */
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+android {
+    namespace = "com.example.undiamas"
+    compileSdk = flutter.compileSdkVersion
+    ndkVersion = flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_1_8
+    }
+
+    defaultConfig {
+        /** Ajusta tu ID de aplicación si lo necesitas */
+        applicationId = "com.example.undiamas"
+        minSdk = flutter.minSdkVersion
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode   // lee de pubspec.yaml
+        versionName = flutter.versionName
+    }
+
+    /** Configuración de la firma release */
+    signingConfigs {
+        release {
+            storeFile     file(keystoreProperties['storeFile'])
+            storePassword keystoreProperties['storePassword']
+            keyAlias      keystoreProperties['keyAlias']
+            keyPassword   keystoreProperties['keyPassword']
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled true        // activa R8/ProGuard
+            shrinkResources true      // elimina recursos no usados
+        }
+        debug {
+            // se usará el keystore debug por defecto
+        }
+    }
+}
+
+flutter {
+    source = "../.."
+}
+

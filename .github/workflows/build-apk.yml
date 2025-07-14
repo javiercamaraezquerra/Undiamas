@@ -1,0 +1,106 @@
+name: Build APK and AAB
+
+on:
+  push:
+    branches: [ mayor_change ]
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1) Obtener el código
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # 2) (Opcional) Verificar que el MP3 está en el repo
+      - name: Comprobar que el MP3 existe en el repo
+        run: |
+          if [ ! -f assets/audio/relax60s.mp3 ]; then
+            echo "❌ El archivo assets/audio/relax60s.mp3 no existe"
+            exit 1
+          fi
+          echo "✅ MP3 encontrado en el repo. Tamaño:"
+          du -h assets/audio/relax60s.mp3
+
+      # 3) (Opcional) Instalar FFmpeg y recodificar el MP3
+      - name: Instalar FFmpeg y recodificar MP3
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          ffmpeg -i assets/audio/relax60s.mp3 -codec:a libmp3lame -b:a 128k assets/audio/relax_fixed.mp3
+          rm assets/audio/relax60s.mp3
+          mv assets/audio/relax_fixed.mp3 assets/audio/relax60s.mp3
+          echo "✅ MP3 recodificado (128 kbps CBR)"
+
+      # 4) Instalar Flutter
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      # 5) Dependencias
+      - name: Install Pub dependencies
+        run: flutter pub get
+
+      # 6) Generar iconos
+      - name: Generate launcher icons
+        run: dart run flutter_launcher_icons
+
+      # 6.1) ⬇️ Auto‑fixes y formato de código
+      - name: Dart fix (apply)
+        run: dart fix --apply
+
+      - name: Dart format
+        run: dart format --output=none .
+
+      # 6.2) Análisis (no detiene la build por avisos)
+      - name: Flutter analyze
+        run: flutter analyze --no-pub --no-fatal-warnings --no-fatal-infos
+
+      # 6.3) Tests unitarios
+      - name: Flutter tests
+        run: flutter test
+
+      # 7) Keystore
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/undiamas.jks
+
+      - name: Create key.properties
+        run: |
+          cat > android/key.properties <<EOF
+          storePassword=${{ secrets.STORE_PASSWORD }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          storeFile=undiamas.jks
+          EOF
+
+      # 8) Compilar APK
+      - name: Build release APK
+        run: flutter build apk --release
+
+      # 9) Compilar AAB
+      - name: Build release AAB
+        run: flutter build appbundle --release
+
+      # 10) Verificar que el MP3 viaja dentro del APK
+      - name: Verificar MP3 dentro del APK
+        run: |
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          unzip -l $APK | grep assets/audio/relax60s.mp3 || {
+            echo "❌ El MP3 no se incluyó en el APK"; exit 1; }
+          echo "✅ MP3 presente en el APK"
+
+      # 11) Subir artefactos
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: undiamas-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: undiamas-aab
+          path: build/app/outputs/bundle/release/app-release.aab
