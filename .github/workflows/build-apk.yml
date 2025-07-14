@@ -2,7 +2,7 @@ name: Build APK and AAB
 
 on:
   push:
-    branches: [ mayor_change ]
+    branches: [ main ]
 
 jobs:
   build-release:
