@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:flutter_localizations/flutter_localizations.dart'; // 🌐
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:intl/intl.dart';                       // 🌐
 
 import 'widgets/bottom_nav_bar.dart';
 import 'theme/app_theme.dart';
@@ -25,7 +26,7 @@ Future<void> main() async {
 
   final cipher = await EncryptionService.getCipher();
 
-  // Migración cajas plano → cifrado
+  // Migración cajas a cifrado…
   if (await Hive.boxExists('udm')) {
     final plain = await Hive.openBox('udm');
     final secure = await Hive.openBox('udm_secure', encryptionCipher: cipher);
@@ -49,9 +50,10 @@ Future<void> main() async {
   );
 
   /* ───────── 3) Notificaciones ───────── */
-  await AchievementService.init();               // ahora pide permiso
+  await AchievementService.init();
 
-  /* ───────── 4) Preferencias UI ───────── */
+  /* ───────── 4) Internacionalización ───────── */
+  Intl.defaultLocale = 'es_ES';                       // ⬅️ fuerza DateFormat
   final prefs = await SharedPreferences.getInstance();
   themeNotifier.value =
       (prefs.getBool('isDarkMode') ?? false) ? ThemeMode.dark : ThemeMode.light;
@@ -71,7 +73,8 @@ Future<void> main() async {
         await AchievementService.scheduleMilestones(start);
       }
       if (reflectionOn) {
-        final json = await rootBundle.loadString('assets/data/reflections.json');
+        final json =
+            await rootBundle.loadString('assets/data/reflections.json');
         await AchievementService.scheduleDailyReflections(json);
       }
     } catch (e, s) {
@@ -96,7 +99,7 @@ class UnDiaMasApp extends StatelessWidget {
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: currentMode,
-          locale: const Locale('es', 'ES'),                // 🌐 fuerza español
+          locale: const Locale('es', 'ES'),
           supportedLocales: const [
             Locale('es', 'ES'),
             Locale('en', 'US'),
@@ -106,6 +109,8 @@ class UnDiaMasApp extends StatelessWidget {
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
+          localeResolutionCallback: (locale, supported) =>
+              const Locale('es', 'ES'),
           home: showOnboarding ? const OnboardingScreen() : BottomNavBar(),
         );
       },
