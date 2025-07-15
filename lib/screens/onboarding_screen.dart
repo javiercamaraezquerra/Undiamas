@@ -30,7 +30,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     'Varias',
   ];
 
-  /* ───────── Guardar y entrar ───────── */
+  /* ───────── Guardar en Hive y entrar ───────── */
   Future<void> _finish() async {
     final cipher = await EncryptionService.getCipher();
     final box =
@@ -47,13 +47,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       MaterialPageRoute(builder: (_) => BottomNavBar()),
     );
 
-    // Programar hitos sin bloquear la UI
+    // Programa los hitos sin bloquear la UI principal
     AchievementService.scheduleMilestones(_startDateTime!);
   }
 
   /* ───────── Selector de fecha y hora ───────── */
   Future<void> _pickDateTime() async {
-    // El selector hereda el locale español del MaterialApp
+    // Hereda el locale español desde MaterialApp, no hace falta pasarlo aquí
     final pickedDate = await showDatePicker(
       context: context,
       firstDate: DateTime(2000),
