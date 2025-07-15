@@ -6,16 +6,17 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:intl/intl.dart';
 
+/// Gestiona notificaciones de logros y reflexión diaria.
 class AchievementService {
   static final _plugin = FlutterLocalNotificationsPlugin();
 
-  /* ─── canales ─── */
+  /* ── canales ── */
   static const _milestoneChannelId = 'achievements';
   static const _milestoneChannelName = 'Logros de sobriedad';
   static const _reflectionChannelId = 'daily_reflection';
   static const _reflectionChannelName = 'Reflexión diaria';
 
-  /* ─── hitos ─── */
+  /* ── hitos ── */
   static const Map<int, String> _milestones = {
     1: '¡Primer día limpio! 🌱',
     3: '3 días: cada paso cuenta 👣',
@@ -41,7 +42,7 @@ class AchievementService {
   static const int _reflectionBaseId = 10000;
   static Map<int, String> get milestones => Map.unmodifiable(_milestones);
 
-  /* ─── init ─── */
+  /* ── init ── */
   static Future<void> init() async {
     const settings = InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
@@ -50,19 +51,20 @@ class AchievementService {
     );
     await _plugin.initialize(settings);
 
-    // Solicitar permiso en Android 13+/iOS
-    final androidGranted = await _plugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestPermission();
+    // Solicitar permisos de forma compatible con todas las versiones
+    try {
+      final androidImpl = _plugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+      await (androidImpl as dynamic)?.requestPermission();
+    } catch (_) {
+      // En versiones antiguas del plugin no existe la API; se ignora
+    }
 
-    final iosGranted = await _plugin
+    await _plugin
         .resolvePlatformSpecificImplementation<
             IOSFlutterLocalNotificationsPlugin>()
         ?.requestPermissions(alert: true, badge: true, sound: true);
-
-    dev.log('Permiso notificaciones => '
-        'Android: $androidGranted, iOS: $iosGranted');
 
     // Zonas horarias
     try {
@@ -72,7 +74,7 @@ class AchievementService {
     }
   }
 
-  /* ─── LOGROS ─── */
+  /* ── LOGROS ── */
   static Future<void> scheduleMilestones(DateTime startDate) async {
     await cancelMilestones();
 
@@ -88,7 +90,7 @@ class AchievementService {
       if (trigger.isBefore(now)) continue;
 
       await _plugin.zonedSchedule(
-        days,
+        days,                          // ID = número de días
         'Logro de recuperación',
         message,
         trigger,
@@ -115,7 +117,7 @@ class AchievementService {
     }
   }
 
-  /* ─── REFLEXIÓN DIARIA ─── */
+  /* ── REFLEXIÓN DIARIA ── */
   static Future<void> scheduleDailyReflections(String reflectionsJson,
       {int daysAhead = 30}) async {
     await cancelDailyReflections(daysAhead: daysAhead);
@@ -130,19 +132,15 @@ class AchievementService {
 
     final now = tz.TZDateTime.now(tz.local);
     var first = tz.TZDateTime(tz.local, now.year, now.month, now.day, 9);
-
-    // Si ya pasaron las 09:00, programa para mañana
-    if (first.isBefore(now)) {
-      first = first.add(const Duration(days: 1));
-    }
+    if (first.isBefore(now)) first = first.add(const Duration(days: 1));
 
     for (var i = 0; i < daysAhead; i++) {
       final date = first.add(Duration(days: i));
-      final dayOfYear = int.parse(DateFormat('D').format(date)) - 1;
-      final title = titles[dayOfYear % titles.length];
+      final doy = int.parse(DateFormat('D').format(date)) - 1;
+      final title = titles[doy % titles.length];
 
       await _plugin.zonedSchedule(
-        _reflectionBaseId + i,
+        _reflectionBaseId + i,         // ID >= 10000
         'Reflexión diaria',
         title,
         date,
@@ -150,8 +148,8 @@ class AchievementService {
           android: AndroidNotificationDetails(
             _reflectionChannelId,
             _reflectionChannelName,
-            importance: Importance.high,      // ⬆️
-            priority: Priority.high,          // ⬆️
+            importance: Importance.high,
+            priority: Priority.high,
           ),
           iOS: DarwinNotificationDetails(),
         ),
@@ -162,9 +160,8 @@ class AchievementService {
       );
     }
 
-    // Log de control
     final pending = await _plugin.pendingNotificationRequests();
-    dev.log('Programadas ${pending.length} notificaciones diarias');
+    dev.log('Programadas ${pending.length} notificaciones (hitos + diarias)');
   }
 
   static Future<void> cancelDailyReflections({int daysAhead = 30}) async {
