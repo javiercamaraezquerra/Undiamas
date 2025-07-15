@@ -2,21 +2,19 @@ name: un_dia_mas
 description: Una app Flutter para apoyo en la recuperación de adicciones.
 publish_to: "none"
 
-# Build number +1 porque hemos cambiado dependencias
-version: 1.0.0+9          
+version: 1.0.0+9          # build number ↑
 
 environment:
-  sdk: ">=2.19.0 <4.0.0"     # ⬅️ compatible con Dart 2.19‑3.x
+  sdk: ">=2.17.0 <3.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
-
-  flutter_localizations:      # incluye intl 0.20.2
+  flutter_localizations:
     sdk: flutter
-
   cupertino_icons: ^1.0.2
   url_launcher: ^6.1.7
+  intl: ^0.17.0
   shared_preferences: ^2.0.15
   hive: ^2.2.3
   hive_flutter: ^1.1.0
@@ -27,7 +25,6 @@ dependencies:
   fl_chart: ^0.66.0
   flutter_markdown: ^0.6.18
   flutter_secure_storage: ^9.0.0
-  # 👇  intl YA NO se declara aquí; viene transitiva de flutter_localizations
 
 dev_dependencies:
   flutter_test:
@@ -44,3 +41,12 @@ flutter:
     - assets/audio/relax60s.mp3
     - assets/data/reflections.json
     - packages/timezone/data/latest_all.tzf
+
+# ────────────────────────────────
+#  CONFIG DE ICONOS  (correcta)
+# ────────────────────────────────
+flutter_icons:
+  image_path: assets/images/logo.png
+  android: true
+  ios: true
+  min_sdk_android: 21
