@@ -24,7 +24,7 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
     'Multimedia',
   ];
 
-  String _query    = '';
+  String _query = '';
   String _category = 'Todos';
 
   @override
@@ -50,9 +50,9 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
   @override
   Widget build(BuildContext context) {
     final filtered = _all.where((r) {
-      final okCat  = _category == 'Todos' || r.category == _category;
-      final okText = _query.isEmpty ||
-          r.title.toLowerCase().contains(_query.toLowerCase());
+      final okCat = _category == 'Todos' || r.category == _category;
+      final okText =
+          _query.isEmpty || r.title.toLowerCase().contains(_query.toLowerCase());
       return okCat && okText;
     }).toList();
 
@@ -99,7 +99,7 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               itemCount: filtered.length,
               itemBuilder: (_, i) {
-                final r   = filtered[i];
+                final r = filtered[i];
                 final fav = _favorites.contains(r.id);
                 return Card(
                   margin: const EdgeInsets.symmetric(vertical: 6),
@@ -164,7 +164,8 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
                   onPressed: () async {
                     final uri = Uri.parse(r.url!);
                     if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      await launchUrl(uri,
+                          mode: LaunchMode.externalApplication);
                     } else {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -190,7 +191,7 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
   }
 }
 
-// ─────────────────── Modelo + contenido verificado ───────────────────
+// ─────────────────── Modelo ───────────────────
 enum _ResType { web, pdf, video, podcast }
 
 class _Resource {
@@ -224,40 +225,41 @@ class _Resource {
   }
 }
 
-// Lista — enlaces comprobados 07 / 2025
+// ─────────────────── Lista de recursos verificados (15 jul 2025) ───────────────────
 final List<_Resource> _resources = [
-  // ── CONOCIMIENTO ────────────────────────────────────────────────────
+  // ── CONOCIMIENTO ───────────────────────────────────────────────
   _Resource(
     id: 'neuro',
-    title: 'Neurobiología básica de la adicción',
+    title: 'La ciencia de la adicción (NIDA)',
     category: 'Conocimiento',
     content:
-        'Explica por qué el circuito de recompensa, memoria y control se ve alterado.\n'
-        'Versión en castellano del Institute on Drug Abuse (NIDA).',
-    url:
-        'https://archives.drugabuse.gov/sites/default/files/drugabuse_addiction_sp.pdf',
+        'Folleto ilustrado que explica cómo las drogas alteran el cerebro y por qué '
+        'la adicción es una enfermedad crónica.',
+    url: 'https://nida.nih.gov/sites/default/files/soa_sp_2014.pdf',
     type: _ResType.pdf,
   ),
   _Resource(
     id: 'triggers',
-    title: 'Detonantes internos y externos',
+    title: 'Factores internos y externos de recaída',
     category: 'Conocimiento',
     content:
-        'Identifica qué situaciones o emociones intensifican tus ganas de consumir y diseña respuestas saludables.',
+        'Artículo divulgativo que describe detonantes emocionales y situacionales y '
+        'propone estrategias preventivas.',
     url:
-        'https://www.prevencionar.com/wp-content/uploads/2020/05/Guia_identificar_disparadores.pdf',
-    type: _ResType.pdf,
+        'https://fundacionliberate.org.co/adiccion-al-alcohol-o-las-drogas-factores-internos-y-externos/',
+    type: _ResType.web,
   ),
 
-  // ── ESTRATEGIAS ─────────────────────────────────────────────────────
+  // ── ESTRATEGIAS ────────────────────────────────────────────────
   _Resource(
     id: 'urge',
-    title: 'Urge‑surfing paso a paso',
+    title: 'Guion de meditación “Urge‑surfing”',
     category: 'Estrategias',
     content:
-        'Ejercicio de 4 min para “surfear” la ola de ganas sin ceder al impulso.',
-    url: 'https://www.youtube.com/watch?v=F3QTipnJXWI',
-    type: _ResType.video,
+        'Script paso a paso (4 pág.) para “surfear” la ola de craving sin ceder al impulso.',
+    url:
+        'https://www.therapistaid.com/worksheets/urge-surfing-script?language=es',
+    type: _ResType.pdf,
   ),
   _Resource(
     id: 'relapse',
@@ -281,22 +283,24 @@ final List<_Resource> _resources = [
   ),
   _Resource(
     id: 'warning',
-    title: 'Lista rápida de señales de alarma',
+    title: 'Señales de alarma: infografía',
     category: 'Estrategias',
     content:
-        'Checklist para saber cuándo pedir ayuda profesional o acudir a urgencias.',
+        'Poster claro que resume síntomas físicos, psicológicos y sociales que alertan de dependencia.',
     url:
-        'https://cdn.isapps.com/isapps/resources/4/2029934/media/autoguia_senales_alarma.pdf',
+        'https://www.javeriana.edu.co/enmental/wp-content/uploads/2024/12/04-Infografia-Cuales-son-los-signos-de-alarma-que-pueden-indicar-dependencia-hacia-drogas-V4.pdf',
     type: _ResType.pdf,
   ),
 
-  // ── BIENESTAR ───────────────────────────────────────────────────────
+  // ── BIENESTAR ──────────────────────────────────────────────────
   _Resource(
     id: 'exercise',
-    title: 'Ejercicio: medicina gratis',
+    title: 'Beneficios del ejercicio en adicciones',
     category: 'Bienestar',
     content:
-        'Caminar 20 min reduce la urgencia de consumir hasta 2 h y mejora tu ánimo.',
+        'Cómo la actividad física reduce el craving y mejora el estado de ánimo.',
+    url:
+        'https://orbiumadicciones.com/bienestar/beneficios-del-ejercicio-fisico-en-el-tratamiento-de-las-adicciones/',
     type: _ResType.web,
   ),
   _Resource(
@@ -311,33 +315,35 @@ final List<_Resource> _resources = [
   ),
   _Resource(
     id: 'detox',
-    title: 'Mini‑detox digital en 3 pasos',
+    title: 'Detox digital: por qué y cómo',
     category: 'Bienestar',
     content:
-        'Silencia notificaciones, crea “islas” sin móvil y sustituye el scroll por estiramientos.',
+        'Consejos prácticos para reducir el tiempo de pantalla y mejorar la salud mental.',
+    url: 'https://conecta.tec.mx/es/noticias/nacional/salud/detox-digital',
     type: _ResType.web,
   ),
 
-  // ── FAMILIA ─────────────────────────────────────────────────────────
+  // ── FAMILIA ────────────────────────────────────────────────────
   _Resource(
     id: 'craft',
     title: 'Guía CRAFT para familias',
     category: 'Familia',
     content:
-        'Método basado en evidencia para apoyar sin confrontar. PDF de la Junta de Castilla y León.',
+        'Método basado en evidencia para apoyar sin confrontar (PDF Castilla y León).',
     url:
         'https://www.lasdrogas.info/wp-content/uploads/2020/03/Guia-CRAFT-familias-2018.pdf',
     type: _ResType.pdf,
   ),
 
-  // ── SUEÑO ───────────────────────────────────────────────────────────
+  // ── SUEÑO ──────────────────────────────────────────────────────
   _Resource(
     id: 'sleep',
-    title: 'Buenas prácticas de sueño',
+    title: 'Guía práctica para dormir bien',
     category: 'Sueño',
     content:
-        'Rutina estable, habitación fresca y sin pantallas: claves para reparar tu cerebro.',
-    type: _ResType.web,
+        'Consejería de Sanidad (Madrid): higiene del sueño y ejercicios de relajación.',
+    url: 'https://www.madrid.org/bvirtual/BVCM050390.pdf',
+    type: _ResType.pdf,
   ),
   _Resource(
     id: 'sleep_diary',
@@ -345,33 +351,36 @@ final List<_Resource> _resources = [
     category: 'Sueño',
     content:
         'Rellénalo cada mañana y noche para descubrir patrones que sabotean tu descanso.',
-    url: 'https://www.sepeap.org/wp-content/uploads/2014/10/DIARIO-DE-SUEÑO.pdf',
+    url:
+        'https://www.sepeap.org/wp-content/uploads/2014/10/DIARIO-DE-SUEÑO.pdf',
     type: _ResType.pdf,
   ),
 
-  // ── NUTRICIÓN ───────────────────────────────────────────────────────
+  // ── NUTRICIÓN ──────────────────────────────────────────────────
   _Resource(
     id: 'nutrition',
-    title: 'Guía rápida: comer para tu recuperación',
+    title: 'Comer para tu recuperación',
     category: 'Nutrición',
     content:
-        'Proteínas en desayuno, carbohidratos complejos y omega‑3 ayudan a estabilizar el ánimo.',
+        'Guía rápida (FAD) sobre proteínas, carbohidratos complejos y omega‑3 para estabilizar el ánimo.',
     url:
         'https://www.fad.es/wp-content/uploads/2021/02/Guia_Nutricion_Adicciones.pdf',
     type: _ResType.pdf,
   ),
 
-  // ── FAQ ─────────────────────────────────────────────────────────────
+  // ── FAQ ────────────────────────────────────────────────────────
   _Resource(
     id: 'faq',
-    title: 'Preguntas frecuentes sobre recaída',
+    title: 'Preguntas frecuentes sobre adicciones',
     category: 'FAQ',
     content:
-        'Duración típica de las ganas, cuándo buscar ayuda y por qué una recaída no es fracaso.',
+        'Hospital Clínic Barcelona: dudas típicas sobre recaída, medicación y soporte.',
+    url:
+        'https://www.clinicbarcelona.org/asistencia/enfermedades/adicciones/preguntas-frecuentes',
     type: _ResType.web,
   ),
 
-  // ── MULTIMEDIA ──────────────────────────────────────────────────────
+  // ── MULTIMEDIA ────────────────────────────────────────────────
   _Resource(
     id: 'podcast',
     title: 'Podcast “Sobriedad a la Carta”',
@@ -383,19 +392,19 @@ final List<_Resource> _resources = [
   ),
   _Resource(
     id: 'mindfulness',
-    title: 'Audio mindfulness 3 min (ES)',
+    title: 'Audio mindfulness 3 min',
     category: 'Multimedia',
     content:
-        'Pausa breve guiada para centrar tu atención y bajar la ansiedad.',
+        'Pausa breve guiada para centrar la atención y bajar la ansiedad.',
     url: 'https://www.youtube.com/watch?v=ZTuR8tlkHH8',
     type: _ResType.video,
   ),
   _Resource(
     id: 'box_breath',
-    title: 'Respiración cuadrada 4‑4‑4‑4 (ES)',
+    title: 'Respiración cuadrada 4‑4‑4‑4',
     category: 'Multimedia',
     content:
-        'Vídeo guiado en castellano para activar tu sistema parasimpático.',
+        'Vídeo guiado en castellano para activar el sistema parasimpático.',
     url: 'https://www.youtube.com/watch?v=ngR5c7N4VaE',
     type: _ResType.video,
   ),
