@@ -35,6 +35,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final cipher = await EncryptionService.getCipher();
     final box =
         await Hive.openBox('udm_secure', encryptionCipher: cipher);
+
     await box.putAll({
       'startDate': _startDateTime!.toIso8601String(),
       'substance': _substance,
@@ -43,16 +44,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (!mounted) return;
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => const BottomNavBar()),
+      MaterialPageRoute(builder: (_) => BottomNavBar()),
     );
-    AchievementService.scheduleMilestones(_startDateTime!); // no await
+
+    // Programar hitos sin bloquear la UI
+    AchievementService.scheduleMilestones(_startDateTime!);
   }
 
   /* ───────── Selector de fecha y hora ───────── */
   Future<void> _pickDateTime() async {
+    // El selector hereda el locale español del MaterialApp
     final pickedDate = await showDatePicker(
       context: context,
-      locale: const Locale('es', 'ES'),
       firstDate: DateTime(2000),
       lastDate: DateTime.now(),
       initialDate: DateTime.now(),
@@ -61,7 +64,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
     final pickedTime = await showTimePicker(
       context: context,
-      locale: const Locale('es', 'ES'),
       initialTime: TimeOfDay.now(),
     );
     if (!mounted || pickedTime == null) return;
@@ -92,7 +94,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         controller: _pageCtrl,
         physics: const NeverScrollableScrollPhysics(),
         children: [
-          /* PASO 1 */
+          // ── PASO 1 ──
           _StepContainer(
             headline: 'Selecciona la fecha y hora\nde tu sobriedad',
             center: ElevatedButton.icon(
@@ -107,7 +109,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   '${_startDateTime!.minute.toString().padLeft(2, '0')}',
           ),
 
-          /* PASO 2 */
+          // ── PASO 2 ──
           _StepContainer(
             headline: '¿Cuál es tu sustancia principal?',
             center: Wrap(
@@ -134,12 +136,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ),
 
-          /* PASO 3 */
+          // ── PASO 3 ──
           _StepContainer(
             headline: '¡Todo listo!',
             subhead: 'Recibirás frases motivacionales cada mañana.',
             center: Icon(Icons.celebration_rounded,
-                size: 96, color: primary.withAlpha(0xCC)),
+                size: 96, color: primary.withOpacity(.8)),
             bottom: ElevatedButton(
               onPressed: (_startDateTime != null && _substance != null)
                   ? _finish
