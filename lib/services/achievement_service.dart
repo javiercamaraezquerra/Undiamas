@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as dev;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
@@ -44,19 +45,24 @@ class AchievementService {
   static Future<void> init() async {
     const settings = InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-      iOS: DarwinInitializationSettings(requestSoundPermission: true, requestAlertPermission: true),
+      iOS: DarwinInitializationSettings(
+          requestSoundPermission: true, requestAlertPermission: true),
     );
     await _plugin.initialize(settings);
 
-    // 1️⃣ Solicitar permiso en Android 13+/iOS
-    await _plugin
+    // Solicitar permiso en Android 13+/iOS
+    final androidGranted = await _plugin
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.requestPermission();
-    await _plugin
+
+    final iosGranted = await _plugin
         .resolvePlatformSpecificImplementation<
             IOSFlutterLocalNotificationsPlugin>()
         ?.requestPermissions(alert: true, badge: true, sound: true);
+
+    dev.log('Permiso notificaciones => '
+        'Android: $androidGranted, iOS: $iosGranted');
 
     // Zonas horarias
     try {
@@ -124,8 +130,11 @@ class AchievementService {
 
     final now = tz.TZDateTime.now(tz.local);
     var first = tz.TZDateTime(tz.local, now.year, now.month, now.day, 9);
-    // ▶️ Si la programación ocurre antes de las 09:00, la primera es hoy.
-    if (first.isBefore(now)) first = first.add(const Duration(days: 1));
+
+    // Si ya pasaron las 09:00, programa para mañana
+    if (first.isBefore(now)) {
+      first = first.add(const Duration(days: 1));
+    }
 
     for (var i = 0; i < daysAhead; i++) {
       final date = first.add(Duration(days: i));
@@ -141,7 +150,8 @@ class AchievementService {
           android: AndroidNotificationDetails(
             _reflectionChannelId,
             _reflectionChannelName,
-            importance: Importance.defaultImportance,
+            importance: Importance.high,      // ⬆️
+            priority: Priority.high,          // ⬆️
           ),
           iOS: DarwinNotificationDetails(),
         ),
@@ -151,6 +161,10 @@ class AchievementService {
         matchDateTimeComponents: DateTimeComponents.dateAndTime,
       );
     }
+
+    // Log de control
+    final pending = await _plugin.pendingNotificationRequests();
+    dev.log('Programadas ${pending.length} notificaciones diarias');
   }
 
   static Future<void> cancelDailyReflections({int daysAhead = 30}) async {
