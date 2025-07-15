@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter_localizations/flutter_localizations.dart'; // 🌐
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -17,14 +18,14 @@ final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  /* ──────────────── 1) Hive + cifrado ──────────────── */
+  /* ───────── 1) Hive + cifrado ───────── */
   await Hive.initFlutter();
   Hive.registerAdapter(DiaryEntryAdapter());
   Hive.registerAdapter(PostAdapter());
 
   final cipher = await EncryptionService.getCipher();
 
-  // Migración cajas a cifrado (idéntica a la versión anterior) ……………………………
+  // Migración cajas plano → cifrado
   if (await Hive.boxExists('udm')) {
     final plain = await Hive.openBox('udm');
     final secure = await Hive.openBox('udm_secure', encryptionCipher: cipher);
@@ -41,24 +42,25 @@ Future<void> main() async {
     await plain.deleteFromDisk();
   }
 
-  /* ──────────────── 2) Ads ──────────────── */
+  /* ───────── 2) Ads ───────── */
   await MobileAds.instance.initialize();
-  MobileAds.instance
-      .updateRequestConfiguration(RequestConfiguration(testDeviceIds: ['TEST_DEVICE_ID']));
+  MobileAds.instance.updateRequestConfiguration(
+    RequestConfiguration(testDeviceIds: ['TEST_DEVICE_ID']),
+  );
 
-  /* ──────────────── 3) Notificaciones ──────────────── */
-  await AchievementService.init();
+  /* ───────── 3) Notificaciones ───────── */
+  await AchievementService.init();               // ahora pide permiso
 
-  /* ──────────────── 4) Preferencias UI ──────────────── */
+  /* ───────── 4) Preferencias UI ───────── */
   final prefs = await SharedPreferences.getInstance();
   themeNotifier.value =
       (prefs.getBool('isDarkMode') ?? false) ? ThemeMode.dark : ThemeMode.light;
 
-  /* ──────────────── 5) Arranque app (¡ya no hay awaits bloqueantes!) ──────────────── */
+  /* ───────── 5) Arranque UI ───────── */
   final hasStartDate = settings.containsKey('startDate');
   runApp(UnDiaMasApp(showOnboarding: !hasStartDate));
 
-  /* ──────────────── 6) Programación de notificaciones DESPUÉS del frame inicial ─── */
+  /* ───────── 6) Programar notificaciones ───────── */
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     try {
       final milestonesOn = prefs.getBool('notifyMilestones') ?? true;
@@ -68,13 +70,11 @@ Future<void> main() async {
         final start = DateTime.parse(settings.get('startDate'));
         await AchievementService.scheduleMilestones(start);
       }
-
       if (reflectionOn) {
         final json = await rootBundle.loadString('assets/data/reflections.json');
         await AchievementService.scheduleDailyReflections(json);
       }
     } catch (e, s) {
-      // Log en consola para depuración, sin romper la UI en producción
       // ignore: avoid_print
       print('Error al programar notificaciones: $e\n$s');
     }
@@ -96,6 +96,16 @@ class UnDiaMasApp extends StatelessWidget {
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: currentMode,
+          locale: const Locale('es', 'ES'),                // 🌐 fuerza español
+          supportedLocales: const [
+            Locale('es', 'ES'),
+            Locale('en', 'US'),
+          ],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
           home: showOnboarding ? const OnboardingScreen() : BottomNavBar(),
         );
       },
