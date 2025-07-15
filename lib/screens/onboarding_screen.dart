@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
+
 import '../widgets/bottom_nav_bar.dart';
 import '../services/achievement_service.dart';
 import '../services/encryption_service.dart';
@@ -21,6 +22,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     'Cannabis',
     'Heroína',
     'Cocaína',
+    'Speed',
+    'Anfetaminas',
+    'Opioides',
+    'Popper',
+    'Ketamina',
     'Varias',
   ];
 
@@ -46,7 +52,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _pickDateTime() async {
     final pickedDate = await showDatePicker(
       context: context,
-      locale: const Locale('es', 'ES'),  // 🌐
+      locale: const Locale('es', 'ES'),
       firstDate: DateTime(2000),
       lastDate: DateTime.now(),
       initialDate: DateTime.now(),
@@ -55,7 +61,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
     final pickedTime = await showTimePicker(
       context: context,
-      locale: const Locale('es', 'ES'),  // 🌐
+      locale: const Locale('es', 'ES'),
       initialTime: TimeOfDay.now(),
     );
     if (!mounted || pickedTime == null) return;
