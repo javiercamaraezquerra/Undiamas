@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
-import 'dart:async' show unawaited;                // ⬅️ nuevo
-
 import '../widgets/bottom_nav_bar.dart';
 import '../services/achievement_service.dart';
 import '../services/encryption_service.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
-
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
@@ -17,41 +14,39 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _pageCtrl = PageController();
   DateTime? _startDateTime;
   String? _substance;
+
   final _options = [
     'Alcohol',
     'Hachís',
     'Cannabis',
     'Heroína',
     'Cocaína',
-    'Varias'
+    'Varias',
   ];
 
   /* ───────── Guardar y entrar ───────── */
   Future<void> _finish() async {
     final cipher = await EncryptionService.getCipher();
-    final box = await Hive.openBox('udm_secure', encryptionCipher: cipher);
-
+    final box =
+        await Hive.openBox('udm_secure', encryptionCipher: cipher);
     await box.putAll({
       'startDate': _startDateTime!.toIso8601String(),
       'substance': _substance,
     });
 
     if (!mounted) return;
-
-    // 1️⃣ Navegamos inmediatamente
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const BottomNavBar()),
     );
-
-    // 2️⃣ Programamos los hitos SIN esperar
-    unawaited(AchievementService.scheduleMilestones(_startDateTime!));
+    AchievementService.scheduleMilestones(_startDateTime!); // no await
   }
 
-  /* ───────── Selección fecha y hora ───────── */
+  /* ───────── Selector de fecha y hora ───────── */
   Future<void> _pickDateTime() async {
     final pickedDate = await showDatePicker(
       context: context,
+      locale: const Locale('es', 'ES'),  // 🌐
       firstDate: DateTime(2000),
       lastDate: DateTime.now(),
       initialDate: DateTime.now(),
@@ -60,6 +55,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
     final pickedTime = await showTimePicker(
       context: context,
+      locale: const Locale('es', 'ES'),  // 🌐
       initialTime: TimeOfDay.now(),
     );
     if (!mounted || pickedTime == null) return;
@@ -83,14 +79,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   /* ───────── UI ───────── */
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.primary;
+    final primary = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       body: PageView(
         controller: _pageCtrl,
         physics: const NeverScrollableScrollPhysics(),
         children: [
-          /* PASO 1 */
+          /* PASO 1 */
           _StepContainer(
             headline: 'Selecciona la fecha y hora\nde tu sobriedad',
             center: ElevatedButton.icon(
@@ -100,12 +96,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
             subhead: _startDateTime == null
                 ? null
-                : 'Elegido: ${_startDateTime!.day}/${_startDateTime!.month}/${_startDateTime!.year} – '
-                    '${_startDateTime!.hour.toString().padLeft(2, '0')}:'
-                    '${_startDateTime!.minute.toString().padLeft(2, '0')}',
+                : '${_startDateTime!.day}/${_startDateTime!.month}/${_startDateTime!.year} – '
+                  '${_startDateTime!.hour.toString().padLeft(2, '0')}:'
+                  '${_startDateTime!.minute.toString().padLeft(2, '0')}',
           ),
 
-          /* PASO 2 */
+          /* PASO 2 */
           _StepContainer(
             headline: '¿Cuál es tu sustancia principal?',
             center: Wrap(
@@ -113,14 +109,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               runSpacing: 12,
               alignment: WrapAlignment.center,
               children: _options
-                  .map(
-                    (e) => ChoiceChip(
-                      label: Text(e),
-                      selected: _substance == e,
-                      selectedColor: color.withAlpha(0x26),
-                      onSelected: (_) => setState(() => _substance = e),
-                    ),
-                  )
+                  .map((e) => ChoiceChip(
+                        label: Text(e),
+                        selected: _substance == e,
+                        selectedColor: primary.withAlpha(0x26),
+                        onSelected: (_) => setState(() => _substance = e),
+                      ))
                   .toList(),
             ),
             bottom: ElevatedButton(
@@ -134,15 +128,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ),
 
-          /* PASO 3 */
+          /* PASO 3 */
           _StepContainer(
             headline: '¡Todo listo!',
             subhead: 'Recibirás frases motivacionales cada mañana.',
             center: Icon(Icons.celebration_rounded,
-                size: 96, color: color.withAlpha(0xCC)),
+                size: 96, color: primary.withAlpha(0xCC)),
             bottom: ElevatedButton(
-              onPressed:
-                  (_startDateTime != null && _substance != null) ? _finish : null,
+              onPressed: (_startDateTime != null && _substance != null)
+                  ? _finish
+                  : null,
               child: const Text('Comenzar'),
             ),
           ),
@@ -158,7 +153,6 @@ class _StepContainer extends StatelessWidget {
   final String? subhead;
   final Widget center;
   final Widget? bottom;
-
   const _StepContainer({
     super.key,
     required this.headline,
@@ -169,18 +163,16 @@ class _StepContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    final t = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(headline,
-              style: textTheme.headlineMedium, textAlign: TextAlign.center),
+          Text(headline, style: t.headlineMedium, textAlign: TextAlign.center),
           if (subhead != null) ...[
             const SizedBox(height: 8),
-            Text(subhead!,
-                style: textTheme.bodyMedium, textAlign: TextAlign.center),
+            Text(subhead!, style: t.bodyMedium, textAlign: TextAlign.center),
           ],
           const SizedBox(height: 36),
           center,
