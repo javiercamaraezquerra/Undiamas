@@ -5,18 +5,16 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:intl/intl.dart';
 
-/// Servicio unificado de notificaciones (logros + reflexión diaria).
 class AchievementService {
   static final _plugin = FlutterLocalNotificationsPlugin();
 
-  /* ──────────────── canales ──────────────── */
+  /* ─── canales ─── */
   static const _milestoneChannelId = 'achievements';
   static const _milestoneChannelName = 'Logros de sobriedad';
-
   static const _reflectionChannelId = 'daily_reflection';
   static const _reflectionChannelName = 'Reflexión diaria';
 
-  /* ──────────────── hitos ──────────────── */
+  /* ─── hitos ─── */
   static const Map<int, String> _milestones = {
     1: '¡Primer día limpio! 🌱',
     3: '3 días: cada paso cuenta 👣',
@@ -39,21 +37,28 @@ class AchievementService {
     3650: '10 años limpio: leyenda 🏅',
   };
 
-  /// IDs base para reflexiones (10000…10029 = 30 días)
   static const int _reflectionBaseId = 10000;
-
-  /// Getter público inmutable (UI)
   static Map<int, String> get milestones => Map.unmodifiable(_milestones);
 
-  /* ──────────────── init ──────────────── */
+  /* ─── init ─── */
   static Future<void> init() async {
     const settings = InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-      iOS: DarwinInitializationSettings(),
+      iOS: DarwinInitializationSettings(requestSoundPermission: true, requestAlertPermission: true),
     );
     await _plugin.initialize(settings);
 
-    // Carga zonas horarias (fallback → UTC)
+    // 1️⃣ Solicitar permiso en Android 13+/iOS
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestPermission();
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin>()
+        ?.requestPermissions(alert: true, badge: true, sound: true);
+
+    // Zonas horarias
     try {
       tz.initializeTimeZones();
     } catch (_) {
@@ -61,7 +66,7 @@ class AchievementService {
     }
   }
 
-  /* ──────────────── LOGROS ──────────────── */
+  /* ─── LOGROS ─── */
   static Future<void> scheduleMilestones(DateTime startDate) async {
     await cancelMilestones();
 
@@ -74,10 +79,10 @@ class AchievementService {
             tz.local, startDate.year, startDate.month, startDate.day, 9)
           .add(Duration(days: days));
 
-      if (trigger.isBefore(now)) continue; // ya pasó
+      if (trigger.isBefore(now)) continue;
 
       await _plugin.zonedSchedule(
-        days, // ID único = número de días
+        days,
         'Logro de recuperación',
         message,
         trigger,
@@ -104,18 +109,14 @@ class AchievementService {
     }
   }
 
-  /* ──────────────── REFLEXIÓN DIARIA ──────────────── */
-
-  /// `reflectionsJson` es el contenido completo de assets/data/reflections.json
+  /* ─── REFLEXIÓN DIARIA ─── */
   static Future<void> scheduleDailyReflections(String reflectionsJson,
       {int daysAhead = 30}) async {
-    await cancelDailyReflections();
+    await cancelDailyReflections(daysAhead: daysAhead);
 
-    // Decodificamos títulos
     final List<dynamic> raw = jsonDecode(reflectionsJson);
     final titles = raw.map<String>((e) {
       if (e is Map && e['title'] != null) return e['title'] as String;
-      // Si sólo hay markdown, capturamos 1ª cabecera ### ...
       final md = e.toString();
       final m = RegExp(r'^###\s+(.+)', multiLine: true).firstMatch(md);
       return m != null ? m.group(1)! : 'Reflexión del día';
@@ -123,18 +124,16 @@ class AchievementService {
 
     final now = tz.TZDateTime.now(tz.local);
     var first = tz.TZDateTime(tz.local, now.year, now.month, now.day, 9);
+    // ▶️ Si la programación ocurre antes de las 09:00, la primera es hoy.
     if (first.isBefore(now)) first = first.add(const Duration(days: 1));
 
     for (var i = 0; i < daysAhead; i++) {
       final date = first.add(Duration(days: i));
-
-      // Día del año (1‑365) → índice
-      final dayOfYear =
-          int.parse(DateFormat('D').format(date)) - 1; // 0‑based
+      final dayOfYear = int.parse(DateFormat('D').format(date)) - 1;
       final title = titles[dayOfYear % titles.length];
 
       await _plugin.zonedSchedule(
-        _reflectionBaseId + i, // ID único
+        _reflectionBaseId + i,
         'Reflexión diaria',
         title,
         date,
@@ -143,7 +142,6 @@ class AchievementService {
             _reflectionChannelId,
             _reflectionChannelName,
             importance: Importance.defaultImportance,
-            priority: Priority.defaultPriority,
           ),
           iOS: DarwinNotificationDetails(),
         ),
