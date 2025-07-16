@@ -4,7 +4,9 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'package:intl/intl.dart';                       // 🌐
+import 'package:intl/intl.dart';
+import 'dart:io' show Platform;
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'widgets/bottom_nav_bar.dart';
 import 'theme/app_theme.dart';
@@ -15,20 +17,20 @@ import 'services/achievement_service.dart';
 import 'services/encryption_service.dart';
 
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
+final GlobalKey<NavigatorState> _navKey = GlobalKey(debugLabel: 'root_nav');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  /* ───────── 1) Hive + cifrado ───────── */
+  /* ── 1) Hive + cifrado ── */
   await Hive.initFlutter();
   Hive.registerAdapter(DiaryEntryAdapter());
   Hive.registerAdapter(PostAdapter());
 
   final cipher = await EncryptionService.getCipher();
 
-  // Migración cajas a cifrado…
   if (await Hive.boxExists('udm')) {
-    final plain = await Hive.openBox('udm');
+    final plain  = await Hive.openBox('udm');
     final secure = await Hive.openBox('udm_secure', encryptionCipher: cipher);
     if (secure.isEmpty) await secure.putAll(plain.toMap());
     await plain.deleteFromDisk();
@@ -36,35 +38,76 @@ Future<void> main() async {
   final settings = await Hive.openBox('udm_secure', encryptionCipher: cipher);
 
   if (await Hive.boxExists('diary')) {
-    final plain = await Hive.openBox<DiaryEntry>('diary');
-    final secure =
-        await Hive.openBox<DiaryEntry>('diary_secure', encryptionCipher: cipher);
+    final plain  = await Hive.openBox<DiaryEntry>('diary');
+    final secure = await Hive.openBox<DiaryEntry>('diary_secure',
+        encryptionCipher: cipher);
     if (secure.isEmpty) await secure.addAll(plain.values);
     await plain.deleteFromDisk();
   }
 
-  /* ───────── 2) Ads ───────── */
+  /* ── 2) Ads ── */
   await MobileAds.instance.initialize();
   MobileAds.instance.updateRequestConfiguration(
     RequestConfiguration(testDeviceIds: ['TEST_DEVICE_ID']),
   );
 
-  /* ───────── 3) Notificaciones ───────── */
+  /* ── 3) Notificaciones ── */
   await AchievementService.init();
 
-  /* ───────── 4) Internacionalización ───────── */
-  Intl.defaultLocale = 'es_ES';                       // ⬅️ fuerza DateFormat
+  /* ── 4) Internacionalización ── */
+  Intl.defaultLocale = 'es_ES';
   final prefs = await SharedPreferences.getInstance();
   themeNotifier.value =
       (prefs.getBool('isDarkMode') ?? false) ? ThemeMode.dark : ThemeMode.light;
 
-  /* ───────── 5) Arranque UI ───────── */
+  /* ── 5) Arranque UI ── */
   final hasStartDate = settings.containsKey('startDate');
   runApp(UnDiaMasApp(showOnboarding: !hasStartDate));
 
-  /* ───────── 6) Programar notificaciones ───────── */
+  /* ── 6) Programar notificaciones y pedir permiso si hace falta ── */
   WidgetsBinding.instance.addPostFrameCallback((_) async {
+    final ctx = _navKey.currentContext;
+    if (ctx == null) return;
+
     try {
+      // Permiso denegado → mostrar diálogo
+      bool allowed = true;
+      if (Platform.isAndroid) {
+        final impl = FlutterLocalNotificationsPlugin()
+            .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin>();
+        allowed = await (impl as dynamic)?.areNotificationsEnabled() ?? true;
+      }
+
+      if (!allowed) {
+        await showDialog(
+          context: ctx,
+          builder: (_) => AlertDialog(
+            title: const Text('Permiso de notificaciones'),
+            content: const Text(
+                'Para avisarte de logros y reflexiones diarias necesitamos '
+                'que actives las notificaciones.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Más tarde'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  // Abre ajustes de la app
+                  await FlutterLocalNotificationsPlugin()
+                      .resolvePlatformSpecificImplementation<
+                          AndroidFlutterLocalNotificationsPlugin>()
+                      ?.openNotificationSettings();
+                },
+                child: const Text('Activar'),
+              ),
+            ],
+          ),
+        );
+      }
+
       final milestonesOn = prefs.getBool('notifyMilestones') ?? true;
       final reflectionOn = prefs.getBool('notifyDailyReflection') ?? true;
 
@@ -94,6 +137,7 @@ class UnDiaMasApp extends StatelessWidget {
       valueListenable: themeNotifier,
       builder: (_, currentMode, __) {
         return MaterialApp(
+          navigatorKey: _navKey,
           title: 'Un Día Más',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.lightTheme,
@@ -109,8 +153,7 @@ class UnDiaMasApp extends StatelessWidget {
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
-          localeResolutionCallback: (locale, supported) =>
-              const Locale('es', 'ES'),
+          localeResolutionCallback: (_, __) => const Locale('es', 'ES'),
           home: showOnboarding ? const OnboardingScreen() : BottomNavBar(),
         );
       },
