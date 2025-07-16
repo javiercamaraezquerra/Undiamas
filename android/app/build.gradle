@@ -1,14 +1,14 @@
 plugins {
     id "com.android.application"
     id "kotlin-android"
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    // El plugin de Flutter siempre al final
     id "dev.flutter.flutter-gradle-plugin"
 }
 
 import java.util.Properties
 import java.io.FileInputStream
 
-/** Carga segura de credenciales de firma */
+// ── Firma segura ----------------------------------------------------------------
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('key.properties')
 if (keystorePropertiesFile.exists()) {
@@ -17,28 +17,26 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.example.undiamas"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = flutter.compileSdkVersion       // 34 con Flutter 3.22
     ndkVersion = flutter.ndkVersion
 
+    // Java 17 — requisito a partir de AGP 8.3
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
-
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_1_8
+        jvmTarget = "17"
     }
 
     defaultConfig {
-        /** Ajusta tu ID de aplicación si lo necesitas */
         applicationId = "com.example.undiamas"
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode   // lee de pubspec.yaml
-        versionName = flutter.versionName
+        minSdk       = flutter.minSdkVersion
+        targetSdk    = flutter.targetSdkVersion
+        versionCode  = flutter.versionCode
+        versionName  = flutter.versionName
     }
 
-    /** Configuración de la firma release */
     signingConfigs {
         release {
             storeFile     file(keystoreProperties['storeFile'])
@@ -50,17 +48,14 @@ android {
 
     buildTypes {
         release {
-            signingConfig signingConfigs.release
-            minifyEnabled true        // activa R8/ProGuard
-            shrinkResources true      // elimina recursos no usados
+            signingConfig  signingConfigs.release
+            minifyEnabled  true
+            shrinkResources true
         }
-        debug {
-            // se usará el keystore debug por defecto
-        }
+        debug { /* keystore debug por defecto */ }
     }
 }
 
 flutter {
     source = "../.."
 }
-
