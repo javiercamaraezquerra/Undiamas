@@ -1,14 +1,13 @@
 plugins {
     id "com.android.application"
     id "kotlin-android"
-    // El plugin de Flutter siempre al final
-    id "dev.flutter.flutter-gradle-plugin"
+    id "dev.flutter.flutter-gradle-plugin"      // siempre el último
 }
 
 import java.util.Properties
 import java.io.FileInputStream
 
-// ── Firma segura ----------------------------------------------------------------
+/* ── Firma segura ─────────────────────────────────────────────── */
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('key.properties')
 if (keystorePropertiesFile.exists()) {
@@ -16,14 +15,15 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.example.undiamas"
-    compileSdk = flutter.compileSdkVersion       // 34 con Flutter 3.22
+    namespace  = "com.example.undiamas"
+    compileSdk = flutter.compileSdkVersion        // 34 con Flutter 3.22
     ndkVersion = flutter.ndkVersion
 
-    // Java 17 — requisito a partir de AGP 8.3
+    /* ── Java 17 + desugaring ── */
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility       = JavaVersion.VERSION_17
+        targetCompatibility       = JavaVersion.VERSION_17
+        coreLibraryDesugaringEnabled true          // ← solución del error
     }
     kotlinOptions {
         jvmTarget = "17"
@@ -58,4 +58,10 @@ android {
 
 flutter {
     source = "../.."
+}
+
+/* ── Dependencias extra ───────────────────────────────────────── */
+dependencies {
+    // Librería necesaria para core desugaring (Java 8+ back‑port)
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
 }
