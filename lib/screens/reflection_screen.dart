@@ -1,10 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as dev;
-import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Muestra la reflexión del día o la indicada por [dayIndex] (0‑364).
 class ReflectionScreen extends StatefulWidget {
@@ -20,8 +22,10 @@ class _ReflectionScreenState extends State<ReflectionScreen>
   String? _header;
   String? _body;
   String? _loadError;
-  late int _currentDoY;   // 1‑365
+  late int _currentDoY; // 1‑365
   Timer? _midnightTimer;
+
+  static const _soloPorHoyUrl = 'https://fzla.org/principio-diario/';
 
   @override
   void initState() {
@@ -37,6 +41,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
     super.dispose();
   }
 
+  /* ───────────────── lifecycle ───────────────── */
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && widget.dayIndex == null) {
@@ -45,7 +50,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
     }
   }
 
-  /* ── Cargar reflexión ── */
+  /* ───────────────── carga de datos ───────────────── */
   Future<void> _loadReflection() async {
     try {
       String raw = await rootBundle.loadString('assets/data/reflections.json');
@@ -58,11 +63,8 @@ class _ReflectionScreenState extends State<ReflectionScreen>
       final data = jsonDecode(raw) as List<dynamic>;
       if (data.length < 365) throw const FormatException('Faltan reflexiones');
 
-      if (widget.dayIndex != null) {
-        _currentDoY = widget.dayIndex! + 1;
-      } else {
-        _currentDoY = _dayOfYear(DateTime.now());
-      }
+      _currentDoY =
+          widget.dayIndex != null ? widget.dayIndex! + 1 : _dayOfYear(DateTime.now());
       final idx = (_currentDoY - 1).clamp(0, 364);
 
       final md = data[idx] as String;
@@ -93,7 +95,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
 
   int _dayOfYear(DateTime dt) => int.parse(DateFormat('D').format(dt));
 
-  /* ── UI ── */
+  /* ───────────────── UI ───────────────── */
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -123,8 +125,8 @@ class _ReflectionScreenState extends State<ReflectionScreen>
             children: [
               Text(
                 _header!,
-                style: theme.textTheme.headlineMedium
-                    ?.copyWith(fontWeight: FontWeight.bold),
+                style:
+                    theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               Card(
@@ -156,6 +158,29 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                       blockSpacing: 12,
                     ),
                   ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              /* ───── enlace adicional ───── */
+              TextButton.icon(
+                icon: const Icon(Icons.open_in_new),
+                style: TextButton.styleFrom(
+                    foregroundColor: theme.colorScheme.primary),
+                onPressed: () async {
+                  final uri = Uri.parse(_soloPorHoyUrl);
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  } else {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content:
+                            Text('No se pudo abrir el enlace, inténtalo más tarde.')));
+                  }
+                },
+                label: const Text(
+                  'Si también quieres ver la reflexión diaria de “Sólo por hoy”, '
+                  'haz clic aquí para verla gratuitamente.',
+                  textAlign: TextAlign.start,
                 ),
               ),
             ],
