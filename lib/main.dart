@@ -11,6 +11,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'widgets/bottom_nav_bar.dart';
 import 'theme/app_theme.dart';
 import 'screens/onboarding_screen.dart';
+import 'screens/reflection_screen.dart';          // ← deep‑link
 import 'models/diary_entry.dart';
 import 'models/post.dart';
 import 'services/achievement_service.dart';
@@ -22,7 +23,7 @@ final GlobalKey<NavigatorState> _navKey = GlobalKey(debugLabel: 'root_nav');
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  /* ── 1) Hive + cifrado ── */
+  /* ── 1) Hive ── */
   await Hive.initFlutter();
   Hive.registerAdapter(DiaryEntryAdapter());
   Hive.registerAdapter(PostAdapter());
@@ -51,8 +52,18 @@ Future<void> main() async {
     RequestConfiguration(testDeviceIds: ['TEST_DEVICE_ID']),
   );
 
-  /* ── 3) Notificaciones ── */
-  await AchievementService.init();
+  /* ── 3) Notificaciones (con callback) ── */
+  await AchievementService.init(
+    onNotificationResponse: (resp) {
+      final payload = resp.payload;
+      final idx = payload != null ? int.tryParse(payload) : null;
+      if (idx != null) {
+        _navKey.currentState?.push(
+          MaterialPageRoute(builder: (_) => ReflectionScreen(dayIndex: idx)),
+        );
+      }
+    },
+  );
 
   /* ── 4) Internacionalización ── */
   Intl.defaultLocale = 'es_ES';
@@ -60,11 +71,11 @@ Future<void> main() async {
   themeNotifier.value =
       (prefs.getBool('isDarkMode') ?? false) ? ThemeMode.dark : ThemeMode.light;
 
-  /* ── 5) Arranque UI ── */
+  /* ── 5) UI ── */
   final hasStartDate = settings.containsKey('startDate');
   runApp(UnDiaMasApp(showOnboarding: !hasStartDate));
 
-  /* ── 6) Programar notificaciones y gestionar permisos ── */
+  /* ── 6) Programar notificaciones + permisos ── */
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     final ctx = _navKey.currentContext;
     if (ctx == null) return;
@@ -72,8 +83,8 @@ Future<void> main() async {
     try {
       bool allowed = true;
       if (Platform.isAndroid) {
-        final impl =
-            FlutterLocalNotificationsPlugin().resolvePlatformSpecificImplementation<
+        final impl = FlutterLocalNotificationsPlugin()
+            .resolvePlatformSpecificImplementation<
                 AndroidFlutterLocalNotificationsPlugin>();
         allowed = await (impl as dynamic)?.areNotificationsEnabled() ?? true;
       }
@@ -94,15 +105,12 @@ Future<void> main() async {
               ElevatedButton(
                 onPressed: () async {
                   Navigator.pop(ctx);
-                  // Intentamos abrir ajustes de la app (si el plugin lo soporta)
                   try {
                     final android = FlutterLocalNotificationsPlugin()
                         .resolvePlatformSpecificImplementation<
                             AndroidFlutterLocalNotificationsPlugin>();
                     await (android as dynamic)?.openNotificationSettings();
-                  } catch (_) {
-                    // Si la API no existe, simplemente no hacemos nada
-                  }
+                  } catch (_) {}
                 },
                 child: const Text('Activar'),
               ),
