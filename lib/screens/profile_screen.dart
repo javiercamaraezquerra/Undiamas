@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
@@ -47,7 +45,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _notifDaily = prefs.getBool('notifyDailyReflection') ?? true;
     _notifMilestones = prefs.getBool('notifyMilestones') ?? true;
 
-    /* fecha inicio sobriedad */
     final cipher = await EncryptionService.getCipher();
     final box = await Hive.openBox('udm_secure', encryptionCipher: cipher);
     if (box.containsKey('startDate')) {
@@ -57,7 +54,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (mounted) setState(() {});
   }
 
-  /* ───────────────── toggles UI ───────────────── */
+  /* ───────────────── toggles ───────────────── */
   Future<void> _toggleTheme(bool v) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isDarkMode', v);
@@ -152,8 +149,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Descargando copia…')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Descargando copia…')));
 
     final data = await DriveBackupService.downloadBackup();
     if (data == null) {
@@ -168,12 +165,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final udm = await Hive.openBox('udm_secure', encryptionCipher: cipher);
     final diary =
         await Hive.openBox<DiaryEntry>('diary_secure', encryptionCipher: cipher);
-    await DriveBackupService.importHive(data, udm, diary);
+
+    final ok = await DriveBackupService.importHive(data, udm, diary);
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Datos restaurados con éxito.')));
-      _loadPrefs();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(ok
+              ? 'Datos restaurados con éxito.'
+              : 'La copia estaba vacía o dañada.')));
+      if (ok) {
+        /* recargar listenable */
+        setState(() {
+          _diaryBoxFuture = EncryptionService.getCipher().then(
+            (c) => Hive.openBox<DiaryEntry>('diary_secure', encryptionCipher: c),
+          );
+        });
+        _loadPrefs();
+      }
     }
   }
 
@@ -195,7 +203,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('¡Contador reiniciado!')));
+        const SnackBar(content: Text('¡Contador reiniciado!')),
+      );
     }
   }
 
