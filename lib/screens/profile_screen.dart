@@ -116,48 +116,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _backupToDrive() async {
     if (!await _confirmDriveConsent()) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text(
-                'Copia no realizada. Puedes perder datos si cambias de dispositivo.')));
-      }
+      _showSnack('Copia no realizada. Puedes perder datos si cambias de dispositivo.');
       return;
     }
+
+    final wait = _showSnack('Subiendo copia…', persistent: true);
 
     final cipher = await EncryptionService.getCipher();
     final udm = await Hive.openBox('udm_secure', encryptionCipher: cipher);
     final diary =
         await Hive.openBox<DiaryEntry>('diary_secure', encryptionCipher: cipher);
 
-    final ok =
-        await DriveBackupService.uploadBackup(DriveBackupService.exportHive(udm, diary));
+    final res = await DriveBackupService.uploadBackup(
+        DriveBackupService.exportHive(udm, diary));
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content:
-          Text(ok ? 'Copia subida a Google Drive' : 'Error subiendo la copia.'),
-    ));
+    wait.close();
+    _showSnack(res.ok ? 'Copia subida a Google Drive'
+                      : res.message ?? 'Error desconocido');
   }
 
   Future<void> _restoreFromDrive() async {
     if (!await _confirmDriveConsent()) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content:
-                Text('Restauración cancelada. Continúas con los datos locales.')));
-      }
+      _showSnack('Restauración cancelada. Continúas con los datos locales.');
       return;
     }
 
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Descargando copia…')));
+    final wait = _showSnack('Descargando copia…', persistent: true);
+    final result = await DriveBackupService.downloadBackup();
+    wait.close();
 
-    final data = await DriveBackupService.downloadBackup();
-    if (data == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No se encontró copia en Drive.')));
-      }
+    if (!result.ok || result.data == null) {
+      _showSnack(result.message ?? 'No se encontró copia.');
       return;
     }
 
@@ -166,22 +155,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final diary =
         await Hive.openBox<DiaryEntry>('diary_secure', encryptionCipher: cipher);
 
-    final ok = await DriveBackupService.importHive(data, udm, diary);
+    final imported = await DriveBackupService.importHive(result.data!, udm, diary);
+    _showSnack(imported
+        ? 'Datos restaurados con éxito.'
+        : 'La copia estaba vacía o dañada.');
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(ok
-              ? 'Datos restaurados con éxito.'
-              : 'La copia estaba vacía o dañada.')));
-      if (ok) {
-        /* recargar listenable */
-        setState(() {
-          _diaryBoxFuture = EncryptionService.getCipher().then(
-            (c) => Hive.openBox<DiaryEntry>('diary_secure', encryptionCipher: c),
-          );
-        });
-        _loadPrefs();
-      }
+    if (imported) {
+      /* recargar listenable */
+      setState(() {
+        _diaryBoxFuture = EncryptionService.getCipher().then(
+          (c) => Hive.openBox<DiaryEntry>('diary_secure', encryptionCipher: c),
+        );
+      });
+      _loadPrefs();
     }
   }
 
@@ -202,10 +188,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _daysClean = 0;
     });
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('¡Contador reiniciado!')),
-      );
+      _showSnack('¡Contador reiniciado!');
     }
+  }
+
+  /* ───────────── helper SnackBar ───────────── */
+  ScaffoldFeatureController<SnackBar, SnackBarClosedReason> _showSnack(
+      String msg,
+      {bool persistent = false}) {
+    final sb = SnackBar(
+      content: Text(msg),
+      duration: persistent ? const Duration(days: 1) : const Duration(seconds: 4),
+    );
+    return ScaffoldMessenger.of(context).showSnackBar(sb);
   }
 
   /* ───────────────── UI ───────────────── */
