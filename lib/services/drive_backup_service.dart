@@ -10,6 +10,14 @@ import 'package:path_provider/path_provider.dart';
 
 import '../models/diary_entry.dart';
 
+class BackupResult<T> {
+  final bool ok;
+  final String? message; // null si ok==true
+  final T? data;
+  const BackupResult.success([this.data]) : ok = true, message = null;
+  const BackupResult.failure(this.message) : ok = false, data = null;
+}
+
 class DriveBackupService {
   static const _fileName = 'udm_backup.json';
   static final _googleSignIn =
@@ -17,64 +25,86 @@ class DriveBackupService {
 
   /* ── autenticación ── */
   static Future<drive.DriveApi?> _driveApi() async {
-    var acc = _googleSignIn.currentUser ??
-        await _googleSignIn.signInSilently() ??
-        await _googleSignIn.signIn();
-    if (acc == null) return null;
+    try {
+      var acc = _googleSignIn.currentUser ??
+          await _googleSignIn.signInSilently() ??
+          await _googleSignIn.signIn();
+      if (acc == null) return null;
 
-    final headers = await acc.authHeaders;
-    return drive.DriveApi(_AuthenticatedClient(IOClient(), headers));
-  }
-
-  /* ── subida ── */
-  static Future<bool> uploadBackup(Map<String, dynamic> json) async {
-    final api = await _driveApi();
-    if (api == null) return false;
-
-    final dir = await getTemporaryDirectory();
-    final tmp = File('${dir.path}/$_fileName')..writeAsStringSync(jsonEncode(json));
-
-    final media =
-        drive.Media(tmp.openRead(), await tmp.length(), contentType: 'application/json');
-    final meta =
-        drive.File()..name = _fileName..parents = ['appDataFolder'];
-
-    final prev = await api.files.list(
-      spaces: 'appDataFolder',
-      q: "name='$_fileName' and trashed=false",
-      $fields: 'files(id)',
-    );
-
-    if (prev.files?.isNotEmpty == true) {
-      await api.files.update(meta, prev.files!.first.id!, uploadMedia: media);
-    } else {
-      await api.files.create(meta, uploadMedia: media);
+      final headers = await acc.authHeaders;
+      return drive.DriveApi(_AuthenticatedClient(IOClient(), headers));
+    } catch (_) {
+      return null;
     }
-    return true;
   }
 
-  /* ── descarga ── */
-  static Future<Map<String, dynamic>?> downloadBackup() async {
-    final api = await _driveApi();
-    if (api == null) return null;
+  /* ── SUBIDA ── */
+  static Future<BackupResult<void>> uploadBackup(
+      Map<String, dynamic> json) async {
+    try {
+      final api = await _driveApi();
+      if (api == null) {
+        return const BackupResult.failure('Autenticación cancelada.');
+      }
 
-    final res = await api.files.list(
-      spaces: 'appDataFolder',
-      q: "name='$_fileName' and trashed=false",
-      orderBy: 'modifiedTime desc',
-      pageSize: 1,
-      $fields: 'files(id)',
-    );
-    if (res.files?.isEmpty ?? true) return null;
+      final dir = await getTemporaryDirectory();
+      final tmp =
+          File('${dir.path}/$_fileName')..writeAsStringSync(jsonEncode(json));
 
-    final media = await api.files.get(
-      res.files!.first.id!,
-      downloadOptions: drive.DownloadOptions.fullMedia,
-    ) as drive.Media;
+      final media = drive.Media(tmp.openRead(), await tmp.length(),
+          contentType: 'application/json');
+      final meta =
+          drive.File()..name = _fileName..parents = ['appDataFolder'];
 
-    final bytes = <int>[];
-    await media.stream.forEach(bytes.addAll);
-    return jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+      final prev = await api.files.list(
+        spaces: 'appDataFolder',
+        q: "name='$_fileName' and trashed=false",
+        $fields: 'files(id)',
+      );
+
+      if (prev.files?.isNotEmpty == true) {
+        await api.files.update(meta, prev.files!.first.id!, uploadMedia: media);
+      } else {
+        await api.files.create(meta, uploadMedia: media);
+      }
+      return const BackupResult.success();
+    } catch (e) {
+      return BackupResult.failure('Error al subir: $e');
+    }
+  }
+
+  /* ── DESCARGA ── */
+  static Future<BackupResult<Map<String, dynamic>>> downloadBackup() async {
+    try {
+      final api = await _driveApi();
+      if (api == null) {
+        return const BackupResult.failure('Autenticación cancelada.');
+      }
+
+      final res = await api.files.list(
+        spaces: 'appDataFolder',
+        q: "name='$_fileName' and trashed=false",
+        orderBy: 'modifiedTime desc',
+        pageSize: 1,
+        $fields: 'files(id)',
+      );
+      if (res.files?.isEmpty ?? true) {
+        return const BackupResult.failure('No hay copia en Drive.');
+      }
+
+      final media = await api.files.get(
+        res.files!.first.id!,
+        downloadOptions: drive.DownloadOptions.fullMedia,
+      ) as drive.Media;
+
+      final bytes = <int>[];
+      await media.stream.forEach(bytes.addAll);
+      final data =
+          jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>? ?? {};
+      return BackupResult.success(data);
+    } catch (e) {
+      return BackupResult.failure('Error al descargar: $e');
+    }
   }
 
   /* ── export / import Hive ── */
@@ -89,22 +119,21 @@ class DriveBackupService {
             .toList(),
       };
 
-  /// Devuelve `true` si se restauró algo, `false` si hubo error o lista vacía.
-  static Future<bool> importHive(
-      Map<String, dynamic> data, Box udm, Box<DiaryEntry> diary) async {
+  static Future<bool> importHive(Map<String, dynamic> data, Box udm,
+      Box<DiaryEntry> diary) async {
     try {
-      if (data['udm'] is Map) await udm.putAll(Map<String, dynamic>.from(data['udm']));
-
+      if (data['udm'] is Map) {
+        await udm.putAll(Map<String, dynamic>.from(data['udm']));
+      }
       if (data['diary'] is List) {
         final list = List<Map<String, dynamic>>.from(data['diary']);
         await diary.clear();
         await diary.addAll(list.map(_mapToDiaryEntry));
-        return true;
       }
+      return true;
     } catch (_) {
-      /* ignora y devuelve false */
+      return false;
     }
-    return false;
   }
 
   static DiaryEntry _mapToDiaryEntry(Map<String, dynamic> m) => DiaryEntry(
