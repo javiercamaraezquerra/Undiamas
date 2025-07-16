@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:developer' as dev;
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
@@ -43,13 +42,18 @@ class AchievementService {
   static Map<int, String> get milestones => Map.unmodifiable(_milestones);
 
   /* ── init ── */
-  static Future<void> init() async {
+  static Future<void> init(
+      {void Function(NotificationResponse)? onNotificationResponse}) async {
     const settings = InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       iOS: DarwinInitializationSettings(
           requestSoundPermission: true, requestAlertPermission: true),
     );
-    await _plugin.initialize(settings);
+
+    await _plugin.initialize(
+      settings,
+      onDidReceiveNotificationResponse: onNotificationResponse,
+    );
 
     // Solicitar permisos de forma compatible con todas las versiones
     try {
@@ -58,7 +62,7 @@ class AchievementService {
               AndroidFlutterLocalNotificationsPlugin>();
       await (androidImpl as dynamic)?.requestPermission();
     } catch (_) {
-      // En versiones antiguas del plugin no existe la API; se ignora
+      /* método no disponible en plugins antiguos */
     }
 
     await _plugin
@@ -153,6 +157,7 @@ class AchievementService {
           ),
           iOS: DarwinNotificationDetails(),
         ),
+        payload: '$doy',               // ← deep‑link
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
