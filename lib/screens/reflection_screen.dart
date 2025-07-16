@@ -1,16 +1,15 @@
 import 'dart:convert';
 import 'dart:developer' as dev;
-import 'dart:async';                      // ⬅️ Timer
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:intl/intl.dart';         // ⬅️ Día del año
+import 'package:intl/intl.dart';
 
-/// Muestra la reflexión correspondiente al día del año.
-/// • Recarga automáticamente si el usuario atraviesa la medianoche
-///   estando dentro de la app o al volver del segundo plano.
+/// Muestra la reflexión del día o la indicada por [dayIndex] (0‑364).
 class ReflectionScreen extends StatefulWidget {
-  const ReflectionScreen({super.key});
+  final int? dayIndex;
+  const ReflectionScreen({super.key, this.dayIndex});
 
   @override
   State<ReflectionScreen> createState() => _ReflectionScreenState();
@@ -18,17 +17,17 @@ class ReflectionScreen extends StatefulWidget {
 
 class _ReflectionScreenState extends State<ReflectionScreen>
     with WidgetsBindingObserver {
-  String? _header;        // Ej.: Día 197 – 15 Julio
-  String? _body;          // Markdown
+  String? _header;
+  String? _body;
   String? _loadError;
-  late int _currentDoY;   // Día del año que estamos mostrando
-  Timer? _midnightTimer;  // Dispara justo a las 00:00
+  late int _currentDoY;   // 1‑365
+  Timer? _midnightTimer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _loadToday();
+    _loadReflection();
   }
 
   @override
@@ -38,21 +37,18 @@ class _ReflectionScreenState extends State<ReflectionScreen>
     super.dispose();
   }
 
-  /* ──────────────── Recarga al volver a primer plano ──────────────── */
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
+    if (state == AppLifecycleState.resumed && widget.dayIndex == null) {
       final today = _dayOfYear(DateTime.now());
-      if (today != _currentDoY) _loadToday();        // nuevo día
+      if (today != _currentDoY) _loadReflection();
     }
   }
 
-  /* ──────────────── Carga reflexión de hoy ──────────────── */
-  Future<void> _loadToday() async {
+  /* ── Cargar reflexión ── */
+  Future<void> _loadReflection() async {
     try {
-      /* 1) Leer JSON y quitar comentarios ........................... */
-      String raw =
-          await rootBundle.loadString('assets/data/reflections.json');
+      String raw = await rootBundle.loadString('assets/data/reflections.json');
       raw = raw.replaceAll(
           RegExp(r'/\*[^*]*\*+(?:[^/*][^*]*\*+)*/', dotAll: true), '');
       raw = raw
@@ -62,14 +58,14 @@ class _ReflectionScreenState extends State<ReflectionScreen>
       final data = jsonDecode(raw) as List<dynamic>;
       if (data.length < 365) throw const FormatException('Faltan reflexiones');
 
-      /* 2) Calcular índice (día del año local, 0‑364) ............... */
-      final now = DateTime.now();
-      _currentDoY = _dayOfYear(now);
+      if (widget.dayIndex != null) {
+        _currentDoY = widget.dayIndex! + 1;
+      } else {
+        _currentDoY = _dayOfYear(DateTime.now());
+      }
       final idx = (_currentDoY - 1).clamp(0, 364);
 
       final md = data[idx] as String;
-
-      /* 3) Separar cabecera y cuerpo Markdown ....................... */
       final lines = LineSplitter.split(md).toList();
       if (lines.isEmpty) throw const FormatException('Sin contenido');
 
@@ -78,28 +74,26 @@ class _ReflectionScreenState extends State<ReflectionScreen>
       _loadError = null;
     } catch (e, st) {
       dev.log('Reflections load error', error: e, stackTrace: st);
-      _loadError = 'No se pudo cargar la reflexión de hoy.';
+      _loadError = 'No se pudo cargar la reflexión solicitada.';
     }
     if (mounted) setState(() {});
-    _scheduleMidnightReload();
+    if (widget.dayIndex == null) _scheduleMidnightReload();
   }
 
-  /* ──────────────── Programa recarga automática a las 00:00 ───────── */
   void _scheduleMidnightReload() {
     _midnightTimer?.cancel();
     final now = DateTime.now();
     final nextMidnight =
         DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
-    final msUntilMidnight = nextMidnight.difference(now).inMilliseconds;
-    _midnightTimer = Timer(Duration(milliseconds: msUntilMidnight + 1000), () {
-      if (mounted) _loadToday();
+    final ms = nextMidnight.difference(now).inMilliseconds;
+    _midnightTimer = Timer(Duration(milliseconds: ms + 1000), () {
+      if (mounted) _loadReflection();
     });
   }
 
-  /* ──────────────── Util ──────────────── */
   int _dayOfYear(DateTime dt) => int.parse(DateFormat('D').format(dt));
 
-  /* ──────────────── UI ──────────────── */
+  /* ── UI ── */
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -127,16 +121,12 @@ class _ReflectionScreenState extends State<ReflectionScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              /* Encabezado */
               Text(
                 _header!,
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: theme.textTheme.headlineMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
-
-              /* Cuerpo Markdown */
               Card(
                 elevation: 1,
                 color: theme.colorScheme.surface,
