@@ -13,28 +13,21 @@ import '../models/diary_entry.dart';
 class DriveBackupService {
   static const _fileName = 'udm_backup.json';
 
-  static final _googleSignIn = GoogleSignIn(
-    scopes: [drive.DriveApi.driveFileScope], // acceso solo a archivos creados
-  );
+  static final _googleSignIn =
+      GoogleSignIn(scopes: [drive.DriveApi.driveFileScope]);
 
-  /* ───── helpers de autenticación ───── */
-  static Future<GoogleSignInAccount?> _signIn() async {
-    var account = _googleSignIn.currentUser;
-    account ??= await _googleSignIn.signInSilently();
-    account ??= await _googleSignIn.signIn();
-    return account;
-  }
-
+  /* ── autenticación ── */
   static Future<drive.DriveApi?> _driveApi() async {
-    final account = await _signIn();
-    if (account == null) return null;
+    var acc = _googleSignIn.currentUser ??
+        await _googleSignIn.signInSilently() ??
+        await _googleSignIn.signIn();
+    if (acc == null) return null;
 
-    final headers = await account.authHeaders;
-    final client = _AuthenticatedClient(IOClient(), headers);
-    return drive.DriveApi(client);
+    final headers = await acc.authHeaders;
+    return drive.DriveApi(_AuthenticatedClient(IOClient(), headers));
   }
 
-  /* ───── BACKUP (subida) ───── */
+  /* ── subida ── */
   static Future<bool> uploadBackup(Map<String, dynamic> json) async {
     final api = await _driveApi();
     if (api == null) return false;
@@ -44,11 +37,10 @@ class DriveBackupService {
 
     final media =
         drive.Media(tmp.openRead(), await tmp.length(), contentType: 'application/json');
-    final fileMeta = drive.File()
+    final meta = drive.File()
       ..name = _fileName
       ..parents = ['appDataFolder'];
 
-    /* ¿existe copia previa? */
     final prev = await api.files.list(
       spaces: 'appDataFolder',
       q: "name='$_fileName' and trashed=false",
@@ -56,14 +48,14 @@ class DriveBackupService {
     );
 
     if (prev.files?.isNotEmpty == true) {
-      await api.files.update(fileMeta, prev.files!.first.id!, uploadMedia: media);
+      await api.files.update(meta, prev.files!.first.id!, uploadMedia: media);
     } else {
-      await api.files.create(fileMeta, uploadMedia: media);
+      await api.files.create(meta, uploadMedia: media);
     }
     return true;
   }
 
-  /* ───── RESTORE (descarga) ───── */
+  /* ── descarga ── */
   static Future<Map<String, dynamic>?> downloadBackup() async {
     final api = await _driveApi();
     if (api == null) return null;
@@ -77,9 +69,8 @@ class DriveBackupService {
     );
     if (res.files?.isEmpty ?? true) return null;
 
-    final fileId = res.files!.first.id!;
     final media = await api.files.get(
-      fileId,
+      res.files!.first.id!,
       downloadOptions: drive.DownloadOptions.fullMedia,
     ) as drive.Media;
 
@@ -88,12 +79,16 @@ class DriveBackupService {
     return jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
   }
 
-  /* ───── Exporta / importa las cajas Hive ───── */
+  /* ── export / import Hive ── */
   static Map<String, dynamic> exportHive(Box udm, Box<DiaryEntry> diary) {
     return {
       'udm': udm.toMap(),
       'diary': diary.values
-          .map((e) => {'text': e.text, 'mood': e.mood, 'date': e.date.toIso8601String()})
+          .map((e) => {
+                'text': e.text,
+                'mood': e.mood,
+                'createdAt': e.createdAt.toIso8601String(),
+              })
           .toList(),
     };
   }
@@ -109,22 +104,20 @@ class DriveBackupService {
     }
   }
 
-  /* ───── util privado ───── */
   static DiaryEntry _mapToDiaryEntry(Map<String, dynamic> m) => DiaryEntry(
         text: m['text'] as String? ?? '',
         mood: m['mood'] as int? ?? 2,
-        date: DateTime.parse(m['date'] as String),
+        createdAt: DateTime.parse(m['createdAt'] as String),
       );
 }
 
-/* ───── cliente autenticado ───── */
+/* ── cliente autenticado ── */
 class _AuthenticatedClient extends http.BaseClient {
   final http.Client _inner;
   final Map<String, String> _headers;
   _AuthenticatedClient(this._inner, this._headers);
 
   @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) {
-    return _inner.send(request..headers.addAll(_headers));
-  }
+  Future<http.StreamedResponse> send(http.BaseRequest request) =>
+      _inner.send(request..headers.addAll(_headers));
 }
