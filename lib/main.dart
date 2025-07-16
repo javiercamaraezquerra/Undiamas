@@ -64,22 +64,21 @@ Future<void> main() async {
   final hasStartDate = settings.containsKey('startDate');
   runApp(UnDiaMasApp(showOnboarding: !hasStartDate));
 
-  /* ── 6) Programar notificaciones y pedir permiso si hace falta ── */
+  /* ── 6) Programar notificaciones y gestionar permisos ── */
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     final ctx = _navKey.currentContext;
     if (ctx == null) return;
 
     try {
-      // Permiso denegado → mostrar diálogo
       bool allowed = true;
       if (Platform.isAndroid) {
-        final impl = FlutterLocalNotificationsPlugin()
-            .resolvePlatformSpecificImplementation<
+        final impl =
+            FlutterLocalNotificationsPlugin().resolvePlatformSpecificImplementation<
                 AndroidFlutterLocalNotificationsPlugin>();
         allowed = await (impl as dynamic)?.areNotificationsEnabled() ?? true;
       }
 
-      if (!allowed) {
+      if (!allowed && ctx.mounted) {
         await showDialog(
           context: ctx,
           builder: (_) => AlertDialog(
@@ -95,11 +94,15 @@ Future<void> main() async {
               ElevatedButton(
                 onPressed: () async {
                   Navigator.pop(ctx);
-                  // Abre ajustes de la app
-                  await FlutterLocalNotificationsPlugin()
-                      .resolvePlatformSpecificImplementation<
-                          AndroidFlutterLocalNotificationsPlugin>()
-                      ?.openNotificationSettings();
+                  // Intentamos abrir ajustes de la app (si el plugin lo soporta)
+                  try {
+                    final android = FlutterLocalNotificationsPlugin()
+                        .resolvePlatformSpecificImplementation<
+                            AndroidFlutterLocalNotificationsPlugin>();
+                    await (android as dynamic)?.openNotificationSettings();
+                  } catch (_) {
+                    // Si la API no existe, simplemente no hacemos nada
+                  }
                 },
                 child: const Text('Activar'),
               ),
