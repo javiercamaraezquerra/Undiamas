@@ -12,7 +12,6 @@ import '../models/diary_entry.dart';
 
 class DriveBackupService {
   static const _fileName = 'udm_backup.json';
-
   static final _googleSignIn =
       GoogleSignIn(scopes: [drive.DriveApi.driveFileScope]);
 
@@ -37,9 +36,8 @@ class DriveBackupService {
 
     final media =
         drive.Media(tmp.openRead(), await tmp.length(), contentType: 'application/json');
-    final meta = drive.File()
-      ..name = _fileName
-      ..parents = ['appDataFolder'];
+    final meta =
+        drive.File()..name = _fileName..parents = ['appDataFolder'];
 
     final prev = await api.files.list(
       spaces: 'appDataFolder',
@@ -80,34 +78,39 @@ class DriveBackupService {
   }
 
   /* ── export / import Hive ── */
-  static Map<String, dynamic> exportHive(Box udm, Box<DiaryEntry> diary) {
-    return {
-      'udm': udm.toMap(),
-      'diary': diary.values
-          .map((e) => {
-                'text': e.text,
-                'mood': e.mood,
-                'createdAt': e.createdAt.toIso8601String(),
-              })
-          .toList(),
-    };
-  }
+  static Map<String, dynamic> exportHive(Box udm, Box<DiaryEntry> diary) => {
+        'udm': udm.toMap(),
+        'diary': diary.values
+            .map((e) => {
+                  'text': e.text,
+                  'mood': e.mood,
+                  'createdAt': e.createdAt.toIso8601String(),
+                })
+            .toList(),
+      };
 
-  static Future<void> importHive(
+  /// Devuelve `true` si se restauró algo, `false` si hubo error o lista vacía.
+  static Future<bool> importHive(
       Map<String, dynamic> data, Box udm, Box<DiaryEntry> diary) async {
-    if (data['udm'] is Map) await udm.putAll(Map<String, dynamic>.from(data['udm']));
+    try {
+      if (data['udm'] is Map) await udm.putAll(Map<String, dynamic>.from(data['udm']));
 
-    if (data['diary'] is List) {
-      await diary.clear();
-      final list = List<Map<String, dynamic>>.from(data['diary']);
-      await diary.addAll(list.map(_mapToDiaryEntry));
+      if (data['diary'] is List) {
+        final list = List<Map<String, dynamic>>.from(data['diary']);
+        await diary.clear();
+        await diary.addAll(list.map(_mapToDiaryEntry));
+        return true;
+      }
+    } catch (_) {
+      /* ignora y devuelve false */
     }
+    return false;
   }
 
   static DiaryEntry _mapToDiaryEntry(Map<String, dynamic> m) => DiaryEntry(
-        text: m['text'] as String? ?? '',
-        mood: m['mood'] as int? ?? 2,
-        createdAt: DateTime.parse(m['createdAt'] as String),
+        text: m['text'] ?? '',
+        mood: m['mood'] ?? 2,
+        createdAt: DateTime.parse(m['createdAt']),
       );
 }
 
