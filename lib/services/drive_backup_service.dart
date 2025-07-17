@@ -20,8 +20,10 @@ class BackupResult<T> {
 
 class DriveBackupService {
   static const _fileName = 'udm_backup.json';
+
+  // ⬇️  PERMISO limitado SOLO a appDataFolder
   static final _googleSignIn =
-      GoogleSignIn(scopes: [drive.DriveApi.driveFileScope]);
+      GoogleSignIn(scopes: [drive.DriveApi.driveAppdataScope]);
 
   /* ── autenticación ── */
   static Future<drive.DriveApi?> _driveApi() async {
@@ -53,9 +55,13 @@ class DriveBackupService {
 
       final media = drive.Media(tmp.openRead(), await tmp.length(),
           contentType: 'application/json');
-      final meta =
-          drive.File()..name = _fileName..parents = ['appDataFolder'];
 
+      // Archivo en la carpeta privada de la app
+      final meta = drive.File()
+        ..name = _fileName
+        ..parents = ['appDataFolder'];
+
+      // ¿Ya existe una copia?
       final prev = await api.files.list(
         spaces: 'appDataFolder',
         q: "name='$_fileName' and trashed=false",
@@ -63,7 +69,8 @@ class DriveBackupService {
       );
 
       if (prev.files?.isNotEmpty == true) {
-        await api.files.update(meta, prev.files!.first.id!, uploadMedia: media);
+        await api.files.update(meta, prev.files!.first.id!,
+            uploadMedia: media);
       } else {
         await api.files.create(meta, uploadMedia: media);
       }
@@ -119,8 +126,8 @@ class DriveBackupService {
             .toList(),
       };
 
-  static Future<bool> importHive(Map<String, dynamic> data, Box udm,
-      Box<DiaryEntry> diary) async {
+  static Future<bool> importHive(
+      Map<String, dynamic> data, Box udm, Box<DiaryEntry> diary) async {
     try {
       if (data['udm'] is Map) {
         await udm.putAll(Map<String, dynamic>.from(data['udm']));
