@@ -76,6 +76,22 @@ jobs:
           storeFile=undiamas.jks
           EOF
 
+      # 7.1) ➕ Imprimir SHA‑1 de la UPLOAD KEY
+      - name: Show upload key SHA‑1
+        run: |
+          keytool -list -v \
+            -keystore android/app/undiamas.jks \
+            -alias ${{ secrets.KEY_ALIAS }} \
+            -storepass ${{ secrets.STORE_PASSWORD }} \
+            -keypass  ${{ secrets.KEY_PASSWORD }} | grep 'SHA1:' || true
+
+      # 7.2) ➕ Imprimir SHA‑1 de la DEBUG KEY
+      - name: Show debug key SHA‑1
+        run: |
+          keytool -list -v \
+            -keystore ~/.android/debug.keystore \
+            -alias androiddebugkey \
+            -storepass android -keypass android | grep 'SHA1:' || true
       # 8) Compilar APK
       - name: Build release APK
         run: flutter build apk --release
