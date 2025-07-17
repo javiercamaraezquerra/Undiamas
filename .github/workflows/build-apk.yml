@@ -85,6 +85,15 @@ jobs:
             -storepass ${{ secrets.STORE_PASSWORD }} \
             -keypass  ${{ secrets.KEY_PASSWORD }} | grep 'SHA1:' || true
 
+      # 7.1‑bis) Generar debug keystore (solo para sacar la huella)
+      - name: Generate debug keystore
+        run: |
+          mkdir -p ~/.android
+          keytool -genkeypair -dname "CN=Android,O=Android,C=US" \
+            -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+            -keystore ~/.android/debug.keystore \
+            -storepass android -keypass android
+
       # 7.2) ➕ Imprimir SHA‑1 de la DEBUG KEY
       - name: Show debug key SHA‑1
         run: |
