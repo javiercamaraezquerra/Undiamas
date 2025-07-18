@@ -18,16 +18,17 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  /* ─── switches ─── */
-  bool _isDark          = false;
-  bool _notifDaily      = true;
+  /* –– preferencias –– */
+  bool _isDark = false;
+  bool _notifDaily = true;
   bool _notifMilestones = true;
-  bool _autoBackup      = false;
+  bool _autoBackup = false;
 
-  /* ─── progreso sobriedad ─── */
+  /* –– progreso –– */
   DateTime? _startDate;
   int _daysClean = 0;
 
+  /* –– cajas Hive –– */
   late Future<Box<DiaryEntry>> _diaryBoxFuture;
 
   @override
@@ -39,16 +40,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadPrefs();
   }
 
-  /*────────────── preferencias ──────────────*/
+  /* ───────────────── prefs ───────────────── */
   Future<void> _loadPrefs() async {
-    final p            = await SharedPreferences.getInstance();
-    _isDark            = p.getBool('isDarkMode') ?? false;
-    _notifDaily        = p.getBool('notifyDailyReflection') ?? true;
-    _notifMilestones   = p.getBool('notifyMilestones') ?? true;
-    _autoBackup        = p.getBool('autoBackup') ?? false;
+    final prefs = await SharedPreferences.getInstance();
+    _isDark = prefs.getBool('isDarkMode') ?? false;
+    _notifDaily = prefs.getBool('notifyDailyReflection') ?? true;
+    _notifMilestones = prefs.getBool('notifyMilestones') ?? true;
+    _autoBackup = prefs.getBool('autoBackup') ?? false;
 
     final cipher = await EncryptionService.getCipher();
-    final box    = await Hive.openBox('udm_secure', encryptionCipher: cipher);
+    final box = await Hive.openBox('udm_secure', encryptionCipher: cipher);
     if (box.containsKey('startDate')) {
       _startDate = DateTime.parse(box.get('startDate'));
       _daysClean = DateTime.now().difference(_startDate!).inDays;
@@ -56,17 +57,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (mounted) setState(() {});
   }
 
-  /*────────────── toggles ──────────────*/
+  /* ─────────── toggles básicos ─────────── */
   Future<void> _toggleTheme(bool v) async {
-    final p = await SharedPreferences.getInstance();
-    await p.setBool('isDarkMode', v);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isDarkMode', v);
     themeNotifier.value = v ? ThemeMode.dark : ThemeMode.light;
     setState(() => _isDark = v);
   }
 
   Future<void> _toggleDailyNotif(bool v) async {
-    final p = await SharedPreferences.getInstance();
-    await p.setBool('notifyDailyReflection', v);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('notifyDailyReflection', v);
     setState(() => _notifDaily = v);
 
     if (v) {
@@ -79,8 +80,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _toggleMilestoneNotif(bool v) async {
-    final p = await SharedPreferences.getInstance();
-    await p.setBool('notifyMilestones', v);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('notifyMilestones', v);
     setState(() => _notifMilestones = v);
 
     if (v && _startDate != null) {
@@ -90,25 +91,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  /* ─────────── copia automática ─────────── */
   Future<void> _toggleAutoBackup(bool v) async {
     final prefs = await SharedPreferences.getInstance();
 
     if (v && !_autoBackup) {
-      /* primera vez → confirmación + copia inicial */
+      // Primera activación → pedir consentimiento y subir copia inicial
       if (!await _confirmDriveConsent()) return;
 
       final wait = _showSnack('Subiendo copia inicial…', persistent: true);
       final cipher = await EncryptionService.getCipher();
-      final udm    = await Hive.openBox('udm_secure', encryptionCipher: cipher);
-      final diary  = await Hive.openBox<DiaryEntry>('diary_secure',
-                          encryptionCipher: cipher);
+      final udm =
+          await Hive.openBox('udm_secure', encryptionCipher: cipher);
+      final diary =
+          await Hive.openBox<DiaryEntry>('diary_secure', encryptionCipher: cipher);
 
       final res = await DriveBackupService.uploadBackup(
           DriveBackupService.exportHive(udm, diary));
 
       wait.close();
       if (!res.ok) {
-        _showSnack(res.message ?? 'Error');
+        _showSnack(res.message ?? 'Error al subir la copia.');
         return;
       }
     }
@@ -117,16 +120,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _autoBackup = v);
   }
 
-  /*────────────── copia / restauración ──────────────*/
+  /* ─────────── restaurar ─────────── */
   Future<bool> _confirmDriveConsent() async {
     return await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
             title: const Text('Google Drive'),
             content: const Text(
-              'La copia se guarda cifrada en tu Drive (carpeta privada). '
-              'Si no lo permites, la app seguirá funcionando, pero '
-              'podrías perder los datos al cambiar de móvil o reinstalar.',
+              'La app necesitará acceder a tu carpeta privada de Drive para '
+              'almacenar copias de seguridad. Si lo rechazas, podrías perder '
+              'los datos al cambiar de dispositivo.',
               textAlign: TextAlign.justify,
             ),
             actions: [
@@ -150,19 +153,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
-    final wait   = _showSnack('Descargando copia…', persistent: true);
+    final wait = _showSnack('Descargando copia…', persistent: true);
     final result = await DriveBackupService.downloadBackup();
     wait.close();
 
     if (!result.ok || result.data == null) {
-      _showSnack(result.message ?? 'No hay copia.');
+      _showSnack(result.message ?? 'No se encontró copia válida.');
       return;
     }
 
     final cipher = await EncryptionService.getCipher();
-    final udm    = await Hive.openBox('udm_secure', encryptionCipher: cipher);
-    final diary  = await Hive.openBox<DiaryEntry>('diary_secure',
-                        encryptionCipher: cipher);
+    final udm =
+        await Hive.openBox('udm_secure', encryptionCipher: cipher);
+    final diary =
+        await Hive.openBox<DiaryEntry>('diary_secure', encryptionCipher: cipher);
 
     final imported =
         await DriveBackupService.importHive(result.data!, udm, diary);
@@ -172,6 +176,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         : 'La copia estaba vacía o dañada.');
 
     if (imported) {
+      // refrescar listenable
       setState(() {
         _diaryBoxFuture = EncryptionService.getCipher().then(
           (c) => Hive.openBox<DiaryEntry>('diary_secure', encryptionCipher: c),
@@ -181,12 +186,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  /*────────────── reset contador ──────────────*/
+  /* ─────────── reset contador ─────────── */
   Future<void> _resetSoberDate() async {
     final now = DateTime.now();
 
     final cipher = await EncryptionService.getCipher();
-    final box    = await Hive.openBox('udm_secure', encryptionCipher: cipher);
+    final box = await Hive.openBox('udm_secure', encryptionCipher: cipher);
     await box.put('startDate', now.toIso8601String());
 
     final prefs = await SharedPreferences.getInstance();
@@ -200,34 +205,83 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _showSnack('¡Contador reiniciado!');
   }
 
-  /*────────────── UI helpers ──────────────*/
+  /* ─────────── Snack helper ─────────── */
   ScaffoldFeatureController<SnackBar, SnackBarClosedReason> _showSnack(
-    String msg, {bool persistent = false}) {
-    return ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        duration:
-            persistent ? const Duration(days: 1) : const Duration(seconds: 4),
+      String msg,
+      {bool persistent = false}) {
+    final sb = SnackBar(
+      content: Text(msg),
+      duration: persistent ? const Duration(days: 1) : const Duration(seconds: 4),
+    );
+    return ScaffoldMessenger.of(context).showSnackBar(sb);
+  }
+
+  /* ─────────── UI ─────────── */
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Perfil')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          ListTile(
+            leading: const Icon(Icons.brightness_6),
+            title: const Text('Modo oscuro'),
+            trailing: Switch(value: _isDark, onChanged: _toggleTheme),
+          ),
+          ListTile(
+            leading: const Icon(Icons.notifications_active_outlined),
+            title: const Text('Notificación diaria de reflexión'),
+            trailing: Switch(value: _notifDaily, onChanged: _toggleDailyNotif),
+          ),
+          ListTile(
+            leading: const Icon(Icons.flag),
+            title: const Text('Notificaciones de logros'),
+            trailing:
+                Switch(value: _notifMilestones, onChanged: _toggleMilestoneNotif),
+          ),
+          ListTile(
+            leading: const Icon(Icons.cloud_sync),
+            title: const Text('Copias automáticas en Drive'),
+            trailing: Switch(value: _autoBackup, onChanged: _toggleAutoBackup),
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.cloud_download),
+            title: const Text('Restaurar desde Drive'),
+            onTap: _restoreFromDrive,
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.refresh),
+            title: const Text('Reiniciar contador'),
+            subtitle: const Text('Establece hoy y ahora como inicio'),
+            onTap: _resetSoberDate,
+          ),
+          const Divider(),
+          if (_startDate != null) ..._buildProgressSection(),
+          const Divider(),
+          _buildMoodSection(),
+        ],
       ),
     );
   }
 
+  /* –– widgets auxiliares –– */
   List<Widget> _buildProgressSection() {
     final milestones = AchievementService.milestones.keys.toList()..sort();
-    final next       = milestones.firstWhere(
-        (d) => _daysClean < d,
-        orElse: () => -1);
+    final next = milestones.firstWhere((d) => _daysClean < d, orElse: () => -1);
 
     return [
       ListTile(
-        leading : const Icon(Icons.celebration),
-        title   : Text('Llevas $_daysClean días limpio'),
+        leading: const Icon(Icons.celebration),
+        title: Text('Llevas $_daysClean días limpio'),
         subtitle: Text('Desde ${DateFormat.yMMMd().format(_startDate!)}'),
       ),
       if (next != -1)
         ListTile(
-          leading : const Icon(Icons.flag_outlined),
-          title   : Text('Próximo hito: $next días'),
+          leading: const Icon(Icons.flag_outlined),
+          title: Text('Próximo hito: $next días'),
           subtitle: Text(AchievementService.milestones[next]!),
         ),
     ];
@@ -243,8 +297,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           valueListenable: box.listenable(),
           builder: (_, __, ___) {
             final entries = box.values.toList();
-            final trend   = moodTrendSign(entries);
-            final avg     = entries.isEmpty
+            final trend = moodTrendSign(entries);
+            final avg = entries.isEmpty
                 ? 2.0
                 : entries.map((e) => e.mood).reduce((a, b) => a + b) /
                     entries.length;
@@ -272,7 +326,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const ListTile(
                       dense: true,
                       leading: Icon(Icons.show_chart),
-                      title : Text('Tendencia de ánimo'),
+                      title: Text('Tendencia de ánimo'),
                     ),
                     AspectRatio(
                       aspectRatio: 1.6,
@@ -291,56 +345,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           },
         );
       },
-    );
-  }
-
-  /*────────────── UI ──────────────*/
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Perfil')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          ListTile(
-            leading : const Icon(Icons.brightness_6),
-            title   : const Text('Modo oscuro'),
-            trailing: Switch(value: _isDark, onChanged: _toggleTheme),
-          ),
-          ListTile(
-            leading : const Icon(Icons.notifications_active_outlined),
-            title   : const Text('Notificación diaria de reflexión'),
-            trailing: Switch(value: _notifDaily, onChanged: _toggleDailyNotif),
-          ),
-          ListTile(
-            leading : const Icon(Icons.flag),
-            title   : const Text('Notificaciones de logros'),
-            trailing: Switch(value: _notifMilestones, onChanged: _toggleMilestoneNotif),
-          ),
-          ListTile(
-            leading : const Icon(Icons.cloud_sync),
-            title   : const Text('Copias automáticas en Drive'),
-            trailing: Switch(value: _autoBackup, onChanged: _toggleAutoBackup),
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.cloud_download),
-            title  : const Text('Restaurar desde Drive'),
-            onTap  : _restoreFromDrive,
-          ),
-          const Divider(),
-          ListTile(
-            leading : const Icon(Icons.refresh),
-            title   : const Text('Reiniciar contador'),
-            subtitle: const Text('Establece hoy y ahora como inicio'),
-            onTap   : _resetSoberDate,
-          ),
-          const Divider(),
-          if (_startDate != null) ..._buildProgressSection(),
-          const Divider(),
-          _buildMoodSection(),
-        ],
-      ),
     );
   }
 }
