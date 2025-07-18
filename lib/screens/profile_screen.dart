@@ -18,17 +18,17 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  /* ─── estados de switches ─── */
+  /* switches */
   bool _isDark          = false;
   bool _notifDaily      = true;
   bool _notifMilestones = true;
   bool _autoBackup      = false;
 
-  /* ─── progreso sobriedad ─── */
+  /* progreso */
   DateTime? _startDate;
   int _daysClean = 0;
 
-  /* ─── cajas ─── */
+  /* Hive */
   late Future<Box<DiaryEntry>> _diaryBoxFuture;
 
   @override
@@ -40,13 +40,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadPrefs();
   }
 
-  /*─────────────────────── Preferencias ───────────────────────*/
   Future<void> _loadPrefs() async {
-    final prefs        = await SharedPreferences.getInstance();
-    _isDark            = prefs.getBool('isDarkMode') ?? false;
-    _notifDaily        = prefs.getBool('notifyDailyReflection') ?? true;
-    _notifMilestones   = prefs.getBool('notifyMilestones') ?? true;
-    _autoBackup        = prefs.getBool('autoBackup') ?? false;
+    final p            = await SharedPreferences.getInstance();
+    _isDark            = p.getBool('isDarkMode') ?? false;
+    _notifDaily        = p.getBool('notifyDailyReflection') ?? true;
+    _notifMilestones   = p.getBool('notifyMilestones') ?? true;
+    _autoBackup        = p.getBool('autoBackup') ?? false;
 
     final cipher = await EncryptionService.getCipher();
     final box    = await Hive.openBox('udm_secure', encryptionCipher: cipher);
@@ -57,7 +56,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (mounted) setState(() {});
   }
 
-  /*─────────────────────── Toggles UI ───────────────────────*/
+  /* ───── toggles ───── */
   Future<void> _toggleTheme(bool v) async {
     final p = await SharedPreferences.getInstance();
     await p.setBool('isDarkMode', v);
@@ -95,11 +94,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final prefs = await SharedPreferences.getInstance();
 
     if (v && !_autoBackup) {
-      /* primera vez → confirmación + copia inicial */
+      // activación inicial → confirmación + copia
       if (!await _confirmDriveConsent()) return;
 
-      final wait = _showSnack('Subiendo copia inicial…', persistent: true);
-
+      final wait   = _showSnack('Subiendo copia inicial…', persistent: true);
       final cipher = await EncryptionService.getCipher();
       final udm    = await Hive.openBox('udm_secure', encryptionCipher: cipher);
       final diary  = await Hive.openBox<DiaryEntry>('diary_secure',
@@ -119,7 +117,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _autoBackup = v);
   }
 
-  /*────────────────── Copia / restauración ──────────────────*/
+  /* ───── copia / restauración ───── */
   Future<bool> _confirmDriveConsent() async {
     return await showDialog<bool>(
           context: context,
@@ -127,8 +125,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             title: const Text('Google Drive'),
             content: const Text(
               'La copia se guarda cifrada en tu Drive (carpeta privada). '
-              'Si no lo permites, la app seguirá funcionando, pero '
-              'podrías perder datos al cambiar de móvil o reinstalar.'
+              'Si no das permiso, podrías perder datos al cambiar de móvil o reinstalar.',
+              textAlign: TextAlign.justify,
             ),
             actions: [
               TextButton(
@@ -143,27 +141,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ) ??
         false;
-  }
-
-  Future<void> _backupToDrive() async {
-    if (!await _confirmDriveConsent()) {
-      _showSnack('Copia cancelada.');
-      return;
-    }
-
-    final wait   = _showSnack('Subiendo copia…', persistent: true);
-    final cipher = await EncryptionService.getCipher();
-    final udm    = await Hive.openBox('udm_secure', encryptionCipher: cipher);
-    final diary  = await Hive.openBox<DiaryEntry>('diary_secure',
-                        encryptionCipher: cipher);
-
-    final res = await DriveBackupService.uploadBackup(
-        DriveBackupService.exportHive(udm, diary));
-
-    wait.close();
-    _showSnack(res.ok
-        ? 'Copia subida a Drive'
-        : res.message ?? 'Error desconocido');
   }
 
   Future<void> _restoreFromDrive() async {
@@ -203,7 +180,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  /*──────────────────── Reiniciar contador ───────────────────*/
+  /* ───── reset contador ───── */
   Future<void> _resetSoberDate() async {
     final now = DateTime.now();
 
@@ -222,20 +199,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (mounted) _showSnack('¡Contador reiniciado!');
   }
 
-  /*───────────────────── Helpers UI ─────────────────────*/
+  /* ───── helper SnackBar ───── */
   ScaffoldFeatureController<SnackBar, SnackBarClosedReason> _showSnack(
     String msg, {
     bool persistent = false,
   }) {
     return ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg),
-        duration:
-            persistent ? const Duration(days: 1) : const Duration(seconds: 4),
+        content : Text(msg),
+        duration: persistent
+            ? const Duration(days: 1)
+            : const Duration(seconds: 4),
       ),
     );
   }
 
+  /* ───── progreso & ánimo ───── */
   List<Widget> _buildProgressSection() {
     final milestones = AchievementService.milestones.keys.toList()..sort();
     final next       = milestones.firstWhere(
@@ -244,8 +223,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return [
       ListTile(
-        leading: const Icon(Icons.celebration),
-        title : Text('Llevas $_daysClean días limpio'),
+        leading : const Icon(Icons.celebration),
+        title   : Text('Llevas $_daysClean días limpio'),
         subtitle: Text('Desde ${DateFormat.yMMMd().format(_startDate!)}'),
       ),
       if (next != -1)
@@ -287,14 +266,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             return Card(
               elevation: 1,
-              shape:
-                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape    : RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               child: Padding(
                 padding: const EdgeInsets.all(12.0),
                 child: Column(
                   children: [
                     const ListTile(
-                      dense: true,
+                      dense : true,
                       leading: Icon(Icons.show_chart),
                       title : Text('Tendencia de ánimo'),
                     ),
@@ -305,7 +284,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 8),
                     Text(
                       phrase,
-                      style: Theme.of(context).textTheme.bodyMedium,
+                      style   : Theme.of(context).textTheme.bodyMedium,
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -318,7 +297,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  /*───────────────────── UI main ─────────────────────*/
+  /* ───── UI ───── */
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -327,8 +306,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           ListTile(
-            leading: const Icon(Icons.brightness_6),
-            title  : const Text('Modo oscuro'),
+            leading : const Icon(Icons.brightness_6),
+            title   : const Text('Modo oscuro'),
             trailing: Switch(value: _isDark, onChanged: _toggleTheme),
           ),
           ListTile(
@@ -344,15 +323,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ListTile(
             leading : const Icon(Icons.cloud_sync),
             title   : const Text('Copias automáticas en Drive'),
-            subtitle: const Text('Se guardan cifradas en tu cuenta'),
             trailing: Switch(value: _autoBackup, onChanged: _toggleAutoBackup),
           ),
           const Divider(),
-          ListTile(
-            leading: const Icon(Icons.cloud_upload),
-            title  : const Text('Copia manual en Drive'),
-            onTap  : _backupToDrive,
-          ),
           ListTile(
             leading: const Icon(Icons.cloud_download),
             title  : const Text('Restaurar desde Drive'),
