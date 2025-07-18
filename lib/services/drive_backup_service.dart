@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:encrypt/encrypt.dart' as enc;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
@@ -9,10 +11,11 @@ import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../models/diary_entry.dart';
+import 'encryption_service.dart';
 
 class BackupResult<T> {
   final bool ok;
-  final String? message; // null si ok==true
+  final String? message;
   final T? data;
   const BackupResult.success([this.data]) : ok = true, message = null;
   const BackupResult.failure(this.message) : ok = false, data = null;
@@ -20,12 +23,10 @@ class BackupResult<T> {
 
 class DriveBackupService {
   static const _fileName = 'udm_backup.json';
-
-  // ⬇️  PERMISO limitado SOLO a appDataFolder
   static final _googleSignIn =
       GoogleSignIn(scopes: [drive.DriveApi.driveAppdataScope]);
 
-  /* ── autenticación ── */
+  /* ───────── autenticación ───────── */
   static Future<drive.DriveApi?> _driveApi() async {
     try {
       var acc = _googleSignIn.currentUser ??
@@ -40,7 +41,31 @@ class DriveBackupService {
     }
   }
 
-  /* ── SUBIDA ── */
+  /* ───────── cifrado AES‑256 ───────── */
+  static Future<String> _encryptJson(Map<String, dynamic> json) async {
+    final keyBytes = await EncryptionService.getRawKey();
+    final key = enc.Key(keyBytes);
+    final iv = enc.IV.fromSecureRandom(16);
+    final encr = enc.Encrypter(enc.AES(key, mode: enc.AESMode.cbc));
+    final ct = encr.encrypt(jsonEncode(json), iv: iv);
+    return jsonEncode({
+      'iv': base64.encode(iv.bytes),
+      'data': ct.base64,
+    });
+  }
+
+  static Future<Map<String, dynamic>> _decryptJson(String txt) async {
+    final map = jsonDecode(txt) as Map<String, dynamic>;
+    final keyBytes = await EncryptionService.getRawKey();
+    final key = enc.Key(keyBytes);
+    final iv = enc.IV(base64.decode(map['iv'] as String));
+    final encr = enc.Encrypter(enc.AES(key, mode: enc.AESMode.cbc));
+    final clear =
+        encr.decrypt(enc.Encrypted.fromBase64(map['data'] as String), iv: iv);
+    return jsonDecode(clear) as Map<String, dynamic>;
+  }
+
+  /* ───────── SUBIDA ───────── */
   static Future<BackupResult<void>> uploadBackup(
       Map<String, dynamic> json) async {
     try {
@@ -50,18 +75,13 @@ class DriveBackupService {
       }
 
       final dir = await getTemporaryDirectory();
-      final tmp =
-          File('${dir.path}/$_fileName')..writeAsStringSync(jsonEncode(json));
+      final tmp = File('${dir.path}/$_fileName')
+        ..writeAsStringSync(await _encryptJson(json));
 
-      final media = drive.Media(tmp.openRead(), await tmp.length(),
-          contentType: 'application/json');
+      final media =
+          drive.Media(tmp.openRead(), tmp.lengthSync(), contentType: 'application/json');
 
-      // Archivo en la carpeta privada de la app
-      final meta = drive.File()
-        ..name = _fileName
-        ..parents = ['appDataFolder'];
-
-      // ¿Ya existe una copia?
+      // Buscar copia previa
       final prev = await api.files.list(
         spaces: 'appDataFolder',
         q: "name='$_fileName' and trashed=false",
@@ -69,9 +89,14 @@ class DriveBackupService {
       );
 
       if (prev.files?.isNotEmpty == true) {
-        await api.files.update(meta, prev.files!.first.id!,
-            uploadMedia: media);
+        // update SIN modificar parents
+        await api.files
+            .update(drive.File()..name = _fileName, prev.files!.first.id!,
+                uploadMedia: media);
       } else {
+        final meta = drive.File()
+          ..name = _fileName
+          ..parents = ['appDataFolder'];
         await api.files.create(meta, uploadMedia: media);
       }
       return const BackupResult.success();
@@ -80,7 +105,7 @@ class DriveBackupService {
     }
   }
 
-  /* ── DESCARGA ── */
+  /* ───────── DESCARGA ───────── */
   static Future<BackupResult<Map<String, dynamic>>> downloadBackup() async {
     try {
       final api = await _driveApi();
@@ -106,15 +131,14 @@ class DriveBackupService {
 
       final bytes = <int>[];
       await media.stream.forEach(bytes.addAll);
-      final data =
-          jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>? ?? {};
+      final data = await _decryptJson(utf8.decode(bytes));
       return BackupResult.success(data);
     } catch (e) {
       return BackupResult.failure('Error al descargar: $e');
     }
   }
 
-  /* ── export / import Hive ── */
+  /* ───────── export / import Hive ───────── */
   static Map<String, dynamic> exportHive(Box udm, Box<DiaryEntry> diary) => {
         'udm': udm.toMap(),
         'diary': diary.values
@@ -150,7 +174,7 @@ class DriveBackupService {
       );
 }
 
-/* ── cliente autenticado ── */
+/* ───────── cliente HTTP con auth ───────── */
 class _AuthenticatedClient extends http.BaseClient {
   final http.Client _inner;
   final Map<String, String> _headers;
