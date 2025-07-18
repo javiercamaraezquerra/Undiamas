@@ -27,6 +27,7 @@ class _JournalScreenState extends State<JournalScreen> {
     _controller.addListener(() => setState(() {}));
   }
 
+  /*──────── guardar entrada + copia auto ────────*/
   Future<void> _saveEntry(Box<DiaryEntry> box) async {
     final entry = DiaryEntry(
       createdAt: DateTime.now(),
@@ -35,17 +36,16 @@ class _JournalScreenState extends State<JournalScreen> {
     );
     await box.add(entry);
 
-    /* ─── copia automática en Drive ─── */
     final prefs = await SharedPreferences.getInstance();
     if (prefs.getBool('autoBackup') ?? false) {
       final cipher = await EncryptionService.getCipher();
       final udm    = await Hive.openBox('udm_secure', encryptionCipher: cipher);
       final diary  = await Hive.openBox<DiaryEntry>('diary_secure',
                           encryptionCipher: cipher);
+      // ignoramos posibles errores silenciosamente
       await DriveBackupService.uploadBackup(
           DriveBackupService.exportHive(udm, diary));
     }
-    /* ────────────────────────────────── */
 
     if (!mounted) return;
     FocusScope.of(context).unfocus();
@@ -75,7 +75,7 @@ class _JournalScreenState extends State<JournalScreen> {
         final box = snap.data!;
         return ValueListenableBuilder(
           valueListenable: box.listenable(),
-          builder: (context, Box<DiaryEntry> b, _) {
+          builder: (_, Box<DiaryEntry> b, __) {
             final entries = b.values.toList().reversed.toList();
             return Scaffold(
               appBar: AppBar(title: const Text('Diario')),
@@ -142,7 +142,7 @@ class _JournalScreenState extends State<JournalScreen> {
                           : ListView.builder(
                               itemCount: entries.length,
                               itemBuilder: (_, i) {
-                                final e    = entries[i];
+                                final e = entries[i];
                                 final date =
                                     '${e.createdAt.day}/${e.createdAt.month}/${e.createdAt.year} '
                                     '${e.createdAt.hour.toString().padLeft(2, '0')}:'
