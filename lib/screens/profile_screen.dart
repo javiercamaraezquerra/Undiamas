@@ -18,17 +18,16 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  /* switches */
+  /* ─── switches ─── */
   bool _isDark          = false;
   bool _notifDaily      = true;
   bool _notifMilestones = true;
   bool _autoBackup      = false;
 
-  /* progreso */
+  /* ─── progreso sobriedad ─── */
   DateTime? _startDate;
   int _daysClean = 0;
 
-  /* Hive */
   late Future<Box<DiaryEntry>> _diaryBoxFuture;
 
   @override
@@ -40,6 +39,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadPrefs();
   }
 
+  /*────────────── preferencias ──────────────*/
   Future<void> _loadPrefs() async {
     final p            = await SharedPreferences.getInstance();
     _isDark            = p.getBool('isDarkMode') ?? false;
@@ -50,13 +50,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final cipher = await EncryptionService.getCipher();
     final box    = await Hive.openBox('udm_secure', encryptionCipher: cipher);
     if (box.containsKey('startDate')) {
-      _startDate  = DateTime.parse(box.get('startDate'));
-      _daysClean  = DateTime.now().difference(_startDate!).inDays;
+      _startDate = DateTime.parse(box.get('startDate'));
+      _daysClean = DateTime.now().difference(_startDate!).inDays;
     }
     if (mounted) setState(() {});
   }
 
-  /* ───── toggles ───── */
+  /*────────────── toggles ──────────────*/
   Future<void> _toggleTheme(bool v) async {
     final p = await SharedPreferences.getInstance();
     await p.setBool('isDarkMode', v);
@@ -94,10 +94,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final prefs = await SharedPreferences.getInstance();
 
     if (v && !_autoBackup) {
-      // activación inicial → confirmación + copia
+      /* primera vez → confirmación + copia inicial */
       if (!await _confirmDriveConsent()) return;
 
-      final wait   = _showSnack('Subiendo copia inicial…', persistent: true);
+      final wait = _showSnack('Subiendo copia inicial…', persistent: true);
       final cipher = await EncryptionService.getCipher();
       final udm    = await Hive.openBox('udm_secure', encryptionCipher: cipher);
       final diary  = await Hive.openBox<DiaryEntry>('diary_secure',
@@ -117,7 +117,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _autoBackup = v);
   }
 
-  /* ───── copia / restauración ───── */
+  /*────────────── copia / restauración ──────────────*/
   Future<bool> _confirmDriveConsent() async {
     return await showDialog<bool>(
           context: context,
@@ -125,7 +125,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             title: const Text('Google Drive'),
             content: const Text(
               'La copia se guarda cifrada en tu Drive (carpeta privada). '
-              'Si no das permiso, podrías perder datos al cambiar de móvil o reinstalar.',
+              'Si no lo permites, la app seguirá funcionando, pero '
+              'podrías perder los datos al cambiar de móvil o reinstalar.',
               textAlign: TextAlign.justify,
             ),
             actions: [
@@ -180,7 +181,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  /* ───── reset contador ───── */
+  /*────────────── reset contador ──────────────*/
   Future<void> _resetSoberDate() async {
     final now = DateTime.now();
 
@@ -196,25 +197,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _startDate = now;
       _daysClean = 0;
     });
-    if (mounted) _showSnack('¡Contador reiniciado!');
+    _showSnack('¡Contador reiniciado!');
   }
 
-  /* ───── helper SnackBar ───── */
+  /*────────────── UI helpers ──────────────*/
   ScaffoldFeatureController<SnackBar, SnackBarClosedReason> _showSnack(
-    String msg, {
-    bool persistent = false,
-  }) {
+    String msg, {bool persistent = false}) {
     return ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content : Text(msg),
-        duration: persistent
-            ? const Duration(days: 1)
-            : const Duration(seconds: 4),
+        content: Text(msg),
+        duration:
+            persistent ? const Duration(days: 1) : const Duration(seconds: 4),
       ),
     );
   }
 
-  /* ───── progreso & ánimo ───── */
   List<Widget> _buildProgressSection() {
     final milestones = AchievementService.milestones.keys.toList()..sort();
     final next       = milestones.firstWhere(
@@ -266,14 +263,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             return Card(
               elevation: 1,
-              shape    : RoundedRectangleBorder(
+              shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
               child: Padding(
                 padding: const EdgeInsets.all(12.0),
                 child: Column(
                   children: [
                     const ListTile(
-                      dense : true,
+                      dense: true,
                       leading: Icon(Icons.show_chart),
                       title : Text('Tendencia de ánimo'),
                     ),
@@ -284,7 +281,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 8),
                     Text(
                       phrase,
-                      style   : Theme.of(context).textTheme.bodyMedium,
+                      style: Theme.of(context).textTheme.bodyMedium,
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -297,7 +294,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  /* ───── UI ───── */
+  /*────────────── UI ──────────────*/
   @override
   Widget build(BuildContext context) {
     return Scaffold(
