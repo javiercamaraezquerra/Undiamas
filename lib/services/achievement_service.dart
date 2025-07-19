@@ -39,7 +39,7 @@ class AchievementService {
     3650: '10 años limpio: leyenda 🏅',
   };
 
-  static const int _reflectionBaseId = 10_000;
+  static const int _reflectionBaseId = 10000;
   static Map<int, String> get milestones => Map.unmodifiable(_milestones);
 
   /* Permisos (cacheados tras init) */
