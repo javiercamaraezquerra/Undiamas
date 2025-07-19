@@ -58,14 +58,19 @@ Future<void> main() async {
   );
 
   /* ── Notificaciones ───────────────────────────────────────────── */
-  await AchievementService.init(onNotificationResponse: (resp) {
-    final idx = int.tryParse(resp.payload ?? '');
-    if (idx != null) {
-      _navKey.currentState?.push(
-        MaterialPageRoute(builder: (_) => ReflectionScreen(dayIndex: idx)),
-      );
-    }
-  });
+  try {
+    await AchievementService.init(onNotificationResponse: (resp) {
+      final idx = int.tryParse(resp.payload ?? '');
+      if (idx != null) {
+        _navKey.currentState?.push(
+          MaterialPageRoute(builder: (_) => ReflectionScreen(dayIndex: idx)),
+        );
+      }
+    });
+  } catch (e, s) {
+    // En caso extremo seguimos sin notificaciones pero la app arranca
+    debugPrint('Init notifications error: $e\n$s');
+  }
 
   /* ── Preferencias / tema ──────────────────────────────────────── */
   Intl.defaultLocale = 'es_ES';
@@ -85,13 +90,19 @@ Future<void> main() async {
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
 
-    final notifAllowed =
-        await (androidImpl as dynamic)?.areNotificationsEnabled() ?? true;
-    final exactAllowed =
-        await (androidImpl as dynamic)?.hasExactAlarmPermission() ?? true;
+    bool notifAllowed = true;
+    bool exactAllowed = true;
+    try {
+      notifAllowed =
+          await (androidImpl as dynamic)?.areNotificationsEnabled() ?? true;
+    } catch (_) {}
+    try {
+      exactAllowed =
+          await (androidImpl as dynamic)?.hasExactAlarmPermission() ?? true;
+    } catch (_) {}
 
     /* 1. Solicitar permisos del sistema */
-    if (!notifAllowed || !exactAllowed) {
+    if ((!notifAllowed || !exactAllowed) && ctx.mounted) {
       await showDialog(
         context: ctx,
         builder: (_) => AlertDialog(
@@ -115,9 +126,11 @@ Future<void> main() async {
               onPressed: () async {
                 Navigator.pop(ctx);
                 if (!notifAllowed) {
-                  await (androidImpl as dynamic)?.openNotificationSettings();
+                  await (androidImpl as dynamic)
+                      ?.openNotificationSettings();
                 } else {
-                  await (androidImpl as dynamic)?.openExactAlarmSettings();
+                  await (androidImpl as dynamic)
+                      ?.openExactAlarmSettings();
                 }
               },
               child: const Text('Ajustes'),
@@ -131,7 +144,8 @@ Future<void> main() async {
     if (_showMiuiHelp &&
         Platform.isAndroid &&
         (await _isMiui()) &&
-        !(prefs.getBool('miuiHelpShown') ?? false)) {
+        !(prefs.getBool('miuiHelpShown') ?? false) &&
+        ctx.mounted) {
       await showDialog(
         context: ctx,
         builder: (_) => AlertDialog(
@@ -164,14 +178,18 @@ Future<void> main() async {
     final milestonesOn = prefs.getBool('notifyMilestones') ?? true;
     final reflectionOn = prefs.getBool('notifyDailyReflection') ?? true;
 
-    if (milestonesOn && hasStartDate) {
-      final start = DateTime.parse(settings.get('startDate'));
-      await AchievementService.scheduleMilestones(start);
-    }
-    if (reflectionOn) {
-      final json =
-          await rootBundle.loadString('assets/data/reflections.json');
-      await AchievementService.scheduleDailyReflections(json);
+    try {
+      if (milestonesOn && hasStartDate) {
+        final start = DateTime.parse(settings.get('startDate'));
+        await AchievementService.scheduleMilestones(start);
+      }
+      if (reflectionOn) {
+        final json =
+            await rootBundle.loadString('assets/data/reflections.json');
+        await AchievementService.scheduleDailyReflections(json);
+      }
+    } catch (e) {
+      debugPrint('Schedule notifications error: $e');
     }
   });
 }
@@ -207,25 +225,23 @@ class UnDiaMasApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: themeNotifier,
-      builder: (_, ThemeMode mode, __) {
-        return MaterialApp(
-          navigatorKey: _navKey,
-          title: 'Un Día Más',
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.lightTheme,
-          darkTheme: AppTheme.darkTheme,
-          themeMode: mode,
-          locale: const Locale('es', 'ES'),
-          supportedLocales: const [Locale('es', 'ES'), Locale('en', 'US')],
-          localizationsDelegates: const [
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          localeResolutionCallback: (_, __) => const Locale('es', 'ES'),
-          home: showOnboarding ? const OnboardingScreen() : BottomNavBar(),
-        );
-      },
+      builder: (_, mode, __) => MaterialApp(
+        navigatorKey: _navKey,
+        title: 'Un Día Más',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: mode,
+        locale: const Locale('es', 'ES'),
+        supportedLocales: const [Locale('es', 'ES'), Locale('en', 'US')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        localeResolutionCallback: (_, __) => const Locale('es', 'ES'),
+        home: showOnboarding ? const OnboardingScreen() : BottomNavBar(),
+      ),
     );
   }
 }
