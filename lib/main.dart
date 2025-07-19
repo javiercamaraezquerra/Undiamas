@@ -1,7 +1,8 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart'
+    show MethodChannel, rootBundle;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -18,18 +19,22 @@ import 'services/encryption_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/bottom_nav_bar.dart';
 
-final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
-final GlobalKey<NavigatorState> _navKey = GlobalKey(debugLabel: 'root_nav');
+final themeNotifier = ValueNotifier(ThemeMode.light);
+final _navKey       = GlobalKey<NavigatorState>(debugLabel: 'root_nav');
+
+/// Muestra ayuda MIUI una sola vez
+const bool _showMiuiHelp = true;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  /* Hive inicial */
+  /* ── Hive (cifrado) ───────────────────────────────────────────── */
   await Hive.initFlutter();
   Hive.registerAdapter(DiaryEntryAdapter());
   Hive.registerAdapter(PostAdapter());
 
   final cipher = await EncryptionService.getCipher();
+
   if (await Hive.boxExists('udm')) {
     final p = await Hive.openBox('udm');
     final s = await Hive.openBox('udm_secure', encryptionCipher: cipher);
@@ -40,19 +45,19 @@ Future<void> main() async {
 
   if (await Hive.boxExists('diary')) {
     final p = await Hive.openBox<DiaryEntry>('diary');
-    final s =
-        await Hive.openBox<DiaryEntry>('diary_secure', encryptionCipher: cipher);
+    final s = await Hive.openBox<DiaryEntry>('diary_secure',
+        encryptionCipher: cipher);
     if (s.isEmpty) await s.addAll(p.values);
     await p.deleteFromDisk();
   }
 
-  /* Ads */
+  /* ── Ads ──────────────────────────────────────────────────────── */
   await MobileAds.instance.initialize();
   await MobileAds.instance.updateRequestConfiguration(
     RequestConfiguration(testDeviceIds: ['TEST_DEVICE_ID']),
   );
 
-  /* Notificaciones */
+  /* ── Notificaciones ───────────────────────────────────────────── */
   await AchievementService.init(onNotificationResponse: (resp) {
     final idx = int.tryParse(resp.payload ?? '');
     if (idx != null) {
@@ -62,7 +67,7 @@ Future<void> main() async {
     }
   });
 
-  /* Preferencias */
+  /* ── Preferencias / tema ──────────────────────────────────────── */
   Intl.defaultLocale = 'es_ES';
   final prefs = await SharedPreferences.getInstance();
   themeNotifier.value =
@@ -71,68 +76,91 @@ Future<void> main() async {
   final hasStartDate = settings.containsKey('startDate');
   runApp(UnDiaMasApp(showOnboarding: !hasStartDate));
 
-  /* Permiso racionalizado + programación de notifs */
+  /* ── Dialog. de permisos + MIUI + programación ───────────────── */
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     final ctx = _navKey.currentContext;
     if (ctx == null) return;
 
-    bool allowed = true;
-    if (Platform.isAndroid) {
-      final impl = FlutterLocalNotificationsPlugin()
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
-      allowed = await (impl as dynamic)?.areNotificationsEnabled() ?? true;
-    }
+    final androidImpl = FlutterLocalNotificationsPlugin()
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
 
-    final shown = prefs.getBool('notifDialogShown') ?? false;
-    if (!allowed) {
-      if (!shown && ctx.mounted) {
-        await showDialog(
-          context: ctx,
-          builder: (_) => AlertDialog(
-            title: const Text('Permiso de notificaciones'),
-            content: const Text(
-                'Para avisarte de logros y reflexiones diarias necesitamos '
-                'que actives las notificaciones.'),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Más tarde')),
-              ElevatedButton(
-                onPressed: () async {
-                  Navigator.pop(ctx);
-                  final android = FlutterLocalNotificationsPlugin()
-                      .resolvePlatformSpecificImplementation<
-                          AndroidFlutterLocalNotificationsPlugin>();
-                  await (android as dynamic)?.openNotificationSettings();
-                },
-                child: const Text('Activar'),
-              ),
-            ],
+    final notifAllowed =
+        await (androidImpl as dynamic)?.areNotificationsEnabled() ?? true;
+    final exactAllowed =
+        await (androidImpl as dynamic)?.hasExactAlarmPermission() ?? true;
+
+    /* 1. Solicitar permisos del sistema */
+    if (!notifAllowed || !exactAllowed) {
+      await showDialog(
+        context: ctx,
+        builder: (_) => AlertDialog(
+          title: const Text('Permisos necesarios'),
+          content: Text(
+            (!notifAllowed
+                    ? 'Activa las notificaciones para recibir reflexiones '
+                      'diarias y avisos de logros.\n\n'
+                    : '') +
+                (!exactAllowed
+                    ? 'Para que los avisos lleguen puntuales Android debe '
+                      'permitir “Alarmas exactas”.'
+                    : ''),
+            textAlign: TextAlign.justify,
           ),
-        );
-        await prefs.setBool('notifDialogShown', true);
-      } else if (ctx.mounted) {
-        ScaffoldMessenger.of(ctx).showSnackBar(
-          SnackBar(
-            content: const Text(
-                'Notificaciones desactivadas. Actívalas para recibir avisos.'),
-            action: SnackBarAction(
-              label: 'Ajustes',
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Más tarde')),
+            ElevatedButton(
               onPressed: () async {
-                final android = FlutterLocalNotificationsPlugin()
-                    .resolvePlatformSpecificImplementation<
-                        AndroidFlutterLocalNotificationsPlugin>();
-                await (android as dynamic)?.openNotificationSettings();
+                Navigator.pop(ctx);
+                if (!notifAllowed) {
+                  await (androidImpl as dynamic)?.openNotificationSettings();
+                } else {
+                  await (androidImpl as dynamic)?.openExactAlarmSettings();
+                }
               },
+              child: const Text('Ajustes'),
             ),
-            duration: const Duration(seconds: 6),
-          ),
-        );
-      }
+          ],
+        ),
+      );
     }
 
-    /* Programar notificaciones */
+    /* 2. Ayuda MIUI (autostart) */
+    if (_showMiuiHelp &&
+        Platform.isAndroid &&
+        (await _isMiui()) &&
+        !(prefs.getBool('miuiHelpShown') ?? false)) {
+      await showDialog(
+        context: ctx,
+        builder: (_) => AlertDialog(
+          title: const Text('Permiso de inicio automático'),
+          content: const Text(
+            'Para que las notificaciones se muestren con la pantalla apagada '
+            'MIUI debe permitir que la app se inicie automáticamente en '
+            'segundo plano.',
+            textAlign: TextAlign.justify,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Omitir'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await openMiuiAutoStartSettings();
+              },
+              child: const Text('Abrir ajustes'),
+            ),
+          ],
+        ),
+      );
+      await prefs.setBool('miuiHelpShown', true);
+    }
+
+    /* 3. Programar notificaciones si el usuario lo permite */
     final milestonesOn = prefs.getBool('notifyMilestones') ?? true;
     final reflectionOn = prefs.getBool('notifyDailyReflection') ?? true;
 
@@ -148,33 +176,54 @@ Future<void> main() async {
   });
 }
 
+/* ───────────────── helpers MIUI ───────────────── */
+
+Future<bool> _isMiui() async {
+  try {
+    final props = await const MethodChannel('undiamas/props')
+        .invokeMethod<Map>('getProps');
+    final v = (props?['ro.miui.ui.version.name'] ?? '') as String;
+    return v.isNotEmpty;
+  } catch (_) {
+    return false;
+  }
+}
+
+/// abre Inicio automático en MIUI (si existe)
+Future<void> openMiuiAutoStartSettings() async {
+  const ch = MethodChannel('undiamas/intent');
+  try {
+    await ch.invokeMethod('openAutoStart');
+  } catch (_) {}
+}
+
+/* ───────────────── APP ───────────────── */
+
 class UnDiaMasApp extends StatelessWidget {
   final bool showOnboarding;
   const UnDiaMasApp({super.key, required this.showOnboarding});
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<ThemeMode>(
+    return ValueListenableBuilder(
       valueListenable: themeNotifier,
-      builder: (_, mode, __) {
-        return MaterialApp(
-          navigatorKey: _navKey,
-          title: 'Un Día Más',
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.lightTheme,
-          darkTheme: AppTheme.darkTheme,
-          themeMode: mode,
-          locale: const Locale('es', 'ES'),
-          supportedLocales: const [Locale('es', 'ES'), Locale('en', 'US')],
-          localizationsDelegates: const [
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          localeResolutionCallback: (_, __) => const Locale('es', 'ES'),
-          home: showOnboarding ? const OnboardingScreen() : BottomNavBar(),
-        );
-      },
+      builder: (_, mode, __) => MaterialApp(
+        navigatorKey: _navKey,
+        title: 'Un Día Más',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: mode,
+        locale: const Locale('es', 'ES'),
+        supportedLocales: const [Locale('es', 'ES'), Locale('en', 'US')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        localeResolutionCallback: (_, __) => const Locale('es', 'ES'),
+        home: showOnboarding ? const OnboardingScreen() : BottomNavBar(),
+      ),
     );
   }
 }
