@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:developer' as dev;
+
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
@@ -10,10 +11,10 @@ class AchievementService {
   static final _plugin = FlutterLocalNotificationsPlugin();
 
   /* ── canales ── */
-  static const _milestoneChannelId   = 'achievements';
+  static const _milestoneChannelId  = 'achievements';
   static const _milestoneChannelName = 'Logros de sobriedad';
-  static const _reflectionChannelId  = 'daily_reflection';
-  static const _reflectionChannelName= 'Reflexión diaria';
+  static const _reflectionChannelId = 'daily_reflection';
+  static const _reflectionChannelName = 'Reflexión diaria';
 
   /* ── hitos ── */
   static const Map<int, String> _milestones = {
@@ -38,18 +39,20 @@ class AchievementService {
     3650: '10 años limpio: leyenda 🏅',
   };
 
-  static const int _reflectionBaseId = 10000;
+  static const int _reflectionBaseId = 10_000;
   static Map<int, String> get milestones => Map.unmodifiable(_milestones);
 
+  /* Permisos (cacheados tras init) */
+  static bool _exactAlarmGranted = true;
+
   /* ── init ── */
-  static Future<void> init({
-    void Function(NotificationResponse)? onNotificationResponse,
-  }) async {
+  static Future<void> init(
+      {void Function(NotificationResponse p)? onNotificationResponse}) async {
     const settings = InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-      iOS:    DarwinInitializationSettings(
-                requestSoundPermission: true,
-                requestAlertPermission: true),
+      android:  AndroidInitializationSettings('@mipmap/ic_launcher'),
+      iOS:      DarwinInitializationSettings(
+                  requestAlertPermission: true,
+                  requestSoundPermission: true),
     );
 
     await _plugin.initialize(
@@ -57,64 +60,54 @@ class AchievementService {
       onDidReceiveNotificationResponse: onNotificationResponse,
     );
 
-    // 1️⃣ Comprobar si ya están activadas antes de volver a solicitar permiso
-    final androidImpl = _plugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
+    /* ── Permiso POST_NOTIFICATIONS (Android 13+) ── */
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
 
-    final enabled = await (androidImpl as dynamic)?.areNotificationsEnabled()
-        ?? true;
+    // En la 17.x el método existe; en versiones viejas reflejamos.
+    await (android as dynamic)?.requestPermission();
 
-    if (!enabled) {
-      try {
-        // Solo pedimos permiso si no estaba concedido
-        await (androidImpl as dynamic)?.requestPermission();
-      } catch (_) {/* versiones antiguas */}
+    /* ── Permiso SCHEDULE_EXACT_ALARM (Android 12+) ── */
+    _exactAlarmGranted =
+        await (android as dynamic)?.hasExactAlarmPermission() ?? true;
+
+    if (!_exactAlarmGranted) {
+      _exactAlarmGranted =
+          await (android as dynamic)?.requestExactAlarmsPermission() ?? false;
     }
 
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin>()
-        ?.requestPermissions(alert: true, badge: true, sound: true);
-
-    // Zonas horarias (imprescindible para zonedSchedule)
-    tz.initializeTimeZones();
+    /* ── Time‑zones ── */
+    try {
+      tz.initializeTimeZones();
+    } catch (_) {
+      tz.setLocalLocation(tz.UTC);
+    }
   }
 
   /* ── LOGROS ── */
-  static Future<void> scheduleMilestones(DateTime startDate) async {
+  static Future<void> scheduleMilestones(DateTime start) async {
     await cancelMilestones();
 
     final now = tz.TZDateTime.now(tz.local);
-    for (final entry in _milestones.entries) {
-      final days    = entry.key;
-      final message = entry.value;
 
+    for (final e in _milestones.entries) {
       final trigger = tz.TZDateTime(
-        tz.local,
-        startDate.year,
-        startDate.month,
-        startDate.day,
-        9, // 09:00 hora local
-      ).add(Duration(days: days));
+            tz.local, start.year, start.month, start.day, 9)
+          .add(Duration(days: e.key));
 
-      if (trigger.isBefore(now)) continue; // ya pasó
+      if (trigger.isBefore(now)) continue;
 
       await _plugin.zonedSchedule(
-        days, // ID = número de días
-        'Logro de recuperación',
-        message,
-        trigger,
+        e.key, 'Logro de recuperación', e.value, trigger,
         const NotificationDetails(
           android: AndroidNotificationDetails(
-            _milestoneChannelId,
-            _milestoneChannelName,
-            importance: Importance.high,
-            priority:  Priority.high,
-          ),
-          iOS: DarwinNotificationDetails(),
+              _milestoneChannelId, _milestoneChannelName,
+              importance: Importance.high, priority: Priority.high),
+          iOS:   DarwinNotificationDetails(),
         ),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        androidScheduleMode: _exactAlarmGranted
+            ? AndroidScheduleMode.exactAllowWhileIdle
+            : AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.dateAndTime,
@@ -129,19 +122,16 @@ class AchievementService {
   }
 
   /* ── REFLEXIÓN DIARIA ── */
-  static Future<void> scheduleDailyReflections(
-    String reflectionsJson, {
-    int daysAhead = 30,
-  }) async {
+  static Future<void> scheduleDailyReflections(String json,
+      {int daysAhead = 60}) async {
     await cancelDailyReflections(daysAhead: daysAhead);
 
-    // Parseamos los títulos a mostrar en la notificación
-    final raw    = jsonDecode(reflectionsJson) as List<dynamic>;
-    final titles = raw.map<String>((e) {
+    /* Lee títulos de las reflexiones */
+    final items = (jsonDecode(json) as List<dynamic>).map((e) {
       if (e is Map && e['title'] != null) return e['title'] as String;
-      final md = e.toString();
-      final m  = RegExp(r'^###\s+(.+)', multiLine: true).firstMatch(md);
-      return m != null ? m.group(1)! : 'Reflexión del día';
+      final m = RegExp(r'^###\s+(.+)', multiLine: true)
+          .firstMatch(e.toString());
+      return m?.group(1) ?? 'Reflexión del día';
     }).toList();
 
     final now   = tz.TZDateTime.now(tz.local);
@@ -149,38 +139,33 @@ class AchievementService {
     if (first.isBefore(now)) first = first.add(const Duration(days: 1));
 
     for (var i = 0; i < daysAhead; i++) {
-      final date   = first.add(Duration(days: i));
-      final doy    = int.parse(DateFormat('D').format(date)) - 1;
-      final title  = titles[doy % titles.length];
+      final date = first.add(Duration(days: i));
+      final doy  = int.parse(DateFormat('D').format(date)) - 1;
+      final title = items[doy % items.length];
 
       await _plugin.zonedSchedule(
-        _reflectionBaseId + i, // ID >= 10000
-        'Reflexión diaria',
-        title,
-        date,
+        _reflectionBaseId + i, 'Reflexión diaria', title, date,
         const NotificationDetails(
           android: AndroidNotificationDetails(
-            _reflectionChannelId,
-            _reflectionChannelName,
-            importance: Importance.high,
-            priority:  Priority.high,
-          ),
+              _reflectionChannelId, _reflectionChannelName,
+              importance: Importance.high, priority: Priority.high),
           iOS: DarwinNotificationDetails(),
         ),
-        payload: '$doy', // deep‑link al día concreto
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        payload: '$doy',
+        androidScheduleMode: _exactAlarmGranted
+            ? AndroidScheduleMode.exactAllowWhileIdle
+            : AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.dateAndTime,
       );
     }
 
-    // Control en logcat
-    final pending = await _plugin.pendingNotificationRequests();
-    dev.log('Programadas ${pending.length} notificaciones (hitos + diarias)');
+    dev.log('[Notif] programadas $daysAhead reflexiones '
+        '(${_exactAlarmGranted ? 'exactas' : 'inexactas'})');
   }
 
-  static Future<void> cancelDailyReflections({int daysAhead = 30}) async {
+  static Future<void> cancelDailyReflections({int daysAhead = 60}) async {
     for (var i = 0; i < daysAhead; i++) {
       await _plugin.cancel(_reflectionBaseId + i);
     }
