@@ -19,7 +19,7 @@ import 'services/encryption_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/bottom_nav_bar.dart';
 
-final themeNotifier = ValueNotifier(ThemeMode.light);
+final themeNotifier = ValueNotifier<ThemeMode>(ThemeMode.light);
 final _navKey       = GlobalKey<NavigatorState>(debugLabel: 'root_nav');
 
 /// Muestra ayuda MIUI una sola vez
@@ -205,25 +205,27 @@ class UnDiaMasApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder(
+    return ValueListenableBuilder<ThemeMode>(
       valueListenable: themeNotifier,
-      builder: (_, mode, __) => MaterialApp(
-        navigatorKey: _navKey,
-        title: 'Un Día Más',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
-        themeMode: mode,
-        locale: const Locale('es', 'ES'),
-        supportedLocales: const [Locale('es', 'ES'), Locale('en', 'US')],
-        localizationsDelegates: const [
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        localeResolutionCallback: (_, __) => const Locale('es', 'ES'),
-        home: showOnboarding ? const OnboardingScreen() : BottomNavBar(),
-      ),
+      builder: (_, ThemeMode mode, __) {
+        return MaterialApp(
+          navigatorKey: _navKey,
+          title: 'Un Día Más',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: mode,
+          locale: const Locale('es', 'ES'),
+          supportedLocales: const [Locale('es', 'ES'), Locale('en', 'US')],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          localeResolutionCallback: (_, __) => const Locale('es', 'ES'),
+          home: showOnboarding ? const OnboardingScreen() : BottomNavBar(),
+        );
+      },
     );
   }
 }
