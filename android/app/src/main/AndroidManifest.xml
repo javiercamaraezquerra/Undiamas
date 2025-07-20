@@ -22,6 +22,11 @@
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-4402835110551152~8514445452"/>
 
+        <!-- Registro automático del plugin de zona horaria -->
+        <meta-data
+            android:name="com.example.undiamas.TzPlugin"
+            android:value="flutterEmbedding" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
