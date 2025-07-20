@@ -225,7 +225,7 @@ class _Resource {
   }
 }
 
-// ─────────────────── Lista de recursos verificados (15 jul 2025) ───────────────────
+// ───────────────── Lista de recursos verificados (jul‑2025) ─────────────────
 final List<_Resource> _resources = [
   // ── CONOCIMIENTO ───────────────────────────────────────────────
   _Resource(
@@ -243,8 +243,7 @@ final List<_Resource> _resources = [
     title: 'Factores internos y externos de recaída',
     category: 'Conocimiento',
     content:
-        'Artículo divulgativo que describe detonantes emocionales y situacionales y '
-        'propone estrategias preventivas.',
+        'Artículo que describe detonantes emocionales y situacionales y propone estrategias para manejarlos.',
     url:
         'https://fundacionliberate.org.co/adiccion-al-alcohol-o-las-drogas-factores-internos-y-externos/',
     type: _ResType.web,
@@ -276,7 +275,7 @@ final List<_Resource> _resources = [
     title: 'Registro de pensamientos (TCC)',
     category: 'Estrategias',
     content:
-        'Cuestiona pensamientos automáticos y evita que detonen el consumo.',
+        'Plantilla cognitivo-conductual para cuestionar pensamientos automáticos y prevenir recaídas.',
     url:
         'https://www.fundacionmar.org.ar/images/fichas/registro-pensamientos.pdf',
     type: _ResType.pdf,
@@ -286,7 +285,7 @@ final List<_Resource> _resources = [
     title: 'Señales de alarma: infografía',
     category: 'Estrategias',
     content:
-        'Poster claro que resume síntomas físicos, psicológicos y sociales que alertan de dependencia.',
+        'Infografía que resume síntomas físicos, psicológicos y sociales indicativos de riesgo.',
     url:
         'https://www.javeriana.edu.co/enmental/wp-content/uploads/2024/12/04-Infografia-Cuales-son-los-signos-de-alarma-que-pueden-indicar-dependencia-hacia-drogas-V4.pdf',
     type: _ResType.pdf,
@@ -341,7 +340,7 @@ final List<_Resource> _resources = [
     title: 'Guía práctica para dormir bien',
     category: 'Sueño',
     content:
-        'Consejería de Sanidad (Madrid): higiene del sueño y ejercicios de relajación.',
+        'Consejos de higiene del sueño y ejercicios de relajación (Comunidad de Madrid).',
     url: 'https://www.madrid.org/bvirtual/BVCM050390.pdf',
     type: _ResType.pdf,
   ),
@@ -350,7 +349,7 @@ final List<_Resource> _resources = [
     title: 'Diario de sueño (7 días)',
     category: 'Sueño',
     content:
-        'Rellénalo cada mañana y noche para descubrir patrones que sabotean tu descanso.',
+        'Formulario para registrar horarios y calidad del sueño durante una semana.',
     url:
         'https://www.sepeap.org/wp-content/uploads/2014/10/DIARIO-DE-SUEÑO.pdf',
     type: _ResType.pdf,
@@ -362,7 +361,7 @@ final List<_Resource> _resources = [
     title: 'Comer para tu recuperación',
     category: 'Nutrición',
     content:
-        'Guía rápida (FAD) sobre proteínas, carbohidratos complejos y omega‑3 para estabilizar el ánimo.',
+        'Guía de la FAD sobre nutrientes que estabilizan el ánimo y previenen recaídas.',
     url:
         'https://www.fad.es/wp-content/uploads/2021/02/Guia_Nutricion_Adicciones.pdf',
     type: _ResType.pdf,
@@ -374,7 +373,7 @@ final List<_Resource> _resources = [
     title: 'Preguntas frecuentes sobre adicciones',
     category: 'FAQ',
     content:
-        'Hospital Clínic Barcelona: dudas típicas sobre recaída, medicación y soporte.',
+        'Hospital Clínic Barcelona: preguntas y respuestas comunes sobre tratamiento y recaída.',
     url:
         'https://www.clinicbarcelona.org/asistencia/enfermedades/adicciones/preguntas-frecuentes',
     type: _ResType.web,
