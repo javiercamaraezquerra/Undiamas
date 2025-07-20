@@ -1,7 +1,4 @@
-/* Simple plugin para obtener el ID IANA de la zona horaria
- * Compatible con el embedding v2 (Flutter 3.22+)
- */
-package com.example.undiamas
+package com.example.undiamas   // ← usa el mismo namespace que en build.gradle
 
 import android.content.Context
 import androidx.annotation.NonNull
@@ -10,7 +7,9 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.util.TimeZone
 
+/** Plugin mínimo para exponer el identificador IANA de la zona horaria local */
 class TzPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
+
     private lateinit var channel: MethodChannel
     private lateinit var appContext: Context
 
@@ -22,7 +21,7 @@ class TzPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
 
     override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: MethodChannel.Result) {
         if (call.method == "getLocalTz") {
-            result.success(TimeZone.getDefault().id)   // ej. "Europe/Madrid"
+            result.success(TimeZone.getDefault().id)   // p. ej.  Europe/Madrid
         } else {
             result.notImplemented()
         }
