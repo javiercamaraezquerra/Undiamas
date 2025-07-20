@@ -1,4 +1,4 @@
-/* ───────────────────────  raíz/android/build.gradle  ─────────────────────── */
+/* ───────────────────────  android/build.gradle  ─────────────────────── */
 
 allprojects {
     repositories {
@@ -16,68 +16,4 @@ subprojects {
 
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
-}
-
-/* ───────────────  PARCHE #1 · namespace faltante  ─────────────── */
-subprojects { sub ->
-    if (sub.name == "flutter_native_timezone") {
-        sub.plugins.withId("com.android.library") {
-            sub.android.namespace =
-                "dev.fluttercommunity.plus.flutter_native_timezone"
-        }
-    }
-}
-
-/* ───────────────  PARCHE #2 · forzar Kotlin 1.9.22  ───────────── */
-subprojects { sub ->
-    sub.buildscript {
-        configurations.matching { it.name == "classpath" }
-            .configureEach { cfg ->
-                cfg.resolutionStrategy.eachDependency { details ->
-                    if (details.requested.group == "org.jetbrains.kotlin" &&
-                        details.requested.name  == "kotlin-gradle-plugin" &&
-                        details.requested.version != "1.9.22") {
-
-                        details.useVersion("1.9.22")
-                    }
-                }
-            }
-    }
-}
-
-/* ───────────────  PARCHE #3 · borrar atributo package  ───────────── */
-subprojects { sub ->
-    if (sub.name == "flutter_native_timezone") {
-        sub.afterEvaluate {
-            android.sourceSets.all { src ->
-                File manifestFile = src.manifest.srcFile
-                if (manifestFile.exists()) {
-                    String original = manifestFile.text
-                    String modified = original.replaceAll(
-                        /package\s*=\s*"com\.whelksoft\.flutter_native_timezone"/,
-                        "")
-                    if (original != modified) {
-                        manifestFile.text = modified
-                    }
-                }
-            }
-        }
-    }
-}
-
-/* ───────────────  PARCHE #4 · Java 17 ≡ Kotlin 17  ───────────────
-   Evita la incompatibilidad 1.8 vs 17 detectada por AGP 8            */
-subprojects { sub ->
-    if (sub.name == "flutter_native_timezone") {
-        sub.plugins.withId("com.android.library") {
-            sub.android.compileOptions {
-                sourceCompatibility = JavaVersion.VERSION_17
-                targetCompatibility = JavaVersion.VERSION_17
-            }
-        }
-        sub.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile)
-            .configureEach { task ->
-                task.kotlinOptions.jvmTarget = "17"
-            }
-    }
 }
