@@ -1,3 +1,5 @@
+/*  ─────────────────────────  raíz/android/build.gradle  ───────────────────────── */
+
 allprojects {
     repositories {
         google()
@@ -6,11 +8,28 @@ allprojects {
 }
 
 rootProject.buildDir = "../build"
+
+/*  cada sub‑módulo compilará dentro de  build/<module>  */
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
     project.evaluationDependsOn(":app")
 }
 
+/*  comando `gradlew clean`  */
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
+}
+
+/* ─────────────────────────  PARCHE AGP 8 · namespace  ──────────────────────────
+   Algunos paquetes (p. ej. flutter_native_timezone ≤ 2.0.0) todavía no
+   incluyen la directiva “namespace” obligatoria con Android Gradle 8+.
+   Ajustamos su build.gradle en tiempo de configuración.
+   ----------------------------------------------------------------------------- */
+subprojects { sub ->
+    if (sub.name == "flutter_native_timezone") {
+        sub.plugins.withId("com.android.library") {
+            /*  usa el mismo namespace que el paquete declara en AndroidManifest.xml  */
+            sub.android.namespace = "dev.fluttercommunity.plus.flutter_native_timezone"
+        }
+    }
 }
