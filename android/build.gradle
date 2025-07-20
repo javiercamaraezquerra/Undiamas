@@ -1,4 +1,4 @@
-/* ─────────────────────────  raíz/android/build.gradle  ───────────────────────── */
+/* ───────────────────────  raíz/android/build.gradle  ─────────────────────── */
 
 allprojects {
     repositories {
@@ -18,8 +18,7 @@ tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }
 
-/* ───────────────── PARCHE #1  ·  namespace faltante  🔧 ─────────────────────────
-   flutter_native_timezone (≤ 2.0.0) aún no define “namespace” con AGP 8+.       */
+/* ───────────────  PARCHE #1 · namespace faltante  ─────────────── */
 subprojects { sub ->
     if (sub.name == "flutter_native_timezone") {
         sub.plugins.withId("com.android.library") {
@@ -29,15 +28,12 @@ subprojects { sub ->
     }
 }
 
-/* ───────────────── PARCHE #2  ·  forzar Kotlin 1.9.22  🔧 ──────────────────────
-   Algunos plugins heredados (flutter_native_timezone 2.0.0) siguen declarando
-   kotlin‑gradle‑plugin 1.3.x.  Reescribimos la versión para TODAS las
-   dependencias org.jetbrains.kotlin:kotlin‑gradle‑plugin de los sub‑proyectos. */
+/* ───────────────  PARCHE #2 · forzar Kotlin 1.9.22  ───────────── */
 subprojects { sub ->
     sub.buildscript {
         configurations.matching { it.name == "classpath" }
-            .configureEach { config ->
-                config.resolutionStrategy.eachDependency { details ->
+            .configureEach { cfg ->
+                cfg.resolutionStrategy.eachDependency { details ->
                     if (details.requested.group == "org.jetbrains.kotlin" &&
                         details.requested.name  == "kotlin-gradle-plugin" &&
                         details.requested.version != "1.9.22") {
@@ -48,5 +44,27 @@ subprojects { sub ->
                     }
                 }
             }
+    }
+}
+
+/* ───────────────  PARCHE #3 · borrar atributo package  ─────────────
+   AGP 8 prohíbe definir el package en el Manifest. Quitamos la línea
+   «package="com.whelksoft.flutter_native_timezone"» antes de la fusión.     */
+subprojects { sub ->
+    if (sub.name == "flutter_native_timezone") {
+        sub.afterEvaluate {
+            android.sourceSets.all { src ->
+                File manifestFile = src.manifest.srcFile
+                if (manifestFile.exists()) {
+                    String original = manifestFile.text
+                    String modified = original.replaceAll(
+                        /package\s*=\s*"com\.whelksoft\.flutter_native_timezone"/,
+                        "")
+                    if (original != modified) {
+                        manifestFile.text = modified
+                    }
+                }
+            }
+        }
     }
 }
