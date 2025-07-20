@@ -1,4 +1,4 @@
-/*  ─────────────────────────  raíz/android/build.gradle  ───────────────────────── */
+/* ─────────────────────────  raíz/android/build.gradle  ───────────────────────── */
 
 allprojects {
     repositories {
@@ -9,27 +9,44 @@ allprojects {
 
 rootProject.buildDir = "../build"
 
-/*  cada sub‑módulo compilará dentro de  build/<module>  */
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
     project.evaluationDependsOn(":app")
 }
 
-/*  comando `gradlew clean`  */
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }
 
-/* ─────────────────────────  PARCHE AGP 8 · namespace  ──────────────────────────
-   Algunos paquetes (p. ej. flutter_native_timezone ≤ 2.0.0) todavía no
-   incluyen la directiva “namespace” obligatoria con Android Gradle 8+.
-   Ajustamos su build.gradle en tiempo de configuración.
-   ----------------------------------------------------------------------------- */
+/* ───────────────── PARCHE #1  ·  namespace faltante  🔧 ─────────────────────────
+   flutter_native_timezone (≤ 2.0.0) aún no define “namespace” con AGP 8+.       */
 subprojects { sub ->
     if (sub.name == "flutter_native_timezone") {
         sub.plugins.withId("com.android.library") {
-            /*  usa el mismo namespace que el paquete declara en AndroidManifest.xml  */
-            sub.android.namespace = "dev.fluttercommunity.plus.flutter_native_timezone"
+            sub.android.namespace =
+                "dev.fluttercommunity.plus.flutter_native_timezone"
         }
+    }
+}
+
+/* ───────────────── PARCHE #2  ·  forzar Kotlin 1.9.22  🔧 ──────────────────────
+   Algunos plugins heredados (flutter_native_timezone 2.0.0) siguen declarando
+   kotlin‑gradle‑plugin 1.3.x.  Reescribimos la versión para TODAS las
+   dependencias org.jetbrains.kotlin:kotlin‑gradle‑plugin de los sub‑proyectos. */
+subprojects { sub ->
+    sub.buildscript {
+        configurations.matching { it.name == "classpath" }
+            .configureEach { config ->
+                config.resolutionStrategy.eachDependency { details ->
+                    if (details.requested.group == "org.jetbrains.kotlin" &&
+                        details.requested.name  == "kotlin-gradle-plugin" &&
+                        details.requested.version != "1.9.22") {
+
+                        details.useVersion("1.9.22")
+                        details.because("AGP 8 requiere Kotlin >= 1.5; " +
+                                        "forzado globalmente a 1.9.22")
+                    }
+                }
+            }
     }
 }
