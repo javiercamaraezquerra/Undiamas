@@ -1,8 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'
-    show MethodChannel, rootBundle;
+import 'package:flutter/services.dart' show MethodChannel, rootBundle;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -35,6 +34,7 @@ Future<void> main() async {
 
   final cipher = await EncryptionService.getCipher();
 
+  // Migraciones no cifrado → cifrado
   if (await Hive.boxExists('udm')) {
     final p = await Hive.openBox('udm');
     final s = await Hive.openBox('udm_secure', encryptionCipher: cipher);
@@ -86,52 +86,38 @@ Future<void> main() async {
     final ctx = _navKey.currentContext;
     if (ctx == null) return;
 
+    // Comprobamos únicamente POST_NOTIFICATIONS, el permiso de
+    // alarmas exactas ya se solicita dentro de AchievementService.
     final androidImpl = FlutterLocalNotificationsPlugin()
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
 
     bool notifAllowed = true;
-    bool exactAllowed = true;
     try {
       notifAllowed =
           await (androidImpl as dynamic)?.areNotificationsEnabled() ?? true;
     } catch (_) {}
-    try {
-      exactAllowed =
-          await (androidImpl as dynamic)?.hasExactAlarmPermission() ?? true;
-    } catch (_) {}
 
-    /* 1. Solicitar permisos del sistema */
-    if ((!notifAllowed || !exactAllowed) && ctx.mounted) {
+    /* 1 · Solicitar POST_NOTIFICATIONS si fuera necesario */
+    if (!notifAllowed && ctx.mounted) {
       await showDialog(
         context: ctx,
         builder: (_) => AlertDialog(
-          title: const Text('Permisos necesarios'),
-          content: Text(
-            (!notifAllowed
-                    ? 'Activa las notificaciones para recibir reflexiones '
-                      'diarias y avisos de logros.\n\n'
-                    : '') +
-                (!exactAllowed
-                    ? 'Para que los avisos lleguen puntuales Android debe '
-                      'permitir “Alarmas exactas”.'
-                    : ''),
+          title: const Text('Permiso de notificaciones'),
+          content: const Text(
+            'Activa las notificaciones para recibir reflexiones diarias y '
+            'avisos de logros.',
             textAlign: TextAlign.justify,
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Más tarde')),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Más tarde'),
+            ),
             ElevatedButton(
               onPressed: () async {
                 Navigator.pop(ctx);
-                if (!notifAllowed) {
-                  await (androidImpl as dynamic)
-                      ?.openNotificationSettings();
-                } else {
-                  await (androidImpl as dynamic)
-                      ?.openExactAlarmSettings();
-                }
+                await (androidImpl as dynamic)?.openNotificationSettings();
               },
               child: const Text('Ajustes'),
             ),
@@ -140,7 +126,7 @@ Future<void> main() async {
       );
     }
 
-    /* 2. Ayuda MIUI (autostart) */
+    /* 2 · Ayuda MIUI (autostart) */
     if (_showMiuiHelp &&
         Platform.isAndroid &&
         (await _isMiui()) &&
@@ -174,7 +160,7 @@ Future<void> main() async {
       await prefs.setBool('miuiHelpShown', true);
     }
 
-    /* 3. Programar notificaciones si el usuario lo permite */
+    /* 3 · Programar notificaciones si el usuario lo permite */
     final milestonesOn = prefs.getBool('notifyMilestones') ?? true;
     final reflectionOn = prefs.getBool('notifyDailyReflection') ?? true;
 
@@ -194,7 +180,7 @@ Future<void> main() async {
   });
 }
 
-/* ───────────────── helpers MIUI ───────────────── */
+/* ───────────────── helpers MIUI ───────────────── */
 
 Future<bool> _isMiui() async {
   try {
@@ -207,7 +193,7 @@ Future<bool> _isMiui() async {
   }
 }
 
-/// abre Inicio automático en MIUI (si existe)
+/// Abre «Inicio automático» en MIUI (si existe)
 Future<void> openMiuiAutoStartSettings() async {
   const ch = MethodChannel('undiamas/intent');
   try {
