@@ -2,10 +2,11 @@ import 'dart:convert';
 import 'dart:developer' as dev;
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter_timezone/flutter_timezone.dart';          // ← nuevo
 import 'package:intl/intl.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+
+import 'native_tz.dart';   // 👈 añadido
 
 /// Gestiona notificaciones de logros y reflexión diaria.
 class AchievementService {
@@ -43,12 +44,12 @@ class AchievementService {
   static const int _reflectionBaseId = 10000;
   static Map<int, String> get milestones => Map.unmodifiable(_milestones);
 
-  /* cache permiso exact‑alarm */
+  /* Permisos (cacheados tras init) */
   static bool _exactAlarmGranted = true;
 
-  /* ─────────────────────────  INIT  ───────────────────────── */
+  /* ── init ── */
   static Future<void> init(
-      {void Function(NotificationResponse)? onNotificationResponse}) async {
+      {void Function(NotificationResponse p)? onNotificationResponse}) async {
     const settings = InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       iOS:     DarwinInitializationSettings(
@@ -61,7 +62,7 @@ class AchievementService {
       onDidReceiveNotificationResponse: onNotificationResponse,
     );
 
-    /* permisos (POST_NOTIFICATIONS + EXACT_ALARM) */
+    /* Permisos Android (POST_NOTIFICATIONS + EXACT_ALARM) */
     final android = _plugin
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
@@ -74,30 +75,27 @@ class AchievementService {
           await (android as dynamic)?.requestExactAlarmsPermission() ?? false;
     }
 
-    /* zonas horarias */
+    /* Zonas horarias */
     tz.initializeTimeZones();
-    final String localName = await FlutterTimezone.getLocalTimezone();
+    final localName = await NativeTz.getLocalTz();
     tz.setLocalLocation(tz.getLocation(localName));
     dev.log('[TZ] Zona local: $localName');
   }
 
-  /* ─────────────────────  LOGROS  ───────────────────── */
+  /* ── LOGROS ── */
   static Future<void> scheduleMilestones(DateTime start) async {
     await cancelMilestones();
-
     final now = tz.TZDateTime.now(tz.local);
+
     for (final e in _milestones.entries) {
       final trigger = tz.TZDateTime(
-              tz.local, start.year, start.month, start.day, 9)
+            tz.local, start.year, start.month, start.day, 9)
           .add(Duration(days: e.key));
 
       if (trigger.isBefore(now)) continue;
 
       await _plugin.zonedSchedule(
-        e.key,
-        'Logro de recuperación',
-        e.value,
-        trigger,
+        e.key, 'Logro de recuperación', e.value, trigger,
         const NotificationDetails(
           android: AndroidNotificationDetails(
               _milestoneChannelId, _milestoneChannelName,
@@ -120,7 +118,7 @@ class AchievementService {
     }
   }
 
-  /* ─────────────────  REFLEXIÓN DIARIA  ───────────────── */
+  /* ── REFLEXIÓN DIARIA ─ */
   static Future<void> scheduleDailyReflections(String json,
       {int daysAhead = 60}) async {
     await cancelDailyReflections(daysAhead: daysAhead);
@@ -131,8 +129,8 @@ class AchievementService {
       return m?.group(1) ?? 'Reflexión del día';
     }).toList();
 
-    final now = tz.TZDateTime.now(tz.local);
-    var first = tz.TZDateTime(tz.local, now.year, now.month, now.day, 9);
+    final now   = tz.TZDateTime.now(tz.local);
+    var first   = tz.TZDateTime(tz.local, now.year, now.month, now.day, 9);
     if (first.isBefore(now)) first = first.add(const Duration(days: 1));
 
     for (var i = 0; i < daysAhead; i++) {
@@ -141,10 +139,7 @@ class AchievementService {
       final title = items[doy % items.length];
 
       await _plugin.zonedSchedule(
-        _reflectionBaseId + i,
-        'Reflexión diaria',
-        title,
-        date,
+        _reflectionBaseId + i, 'Reflexión diaria', title, date,
         const NotificationDetails(
           android: AndroidNotificationDetails(
               _reflectionChannelId, _reflectionChannelName,
