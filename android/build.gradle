@@ -39,17 +39,13 @@ subprojects { sub ->
                         details.requested.version != "1.9.22") {
 
                         details.useVersion("1.9.22")
-                        details.because("AGP 8 requiere Kotlin >= 1.5; " +
-                                        "forzado globalmente a 1.9.22")
                     }
                 }
             }
     }
 }
 
-/* ───────────────  PARCHE #3 · borrar atributo package  ─────────────
-   AGP 8 prohíbe definir el package en el Manifest. Quitamos la línea
-   «package="com.whelksoft.flutter_native_timezone"» antes de la fusión.     */
+/* ───────────────  PARCHE #3 · borrar atributo package  ───────────── */
 subprojects { sub ->
     if (sub.name == "flutter_native_timezone") {
         sub.afterEvaluate {
@@ -66,5 +62,22 @@ subprojects { sub ->
                 }
             }
         }
+    }
+}
+
+/* ───────────────  PARCHE #4 · Java 17 ≡ Kotlin 17  ───────────────
+   Evita la incompatibilidad 1.8 vs 17 detectada por AGP 8            */
+subprojects { sub ->
+    if (sub.name == "flutter_native_timezone") {
+        sub.plugins.withId("com.android.library") {
+            sub.android.compileOptions {
+                sourceCompatibility = JavaVersion.VERSION_17
+                targetCompatibility = JavaVersion.VERSION_17
+            }
+        }
+        sub.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile)
+            .configureEach { task ->
+                task.kotlinOptions.jvmTarget = "17"
+            }
     }
 }
