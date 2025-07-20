@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:developer' as dev;
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_native_timezone/flutter_native_timezone.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:intl/intl.dart';
@@ -60,26 +61,26 @@ class AchievementService {
       onDidReceiveNotificationResponse: onNotificationResponse,
     );
 
-    /* ── Permiso POST_NOTIFICATIONS (Android 13+) ── */
+    /* Permisos Android */
     final android = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
 
-    // En la 17.x el método existe; en versiones viejas reflejamos.
-    await (android as dynamic)?.requestPermission();
-
-    /* ── Permiso SCHEDULE_EXACT_ALARM (Android 12+) ── */
+    await (android as dynamic)?.requestPermission();           // POST_NOTIFICATIONS
     _exactAlarmGranted =
         await (android as dynamic)?.hasExactAlarmPermission() ?? true;
-
     if (!_exactAlarmGranted) {
       _exactAlarmGranted =
           await (android as dynamic)?.requestExactAlarmsPermission() ?? false;
     }
 
-    /* ── Time‑zones ── */
+    /* Zona horaria local */
     try {
       tz.initializeTimeZones();
-    } catch (_) {
+      final name = await FlutterNativeTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(name));
+      dev.log('[Notif] Zona local: $name');
+    } catch (e) {
+      dev.log('[Notif] Error cargando zona: $e → UTC');
       tz.setLocalLocation(tz.UTC);
     }
   }
@@ -87,12 +88,11 @@ class AchievementService {
   /* ── LOGROS ── */
   static Future<void> scheduleMilestones(DateTime start) async {
     await cancelMilestones();
-
     final now = tz.TZDateTime.now(tz.local);
 
     for (final e in _milestones.entries) {
       final trigger = tz.TZDateTime(
-            tz.local, start.year, start.month, start.day, 9)
+              tz.local, start.year, start.month, start.day, 9)
           .add(Duration(days: e.key));
 
       if (trigger.isBefore(now)) continue;
@@ -126,7 +126,6 @@ class AchievementService {
       {int daysAhead = 60}) async {
     await cancelDailyReflections(daysAhead: daysAhead);
 
-    /* Lee títulos de las reflexiones */
     final items = (jsonDecode(json) as List<dynamic>).map((e) {
       if (e is Map && e['title'] != null) return e['title'] as String;
       final m = RegExp(r'^###\s+(.+)', multiLine: true)
@@ -161,8 +160,9 @@ class AchievementService {
       );
     }
 
-    dev.log('[Notif] programadas $daysAhead reflexiones '
-        '(${_exactAlarmGranted ? 'exactas' : 'inexactas'})');
+    dev.log('[Notif] Programadas $daysAhead reflexiones '
+        '(${_exactAlarmGranted ? 'exactas' : 'inexactas'}) '
+        'a partir de ${first.hour}:${first.minute.toString().padLeft(2,'0')}');
   }
 
   static Future<void> cancelDailyReflections({int daysAhead = 60}) async {
