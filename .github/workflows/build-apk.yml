@@ -37,7 +37,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          channel: stable
 
       # 5) Dependencias
       - name: Install Pub dependencies
@@ -47,7 +47,7 @@ jobs:
       - name: Generate launcher icons
         run: dart run flutter_launcher_icons
 
-      # 6.1) ⬇️ Auto‑fixes y formato de código
+      # 6.1) Auto‑fixes y formato
       - name: Dart fix (apply)
         run: dart fix --apply
 
@@ -62,7 +62,7 @@ jobs:
       - name: Flutter tests
         run: flutter test
 
-      # 7) Keystore
+      # 7) Keystore de subida
       - name: Decode keystore
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/undiamas.jks
@@ -76,7 +76,7 @@ jobs:
           storeFile=undiamas.jks
           EOF
 
-      # 7.1) ➕ Imprimir SHA‑1 de la UPLOAD KEY
+      # 7.1) Mostrar huellas SHA‑1 (opcional)
       - name: Show upload key SHA‑1
         run: |
           keytool -list -v \
@@ -85,7 +85,6 @@ jobs:
             -storepass ${{ secrets.STORE_PASSWORD }} \
             -keypass  ${{ secrets.KEY_PASSWORD }} | grep 'SHA1:' || true
 
-      # 7.1‑bis) Generar debug keystore (solo para sacar la huella)
       - name: Generate debug keystore
         run: |
           mkdir -p ~/.android
@@ -94,32 +93,32 @@ jobs:
             -keystore ~/.android/debug.keystore \
             -storepass android -keypass android
 
-      # 7.2) ➕ Imprimir SHA‑1 de la DEBUG KEY
       - name: Show debug key SHA‑1
         run: |
           keytool -list -v \
             -keystore ~/.android/debug.keystore \
             -alias androiddebugkey \
             -storepass android -keypass android | grep 'SHA1:' || true
-     # debbug para probar, eliminar
-     - name: Build debug APK            # NUEVO PASO
+
+      # 8) ✨ Build DEBUG APK para pruebas locales
+      - name: Build debug APK
         run: flutter build apk --debug
 
-      - name: Upload DEBUG APK artifact  # NUEVO PASO
+      - name: Upload DEBUG APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: undiamas-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
-      
-      # 8) Compilar APK
+
+      # 9) Build release APK
       - name: Build release APK
         run: flutter build apk --release
 
-      # 9) Compilar AAB
+      # 10) Build release AAB
       - name: Build release AAB
         run: flutter build appbundle --release
 
-      # 10) Verificar que el MP3 viaja dentro del APK
+      # 11) Verificar que el MP3 va dentro del APK
       - name: Verificar MP3 dentro del APK
         run: |
           APK=build/app/outputs/flutter-apk/app-release.apk
@@ -127,7 +126,7 @@ jobs:
             echo "❌ El MP3 no se incluyó en el APK"; exit 1; }
           echo "✅ MP3 presente en el APK"
 
-      # 11) Subir artefactos
+      # 12) Subir artefactos finales
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
