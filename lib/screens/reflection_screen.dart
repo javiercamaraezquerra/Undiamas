@@ -2,11 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as dev;
 
+import 'package:flutter/foundation.dart';                       // kDebugMode
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 /// Muestra la reflexión del día o la indicada por [dayIndex] (0‑364).
 class ReflectionScreen extends StatefulWidget {
@@ -27,6 +30,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
 
   static const _soloPorHoyUrl = 'https://fzla.org/principio-diario/';
 
+  /* ───────────────────────────── lifecycle ───────────────────────────── */
   @override
   void initState() {
     super.initState();
@@ -41,7 +45,6 @@ class _ReflectionScreenState extends State<ReflectionScreen>
     super.dispose();
   }
 
-  /* ───────────────── lifecycle ───────────────── */
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && widget.dayIndex == null) {
@@ -50,7 +53,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
     }
   }
 
-  /* ───────────────── carga de datos ───────────────── */
+  /* ─────────────────────── carga de la reflexión ─────────────────────── */
   Future<void> _loadReflection() async {
     try {
       String raw = await rootBundle.loadString('assets/data/reflections.json');
@@ -63,8 +66,9 @@ class _ReflectionScreenState extends State<ReflectionScreen>
       final data = jsonDecode(raw) as List<dynamic>;
       if (data.length < 365) throw const FormatException('Faltan reflexiones');
 
-      _currentDoY =
-          widget.dayIndex != null ? widget.dayIndex! + 1 : _dayOfYear(DateTime.now());
+      _currentDoY = widget.dayIndex != null
+          ? widget.dayIndex! + 1
+          : _dayOfYear(DateTime.now());
       final idx = (_currentDoY - 1).clamp(0, 364);
 
       final md = data[idx] as String;
@@ -95,7 +99,70 @@ class _ReflectionScreenState extends State<ReflectionScreen>
 
   int _dayOfYear(DateTime dt) => int.parse(DateFormat('D').format(dt));
 
-  /* ───────────────── UI ───────────────── */
+  /* ───────────────────────── utilidades DEBUG ────────────────────────── */
+  /// Programa una notificación que saltará en 10 s (canal “test”).
+  Future<void> _scheduleTestNotification() async {
+    final plugin = FlutterLocalNotificationsPlugin();
+    final trigger =
+        tz.TZDateTime.now(tz.local).add(const Duration(seconds: 10));
+
+    await plugin.zonedSchedule(
+      99999,
+      'TEST',
+      'Esto es una prueba',
+      trigger,
+      const NotificationDetails(
+        android:
+            AndroidNotificationDetails('test', 'Pruebas', importance: Importance.high, priority: Priority.high),
+        iOS: DarwinNotificationDetails(),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+    );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Notificación de prueba programada para 10 s.')));
+    }
+  }
+
+  /// Muestra todas las notificaciones pendientes.
+  Future<void> _showPendingNotifications() async {
+    final plugin = FlutterLocalNotificationsPlugin();
+    final list = await plugin.pendingNotificationRequests();
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Notificaciones en cola'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: list.isEmpty
+              ? const Text('No hay notificaciones pendientes.')
+              : ListView(
+                  children: list
+                      .map((n) => ListTile(
+                            title: Text('${n.id} – ${n.title ?? ''}'),
+                            subtitle: Text(n.scheduledDate != null
+                                ? DateFormat('yyyy-MM-dd HH:mm:ss')
+                                    .format(n.scheduledDate!.toLocal())
+                                : 'Sin fecha'),
+                          ))
+                      .toList(),
+                ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cerrar')),
+        ],
+      ),
+    );
+  }
+
+  /* ────────────────────────────── UI ────────────────────────────── */
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -123,11 +190,9 @@ class _ReflectionScreenState extends State<ReflectionScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                _header!,
-                style:
-                    theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-              ),
+              Text(_header!,
+                  style: theme.textTheme.headlineMedium
+                      ?.copyWith(fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
               Card(
                 elevation: 1,
@@ -161,7 +226,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                 ),
               ),
               const SizedBox(height: 24),
-              /* ───── enlace adicional ───── */
+              /* ───────── enlace adicional ───────── */
               TextButton.icon(
                 icon: const Icon(Icons.open_in_new),
                 style: TextButton.styleFrom(
@@ -169,12 +234,13 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                 onPressed: () async {
                   final uri = Uri.parse(_soloPorHoyUrl);
                   if (await canLaunchUrl(uri)) {
-                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    await launchUrl(uri,
+                        mode: LaunchMode.externalApplication);
                   } else {
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                        content:
-                            Text('No se pudo abrir el enlace, inténtalo más tarde.')));
+                        content: Text(
+                            'No se pudo abrir el enlace, inténtalo más tarde.')));
                   }
                 },
                 label: const Text(
@@ -183,6 +249,22 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                   textAlign: TextAlign.start,
                 ),
               ),
+              /* ───────── utilidades DEBUG (solo debug build) ───────── */
+              if (kDebugMode) ...[
+                const Divider(height: 32),
+                Text('Herramientas de depuración',
+                    style: theme.textTheme.titleMedium),
+                const SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: _scheduleTestNotification,
+                  child: const Text('Probar notificación (10 s)'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton(
+                  onPressed: _showPendingNotifications,
+                  child: const Text('Ver notificaciones pendientes'),
+                ),
+              ],
             ],
           ),
         ),
