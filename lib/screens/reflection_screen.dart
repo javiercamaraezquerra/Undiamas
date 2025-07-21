@@ -35,6 +35,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
+  bool _pluginReady = false; // evita doble init
 
   /* ───────────────────────────── lifecycle ───────────────────────────── */
   @override
@@ -108,15 +109,13 @@ class _ReflectionScreenState extends State<ReflectionScreen>
   /* ─────────────────── helpers notificaciones test ─────────────────── */
 
   Future<void> _ensurePluginReady() async {
-    // 1) zona horaria local
-    try {
-      tzdb.initializeTimeZones();
-    } catch (_) {}
-    // 2) inicialización rápida si fuera necesaria
+    if (_pluginReady) return;
+    tzdb.initializeTimeZones();
     await _plugin.initialize(const InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       iOS: DarwinInitializationSettings(),
     ));
+    _pluginReady = true;
   }
 
   /// Programa una notificación que saltará en 10 s (canal “test”).
@@ -128,9 +127,9 @@ class _ReflectionScreenState extends State<ReflectionScreen>
           tz.TZDateTime.now(tz.local).add(const Duration(seconds: 10));
 
       await _plugin.zonedSchedule(
-        99999, // ← sin separadores
+        99999,
         'TEST',
-        'Esto es una prueba',
+        'Esto es una prueba programada',
         trigger,
         const NotificationDetails(
           android: AndroidNotificationDetails(
@@ -151,6 +150,33 @@ class _ReflectionScreenState extends State<ReflectionScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text('Error al programar: $e'),
+            duration: const Duration(seconds: 6)));
+      }
+    }
+  }
+
+  /// Notificación inmediata — prueba básica de permisos.
+  Future<void> _sendNow() async {
+    try {
+      await _ensurePluginReady();
+      await _plugin.show(
+        778,
+        'Prueba inmediata',
+        'Si lees esto, el permiso de notificaciones está OK',
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'test',
+            'Pruebas',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+          iOS: DarwinNotificationDetails(),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Error al mostrar: $e'),
             duration: const Duration(seconds: 6)));
       }
     }
@@ -292,6 +318,11 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                 ElevatedButton(
                   onPressed: _scheduleTestNotification,
                   child: const Text('Probar notificación (10 s)'),
+                ),
+                const SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: _sendNow,
+                  child: const Text('Enviar ahora'),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton(
