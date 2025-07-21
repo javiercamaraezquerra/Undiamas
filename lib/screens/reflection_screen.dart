@@ -108,13 +108,11 @@ class _ReflectionScreenState extends State<ReflectionScreen>
   /* ─────────────────── helpers notificaciones test ─────────────────── */
 
   Future<void> _ensurePluginReady() async {
-    // 1) zona horaria local (si no estuviera ya)
+    // 1) zona horaria local
     try {
       tzdb.initializeTimeZones();
-    } catch (_) {
-      // si ya está inicializado, ignora
-    }
-    // 2) inicialización rápida en caso de que la app no la hubiera hecho
+    } catch (_) {}
+    // 2) inicialización rápida si fuera necesaria
     await _plugin.initialize(const InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       iOS: DarwinInitializationSettings(),
@@ -130,7 +128,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
           tz.TZDateTime.now(tz.local).add(const Duration(seconds: 10));
 
       await _plugin.zonedSchedule(
-        99_999,
+        99999, // ← sin separadores
         'TEST',
         'Esto es una prueba',
         trigger,
