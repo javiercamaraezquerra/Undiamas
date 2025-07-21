@@ -1,7 +1,8 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show MethodChannel, rootBundle;
+import 'package:flutter/services.dart'
+    show MethodChannel, rootBundle;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -57,7 +58,7 @@ Future<void> main() async {
     RequestConfiguration(testDeviceIds: ['TEST_DEVICE_ID']),
   );
 
-  /* ── Notificaciones ───────────────────────────────────────────── */
+  /* ── Notificaciones (init + callback) ─────────────────────────── */
   try {
     await AchievementService.init(onNotificationResponse: (resp) {
       final idx = int.tryParse(resp.payload ?? '');
@@ -81,13 +82,12 @@ Future<void> main() async {
   final hasStartDate = settings.containsKey('startDate');
   runApp(UnDiaMasApp(showOnboarding: !hasStartDate));
 
-  /* ── Dialog. de permisos + MIUI + programación ───────────────── */
+  /* ── Diálogos de permisos + MIUI + programación ───────────────── */
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     final ctx = _navKey.currentContext;
     if (ctx == null) return;
 
-    // Comprobamos únicamente POST_NOTIFICATIONS, el permiso de
-    // alarmas exactas ya se solicita dentro de AchievementService.
+    /* 1 · POST_NOTIFICATIONS (Android 13+) */
     final androidImpl = FlutterLocalNotificationsPlugin()
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
@@ -98,7 +98,6 @@ Future<void> main() async {
           await (androidImpl as dynamic)?.areNotificationsEnabled() ?? true;
     } catch (_) {}
 
-    /* 1 · Solicitar POST_NOTIFICATIONS si fuera necesario */
     if (!notifAllowed && ctx.mounted) {
       await showDialog(
         context: ctx,
@@ -111,12 +110,12 @@ Future<void> main() async {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Más tarde'),
-            ),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Más tarde')),
             ElevatedButton(
               onPressed: () async {
                 Navigator.pop(ctx);
+                await (androidImpl as dynamic)?.requestPermission();
                 await (androidImpl as dynamic)?.openNotificationSettings();
               },
               child: const Text('Ajustes'),
