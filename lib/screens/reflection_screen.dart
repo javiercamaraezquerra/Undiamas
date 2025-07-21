@@ -112,8 +112,8 @@ class _ReflectionScreenState extends State<ReflectionScreen>
       'Esto es una prueba',
       trigger,
       const NotificationDetails(
-        android:
-            AndroidNotificationDetails('test', 'Pruebas', importance: Importance.high, priority: Priority.high),
+        android: AndroidNotificationDetails('test', 'Pruebas',
+            importance: Importance.high, priority: Priority.high),
         iOS: DarwinNotificationDetails(),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -145,10 +145,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                   children: list
                       .map((n) => ListTile(
                             title: Text('${n.id} – ${n.title ?? ''}'),
-                            subtitle: Text(n.scheduledDate != null
-                                ? DateFormat('yyyy-MM-dd HH:mm:ss')
-                                    .format(n.scheduledDate!.toLocal())
-                                : 'Sin fecha'),
+                            subtitle: Text(n.body ?? ''),
                           ))
                       .toList(),
                 ),
