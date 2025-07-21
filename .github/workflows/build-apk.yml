@@ -101,6 +101,16 @@ jobs:
             -keystore ~/.android/debug.keystore \
             -alias androiddebugkey \
             -storepass android -keypass android | grep 'SHA1:' || true
+     # debbug para probar, eliminar
+     - name: Build debug APK            # NUEVO PASO
+        run: flutter build apk --debug
+
+      - name: Upload DEBUG APK artifact  # NUEVO PASO
+        uses: actions/upload-artifact@v4
+        with:
+          name: undiamas-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+      
       # 8) Compilar APK
       - name: Build release APK
         run: flutter build apk --release
