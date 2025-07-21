@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as dev;
 
-import 'package:flutter/foundation.dart';                       // kDebugMode
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -10,6 +9,9 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
+
+/// visible en todos los builds (ajusta a false antes de publicar)
+const bool _showTestTools = true;
 
 /// Muestra la reflexión del día o la indicada por [dayIndex] (0‑364).
 class ReflectionScreen extends StatefulWidget {
@@ -99,7 +101,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
 
   int _dayOfYear(DateTime dt) => int.parse(DateFormat('D').format(dt));
 
-  /* ───────────────────────── utilidades DEBUG ────────────────────────── */
+  /* ───────────────────────── utilidades TEST ────────────────────────── */
   /// Programa una notificación que saltará en 10 s (canal “test”).
   Future<void> _scheduleTestNotification() async {
     final plugin = FlutterLocalNotificationsPlugin();
@@ -112,7 +114,8 @@ class _ReflectionScreenState extends State<ReflectionScreen>
       'Esto es una prueba',
       trigger,
       const NotificationDetails(
-        android: AndroidNotificationDetails('test', 'Pruebas',
+        android: AndroidNotificationDetails(
+            'test', 'Pruebas',
             importance: Importance.high, priority: Priority.high),
         iOS: DarwinNotificationDetails(),
       ),
@@ -246,10 +249,10 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                   textAlign: TextAlign.start,
                 ),
               ),
-              /* ───────── utilidades DEBUG (solo debug build) ───────── */
-              if (kDebugMode) ...[
+              /* ───────── utilidades DEBUG / TEST ─────────  TODO REMOVE ─ */
+              if (_showTestTools) ...[
                 const Divider(height: 32),
-                Text('Herramientas de depuración',
+                Text('Herramientas de prueba',
                     style: theme.textTheme.titleMedium),
                 const SizedBox(height: 8),
                 ElevatedButton(
