@@ -8,6 +8,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest.dart' as tzdb;
 import 'package:timezone/timezone.dart' as tz;
 
 /// visible en todos los builds (ajusta a false antes de publicar)
@@ -31,6 +32,9 @@ class _ReflectionScreenState extends State<ReflectionScreen>
   Timer? _midnightTimer;
 
   static const _soloPorHoyUrl = 'https://fzla.org/principio-diario/';
+
+  final FlutterLocalNotificationsPlugin _plugin =
+      FlutterLocalNotificationsPlugin();
 
   /* ───────────────────────────── lifecycle ───────────────────────────── */
   @override
@@ -101,65 +105,97 @@ class _ReflectionScreenState extends State<ReflectionScreen>
 
   int _dayOfYear(DateTime dt) => int.parse(DateFormat('D').format(dt));
 
-  /* ───────────────────────── utilidades TEST ────────────────────────── */
+  /* ─────────────────── helpers notificaciones test ─────────────────── */
+
+  Future<void> _ensurePluginReady() async {
+    // 1) zona horaria local (si no estuviera ya)
+    try {
+      tzdb.initializeTimeZones();
+    } catch (_) {
+      // si ya está inicializado, ignora
+    }
+    // 2) inicialización rápida en caso de que la app no la hubiera hecho
+    await _plugin.initialize(const InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      iOS: DarwinInitializationSettings(),
+    ));
+  }
+
   /// Programa una notificación que saltará en 10 s (canal “test”).
   Future<void> _scheduleTestNotification() async {
-    final plugin = FlutterLocalNotificationsPlugin();
-    final trigger =
-        tz.TZDateTime.now(tz.local).add(const Duration(seconds: 10));
+    try {
+      await _ensurePluginReady();
 
-    await plugin.zonedSchedule(
-      99999,
-      'TEST',
-      'Esto es una prueba',
-      trigger,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-            'test', 'Pruebas',
-            importance: Importance.high, priority: Priority.high),
-        iOS: DarwinNotificationDetails(),
-      ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-    );
+      final trigger =
+          tz.TZDateTime.now(tz.local).add(const Duration(seconds: 10));
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Notificación de prueba programada para 10 s.')));
+      await _plugin.zonedSchedule(
+        99_999,
+        'TEST',
+        'Esto es una prueba',
+        trigger,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+              'test', 'Pruebas',
+              importance: Importance.high, priority: Priority.high),
+          iOS: DarwinNotificationDetails(),
+        ),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Notificación programada para 10 s 👍')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Error al programar: $e'),
+            duration: const Duration(seconds: 6)));
+      }
     }
   }
 
   /// Muestra todas las notificaciones pendientes.
   Future<void> _showPendingNotifications() async {
-    final plugin = FlutterLocalNotificationsPlugin();
-    final list = await plugin.pendingNotificationRequests();
-    if (!mounted) return;
+    try {
+      await _ensurePluginReady();
+      final list = await _plugin.pendingNotificationRequests();
+      if (!mounted) return;
 
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Notificaciones en cola'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: list.isEmpty
-              ? const Text('No hay notificaciones pendientes.')
-              : ListView(
-                  children: list
-                      .map((n) => ListTile(
-                            title: Text('${n.id} – ${n.title ?? ''}'),
-                            subtitle: Text(n.body ?? ''),
-                          ))
-                      .toList(),
-                ),
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Notificaciones en cola'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: list.isEmpty
+                ? const Text('No hay notificaciones pendientes.')
+                : ListView(
+                    children: list
+                        .map((n) => ListTile(
+                              title: Text('${n.id} – ${n.title ?? ''}'),
+                              subtitle: Text(n.body ?? ''),
+                            ))
+                        .toList(),
+                  ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cerrar')),
+          ],
         ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cerrar')),
-        ],
-      ),
-    );
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Error al obtener lista: $e'),
+            duration: const Duration(seconds: 6)));
+      }
+    }
   }
 
   /* ────────────────────────────── UI ────────────────────────────── */
@@ -249,7 +285,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                   textAlign: TextAlign.start,
                 ),
               ),
-              /* ───────── utilidades DEBUG / TEST ─────────  TODO REMOVE ─ */
+              /* ───────── utilidades TEST  TODO REMOVE ───────── */
               if (_showTestTools) ...[
                 const Divider(height: 32),
                 Text('Herramientas de prueba',
