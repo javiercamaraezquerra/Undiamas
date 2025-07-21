@@ -23,7 +23,7 @@ android {
     compileOptions {
         sourceCompatibility       = JavaVersion.VERSION_17
         targetCompatibility       = JavaVersion.VERSION_17
-        coreLibraryDesugaringEnabled true          // ← solución del error
+        coreLibraryDesugaringEnabled true
     }
     kotlinOptions {
         jvmTarget = "17"
@@ -48,11 +48,19 @@ android {
 
     buildTypes {
         release {
-            signingConfig  signingConfigs.release
-            minifyEnabled  true
+            signingConfig   signingConfigs.release
+            minifyEnabled   true
             shrinkResources true
+
+            /* ── R8 / ProGuard ──
+               • archivo por defecto optimizado
+               • reglas propias (keep de flutter_local_notifications + Gson) */
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
+                          'proguard-rules.pro'
         }
-        debug { /* keystore debug por defecto */ }
+        debug {
+            // keystore debug por defecto
+        }
     }
 }
 
