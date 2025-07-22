@@ -1,8 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'
-    show MethodChannel, rootBundle;
+import 'package:flutter/services.dart' show MethodChannel, rootBundle;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -22,7 +21,7 @@ import 'widgets/bottom_nav_bar.dart';
 final themeNotifier = ValueNotifier<ThemeMode>(ThemeMode.light);
 final _navKey       = GlobalKey<NavigatorState>(debugLabel: 'root_nav');
 
-/// Muestra ayuda MIUI una sola vez
+/// Muestra la ayuda MIUI una sola vez
 const bool _showMiuiHelp = true;
 
 Future<void> main() async {
@@ -35,7 +34,7 @@ Future<void> main() async {
 
   final cipher = await EncryptionService.getCipher();
 
-  // Migraciones no cifrado → cifrado
+  // Migraciones (cajas sin cifrar → cifradas)
   if (await Hive.boxExists('udm')) {
     final p = await Hive.openBox('udm');
     final s = await Hive.openBox('udm_secure', encryptionCipher: cipher);
@@ -58,7 +57,7 @@ Future<void> main() async {
     RequestConfiguration(testDeviceIds: ['TEST_DEVICE_ID']),
   );
 
-  /* ── Notificaciones (init + callback) ─────────────────────────── */
+  /* ── Notificaciones (init + deep‑link) ───────────────────────── */
   try {
     await AchievementService.init(onNotificationResponse: (resp) {
       final idx = int.tryParse(resp.payload ?? '');
@@ -69,11 +68,11 @@ Future<void> main() async {
       }
     });
   } catch (e, s) {
-    // En caso extremo seguimos sin notificaciones pero la app arranca
+    // Si falla seguimos sin notificaciones, la app arranca igual
     debugPrint('Init notifications error: $e\n$s');
   }
 
-  /* ── Preferencias / tema ──────────────────────────────────────── */
+  /* ── Preferencias / tema ─────────────────────────────────────── */
   Intl.defaultLocale = 'es_ES';
   final prefs = await SharedPreferences.getInstance();
   themeNotifier.value =
@@ -82,16 +81,16 @@ Future<void> main() async {
   final hasStartDate = settings.containsKey('startDate');
   runApp(UnDiaMasApp(showOnboarding: !hasStartDate));
 
-  /* ── Diálogos de permisos + MIUI + programación ───────────────── */
+  /* ── Diálogos de permisos + MIUI + programación ──────────────── */
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     final ctx = _navKey.currentContext;
     if (ctx == null) return;
 
-    /* 1 · POST_NOTIFICATIONS (Android 13+) */
     final androidImpl = FlutterLocalNotificationsPlugin()
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
 
+    /* 1 · POST_NOTIFICATIONS */
     bool notifAllowed = true;
     try {
       notifAllowed =
@@ -110,8 +109,9 @@ Future<void> main() async {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Más tarde')),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Más tarde'),
+            ),
             ElevatedButton(
               onPressed: () async {
                 Navigator.pop(ctx);
@@ -125,7 +125,48 @@ Future<void> main() async {
       );
     }
 
-    /* 2 · Ayuda MIUI (autostart) */
+    /* 2 · SCHEDULE_EXACT_ALARM (Android 12+) */
+    bool exactAllowed = true;
+    try {
+      exactAllowed =
+          await (androidImpl as dynamic)?.hasExactAlarmPermission() ?? true;
+    } catch (_) {}
+
+    if (!exactAllowed && ctx.mounted) {
+      final grant = await showDialog<bool>(
+            context: ctx,
+            builder: (_) => AlertDialog(
+              title: const Text('Alarmas exactas'),
+              content: const Text(
+                'Para que las notificaciones se entreguen a la hora exacta, '
+                'Android necesita permitir “Alarmas exactas”. ¿Quieres activarlo ahora?',
+                textAlign: TextAlign.justify,
+              ),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Más tarde')),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Activar'),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+
+      if (grant) {
+        exactAllowed =
+            await (androidImpl as dynamic)?.requestExactAlarmsPermission() ??
+                false;
+        if (!exactAllowed && ctx.mounted) {
+          ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+              content: Text('No se pudo otorgar “Alarmas exactas”.')));
+        }
+      }
+    }
+
+    /* 3 · Ayuda MIUI (inicio automático) */
     if (_showMiuiHelp &&
         Platform.isAndroid &&
         (await _isMiui()) &&
@@ -159,7 +200,7 @@ Future<void> main() async {
       await prefs.setBool('miuiHelpShown', true);
     }
 
-    /* 3 · Programar notificaciones si el usuario lo permite */
+    /* 4 · Programar notificaciones si procede */
     final milestonesOn = prefs.getBool('notifyMilestones') ?? true;
     final reflectionOn = prefs.getBool('notifyDailyReflection') ?? true;
 
