@@ -1,18 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Manifest principal de “Un Día Más”.
-  ‑‑ 25 jul 2025 – Receivers para alarmas exactas:
-     • Se añaden con tools:node="replace"  ⟶  evita colisión con el
-       manifest que trae el plugin `flutter_local_notifications`.
+  27 jul 2025 – Receivers para alarmas exactas:
+     • Marcados con tools:node="replace" para que
+       no se dupliquen con los del plugin.
 -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-          xmlns:tools="http://schemas.android.com/tools">
+<manifest
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    package="com.example.undiamas">   <!-- ← ¡IMPORTANTE! -->
 
     <!-- ───────── PERMISOS ───────── -->
-    <uses-permission android:name="android.permission.INTERNET"                />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"    />
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"    />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"      />
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <!-- ───────── APLICACIÓN ───────── -->
     <application
@@ -25,25 +27,22 @@
         <!-- AdMob -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-4402835110551152~8514445452" />
+            android:value="ca-app-pub-4402835110551152~8514445452"/>
 
         <!-- Registro del plugin de zona horaria (si lo usas) -->
         <meta-data
             android:name="com.example.undiamas.TzPlugin"
-            android:value="flutterEmbedding" />
+            android:value="flutterEmbedding"/>
 
         <!-- ═══════════════════════════════════════════════
              RECEPTORES PARA ALARMAS PROGRAMADAS
-             tools:node="replace"  ➜  evita que el merger duplique
-             el receiver que ya declara el plugin.
-        ═══════════════════════════════════════════════  -->
+        ═══════════════════════════════════════════════ -->
         <receiver
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
             android:exported="false"
-            android:permission="android.permission.SCHEDULE_EXACT_ALARM"
             tools:node="replace">
             <intent-filter>
-                <action android:name="com.dexterous.flutterlocalnotifications.SCHEDULED_NOTIFICATION" />
+                <action android:name="com.dexterous.flutterlocalnotifications.SCHEDULED_NOTIFICATION"/>
             </intent-filter>
         </receiver>
 
@@ -52,8 +51,8 @@
             android:exported="false"
             tools:node="replace">
             <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED"   />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
             </intent-filter>
         </receiver>
         <!-- ═══════════════════════════════════════════════ -->
@@ -71,25 +70,26 @@
 
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
+                android:resource="@style/NormalTheme"/>
 
             <intent-filter>
-                <action android:name="android.intent.action.MAIN"   />
-                <category android:name="android.intent.category.LAUNCHER" />
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
 
         <!-- Versión de la embedding -->
         <meta-data
             android:name="flutterEmbedding"
-            android:value="2" />
+            android:value="2"/>
     </application>
 
-    <!-- Para el menú “Compartir → Procesar texto” -->
+    <!-- Para el menú “Compartir → Procesar texto” -->
     <queries>
         <intent>
-            <action android:name="android.intent.action.PROCESS_TEXT" />
-            <data android:mimeType="text/plain" />
+            <action android:name="android.intent.action.PROCESS_TEXT"/>
+            <data android:mimeType="text/plain"/>
         </intent>
     </queries>
+
 </manifest>
