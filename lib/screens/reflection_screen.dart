@@ -11,8 +11,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tzdb;
 import 'package:timezone/timezone.dart' as tz;
 
-import '../services/native_tz.dart';            // ← añadido
-
 /// Pon a false antes de publicar
 const bool _showTestTools = true;
 
@@ -97,24 +95,19 @@ class _ReflectionScreenState extends State<ReflectionScreen>
     final now = DateTime.now();
     final nextMidnight =
         DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
-    _midnightTimer = Timer(nextMidnight.difference(now) + const Duration(seconds: 1),
-        () { if (mounted) _loadReflection(); });
+    final ms = nextMidnight.difference(now).inMilliseconds;
+    _midnightTimer = Timer(Duration(milliseconds: ms + 1000), () {
+      if (mounted) _loadReflection();
+    });
   }
 
   int _dayOfYear(DateTime dt) => int.parse(DateFormat('D').format(dt));
 
   /* ------------------ Helpers notificaciones test ------------------ */
   Future<void> _ensurePluginReady() async {
-    // 1 · BD de zonas (solo la primera vez)
-    tzdb.initializeTimeZones();
-    // 2 · Ajustar zona local real
     try {
-      final name = await NativeTz.getLocalTz();
-      tz.setLocalLocation(tz.getLocation(name));
-    } catch (_) {
-      // En caso de fallo sigue con tz.local = UTC
-    }
-    // 3 · Inicializar plugin si aún no lo está
+      tzdb.initializeTimeZones();
+    } catch (_) {}
     await _plugin.initialize(const InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       iOS: DarwinInitializationSettings(),
@@ -132,7 +125,8 @@ class _ReflectionScreenState extends State<ReflectionScreen>
       if (exact) {
         try {
           exactPermitted =
-              await (androidImpl as dynamic)?.hasExactAlarmPermission() ?? true;
+              await (androidImpl as dynamic)?.hasExactAlarmPermission() ??
+                  true;
           if (!exactPermitted) {
             exactPermitted =
                 await (androidImpl as dynamic)?.requestExactAlarmsPermission() ??
@@ -151,12 +145,12 @@ class _ReflectionScreenState extends State<ReflectionScreen>
         return;
       }
 
-      final int id   = exact ? 99999 : 99998;
       final int secs = exact ? 10 : 130;
-      // Evitar duplicados si se pulsa varias veces
-      await _plugin.cancel(id);
+      final trigger =
+          tz.TZDateTime.now(tz.local).add(Duration(seconds: secs));
 
-      final trigger = tz.TZDateTime.now(tz.local).add(Duration(seconds: secs));
+      final id = exact ? 99999 : 99998;
+      await _plugin.cancel(id); // evita duplicados en sucesivas pruebas
 
       await _plugin.zonedSchedule(
         id,
@@ -165,11 +159,15 @@ class _ReflectionScreenState extends State<ReflectionScreen>
             ? 'Si lees esto, la alarma exacta funciona'
             : 'Esto es una prueba programada en modo inexacto',
         trigger,
-        const NotificationDetails(
+        NotificationDetails(                                   // CHANGE
           android: AndroidNotificationDetails(
-              'test', 'Pruebas',
-              importance: Importance.high, priority: Priority.high),
-          iOS: DarwinNotificationDetails(),
+            'test',
+            'Pruebas',
+            importance: Importance.high,
+            priority: Priority.high,
+            alarmClock: exact,                                // CHANGE
+          ),
+          iOS: const DarwinNotificationDetails(),
         ),
         androidScheduleMode: exact
             ? AndroidScheduleMode.exactAllowWhileIdle
@@ -177,6 +175,9 @@ class _ReflectionScreenState extends State<ReflectionScreen>
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
       );
+
+      dev.log('[TEST] $id programada para '
+          '${DateFormat.Hms().format(trigger.toLocal())} (exact=$exact)'); // CHANGE
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
