@@ -19,7 +19,7 @@ android {
     compileSdk = flutter.compileSdkVersion        // 34 con Flutter 3.22
     ndkVersion = flutter.ndkVersion
 
-    /* ── Java 17 + desugaring ── */
+    /* ── Java 17 + desugaring ────────────────────────────────── */
     compileOptions {
         sourceCompatibility       = JavaVersion.VERSION_17
         targetCompatibility       = JavaVersion.VERSION_17
@@ -48,16 +48,24 @@ android {
 
     buildTypes {
         release {
-            signingConfig   signingConfigs.release
-            minifyEnabled   true
-            shrinkResources true
+            signingConfig signingConfigs.release
 
-            /* ── R8 / ProGuard ──
-               • archivo por defecto optimizado
-               • reglas propias (keep de flutter_local_notifications + Gson) */
+            /* ──────────────────────────────────────────────────────────
+             *  ⚠️  Ofuscación y shrink DESACTIVADOS solo para pruebas
+             *      de notificaciones (evitamos que R8 elimine el
+             *      BroadcastReceiver del plugin).
+             *
+             *      Cuando confirmes que todo funciona, vuelve a
+             *      habilitar estas dos líneas y deja activo ProGuard
+             *      con las reglas ampliadas.                       */
+            // minifyEnabled   true
+            // shrinkResources true
+
+            /* ── R8 / ProGuard (se ignora si minifyEnabled=false) ── */
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
                           'proguard-rules.pro'
         }
+
         debug {
             // keystore debug por defecto
         }
