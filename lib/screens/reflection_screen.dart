@@ -11,11 +11,10 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tzdb;
 import 'package:timezone/timezone.dart' as tz;
 
-///  ⚠️ Recuerda poner a false antes de publicar
+///  ⚠️ Pon a false antes de compilar producción
 const bool _showTestTools = true;
 
-/// Pantalla de reflexión diaria ‑ muestra la reflexión del día actual
-/// o la indicada por [dayIndex] (0‑364).
+/// Pantalla de reflexión diaria (día actual o [dayIndex] 0‑364).
 class ReflectionScreen extends StatefulWidget {
   final int? dayIndex;
   const ReflectionScreen({super.key, this.dayIndex});
@@ -26,10 +25,8 @@ class ReflectionScreen extends StatefulWidget {
 
 class _ReflectionScreenState extends State<ReflectionScreen>
     with WidgetsBindingObserver {
-  String? _header;
-  String? _body;
-  String? _loadError;
-  late int _currentDoY; // 1‑365
+  String? _header, _body, _loadError;
+  late int _currentDoY; // 1‑365
   Timer? _midnightTimer;
 
   static const _soloPorHoyUrl = 'https://fzla.org/principio-diario/';
@@ -41,6 +38,10 @@ class _ReflectionScreenState extends State<ReflectionScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadReflection();
+    // Cargamos BD de zonas una sola vez (no se llama a initialize otra vez)
+    try {
+      tzdb.initializeTimeZones();
+    } catch (_) {}
   }
 
   @override
@@ -97,120 +98,117 @@ class _ReflectionScreenState extends State<ReflectionScreen>
     final now = DateTime.now();
     final nextMidnight =
         DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
-    final ms = nextMidnight.difference(now).inMilliseconds;
-    _midnightTimer = Timer(Duration(milliseconds: ms + 1000), () {
+    _midnightTimer = Timer(
+        nextMidnight.difference(now) + const Duration(seconds: 1), () {
       if (mounted) _loadReflection();
     });
   }
 
   int _dayOfYear(DateTime dt) => int.parse(DateFormat('D').format(dt));
 
-  /* ─────────────────── helpers notificaciones test ─────────────────── */
+  /* ────────────────── utilidades de prueba de notificaciones ───────────────── */
 
-  Future<void> _bootstrapPlugin() async {
-    // 1 · Base de datos de zonas horarias (solo la 1ª vez tarda)
+  /// Notificación inmediata (para verificar que el canal funciona).
+  Future<void> _fireImmediateNotification() async {
     try {
-      tzdb.initializeTimeZones();
-    } catch (_) {}
-    // 2 · Inicialización mínima (si la app ya lo hizo, se ignora)
-    await _plugin.initialize(const InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-      iOS: DarwinInitializationSettings(),
-    ));
+      await _plugin.show(
+        1,
+        'Prueba inmediata',
+        'Si lees esto, el permiso de notificaciones está OK',
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+              'immediate', 'Inmediatas',
+              importance: Importance.high, priority: Priority.high),
+          iOS: DarwinNotificationDetails(),
+        ),
+      );
+    } catch (e) {
+      _showError('Error al mostrar notificación: $e');
+    }
   }
 
-  /// Programa una notificación para dentro de 10 s (“canal test”).
+  /// Programa una notificación para dentro de 10 s.
   Future<void> _scheduleTestNotification() async {
-    await _bootstrapPlugin();
+    try {
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
 
-    /* 1 · ¿Tenemos permiso para alarmas exactas? */
-    final android = _plugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
-    bool exactGranted =
-        await (android as dynamic)?.hasExactAlarmPermission() ?? true;
-    if (!exactGranted) {
-      exactGranted =
-          await (android as dynamic)?.requestExactAlarmsPermission() ?? false;
-    }
+      bool exactGranted =
+          await (android as dynamic)?.hasExactAlarmPermission() ?? true;
+      if (!exactGranted) {
+        exactGranted =
+            await (android as dynamic)?.requestExactAlarmsPermission() ?? false;
+      }
 
-    /* 2 · Construimos la hora de disparo */
-    final trigger =
-        tz.TZDateTime.now(tz.local).add(const Duration(seconds: 10));
+      final trigger =
+          tz.TZDateTime.now(tz.local).add(const Duration(seconds: 10));
 
-    /* 3 · Programamos con el modo adecuado */
-    await _plugin.zonedSchedule(
-      99999,
-      'TEST',
-      'Esto es una prueba programada',
-      trigger,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-            'test', 'Pruebas',
-            importance: Importance.high, priority: Priority.high),
-        iOS: DarwinNotificationDetails(),
-      ),
-      androidScheduleMode: exactGranted
-          ? AndroidScheduleMode.exactAllowWhileIdle
-          : AndroidScheduleMode.inexactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-    );
+      await _plugin.zonedSchedule(
+        99999,
+        'TEST',
+        'Esto es una prueba programada',
+        trigger,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+              'test', 'Pruebas',
+              importance: Importance.high, priority: Priority.high),
+          iOS: DarwinNotificationDetails(),
+        ),
+        androidScheduleMode: exactGranted
+            ? AndroidScheduleMode.exactAllowWhileIdle
+            : AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
 
-    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(exactGranted
               ? '⏰ Notificación exacta programada para 10 s.'
-              : '⏰ Programada (modo inexacto, sin permiso exacto).')));
+              : '⏰ Programada (modo inexacto). Puede retrasarse.')));
+    } catch (e) {
+      _showError('Error al programar: $e');
     }
   }
 
-  /// Notificación instantánea (útil para comprobar que el canal suena).
-  Future<void> _fireImmediateNotification() async {
-    await _bootstrapPlugin();
-    await _plugin.show(
-      0,
-      'Prueba inmediata',
-      'Si lees esto, el permiso de notificaciones está OK',
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-            'immediate', 'Inmediatas',
-            importance: Importance.high, priority: Priority.high),
-        iOS: DarwinNotificationDetails(),
-      ),
-    );
+  /// Lista de notificaciones pendientes.
+  Future<void> _showPendingNotifications() async {
+    try {
+      final list = await _plugin.pendingNotificationRequests();
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Notificaciones en cola'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: list.isEmpty
+                ? const Text('No hay notificaciones pendientes.')
+                : ListView(
+                    children: list
+                        .map((n) => ListTile(
+                              title: Text('${n.id} – ${n.title ?? ''}'),
+                              subtitle: Text(n.body ?? ''),
+                            ))
+                        .toList(),
+                  ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cerrar')),
+          ],
+        ),
+      );
+    } catch (e) {
+      _showError('Error al obtener lista: $e');
+    }
   }
 
-  /// Lista rápida de notificaciones en cola.
-  Future<void> _showPendingNotifications() async {
-    await _bootstrapPlugin();
-    final list = await _plugin.pendingNotificationRequests();
+  void _showError(String msg) {
     if (!mounted) return;
-
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Notificaciones en cola'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: list.isEmpty
-              ? const Text('No hay notificaciones pendientes.')
-              : ListView(
-                  children: list
-                      .map((n) => ListTile(
-                            title: Text('${n.id} – ${n.title ?? ''}'),
-                            subtitle: Text(n.body ?? ''),
-                          ))
-                      .toList(),
-                ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cerrar')),
-        ],
-      ),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg), duration: const Duration(seconds: 6)));
   }
 
   /* ────────────────────────────── UI ────────────────────────────── */
@@ -277,8 +275,6 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                 ),
               ),
               const SizedBox(height: 24),
-
-              /* ───────── enlace adicional ───────── */
               TextButton.icon(
                 icon: const Icon(Icons.open_in_new),
                 style: TextButton.styleFrom(
@@ -289,10 +285,8 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                     await launchUrl(uri,
                         mode: LaunchMode.externalApplication);
                   } else {
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                        content: Text(
-                            'No se pudo abrir el enlace, inténtalo más tarde.')));
+                    _showError(
+                        'No se pudo abrir el enlace, inténtalo más tarde.');
                   }
                 },
                 label: const Text(
@@ -302,7 +296,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                 ),
               ),
 
-              /* ───────── utilidades de prueba (ocúltalas antes de publicar) ───────── */
+              /* ═══ Herramientas de prueba (eliminar/ocultar en producción) ═══ */
               if (_showTestTools) ...[
                 const Divider(height: 32),
                 Text('Herramientas de prueba',
