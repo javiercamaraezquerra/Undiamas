@@ -32,6 +32,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
   Timer? _midnightTimer;
 
   static const _soloPorHoyUrl = 'https://fzla.org/principio-diario/';
+
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
@@ -118,45 +119,39 @@ class _ReflectionScreenState extends State<ReflectionScreen>
     ));
   }
 
-  void _showError(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), duration: const Duration(seconds: 6)),
-    );
-  }
-
-  /// Programa una notificación que saltará en 10 s (canal “test”).
+  /// Programa una notificación test:
+  ///   • 10 s si se dispone de permiso de alarmas exactas.
+  ///   • 130 s (≈ >2 min) en modo inexacto si no.
   Future<void> _scheduleTestNotification() async {
     try {
       await _ensurePluginReady();
 
-      // ── Comprobar / solicitar EXACT_ALARM si la API lo soporta ──
-      final android = _plugin
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
+      final androidImpl = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
 
-      bool exactGranted = false;
-      if (android != null) {
-        try {
-          exactGranted =
-              await (android as dynamic).hasExactAlarmPermission() ?? false;
-          if (!exactGranted) {
-            exactGranted =
-                await (android as dynamic).requestExactAlarmsPermission() ??
-                    false;
-          }
-        } catch (_) {
-          // Método no disponible en esta versión del plugin → usamos modo inexacto
-        }
+      bool exactAllowed = false;
+      try {
+        exactAllowed =
+            await (androidImpl as dynamic)?.hasExactAlarmPermission() ?? false;
+      } catch (_) {
+        // Método no disponible (API<31) → se permite exact
+        exactAllowed = true;
       }
 
+      final int seconds = exactAllowed ? 10 : 130;
+      final mode = exactAllowed
+          ? AndroidScheduleMode.exactAllowWhileIdle
+          : AndroidScheduleMode.inexactAllowWhileIdle;
+
       final trigger =
-          tz.TZDateTime.now(tz.local).add(const Duration(seconds: 10));
+          tz.TZDateTime.now(tz.local).add(Duration(seconds: seconds));
 
       await _plugin.zonedSchedule(
         99999,
-        'TEST',
-        'Esto es una prueba programada',
+        'Prueba inmediata',
+        exactAllowed
+            ? 'Si lees esto, el permiso de notificaciones está OK'
+            : 'Esto es una prueba programada',
         trigger,
         const NotificationDetails(
           android: AndroidNotificationDetails(
@@ -164,38 +159,26 @@ class _ReflectionScreenState extends State<ReflectionScreen>
               importance: Importance.high, priority: Priority.high),
           iOS: DarwinNotificationDetails(),
         ),
-        androidScheduleMode: exactGranted
-            ? AndroidScheduleMode.exactAllowWhileIdle
-            : AndroidScheduleMode.inexactAllowWhileIdle,
+        androidScheduleMode: mode,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
       );
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(exactGranted
-              ? '⏰ Notificación exacta programada (10 s).'
-              : '⏰ Programada en modo inexacto (puede retrasarse unos segundos).')));
-    } catch (e) {
-      _showError('Error al programar: $e');
-    }
-  }
-
-  /// Envía una notificación inmediata (permite comprobar POST_NOTIFICATIONS).
-  Future<void> _sendImmediateNotification() async {
-    try {
-      await _ensurePluginReady();
-      await _plugin.show(
-        88888,
-        'Prueba inmediata',
-        'Si lees esto, el permiso de notificaciones está OK',
-        const NotificationDetails(
-          android: AndroidNotificationDetails('test', 'Pruebas',
-              importance: Importance.high, priority: Priority.high),
-          iOS: DarwinNotificationDetails(),
+        content: Text(
+          exactAllowed
+              ? '⏰ Programada en modo **EXACTO** (10 s).'
+              : '⏰ Programada en modo inexacto (puede retrasarse unos segundos).',
         ),
-      );
+        duration: const Duration(seconds: 5),
+      ));
     } catch (e) {
-      _showError('Error al enviar: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Error al programar: $e'),
+            duration: const Duration(seconds: 6)));
+      }
     }
   }
 
@@ -231,7 +214,11 @@ class _ReflectionScreenState extends State<ReflectionScreen>
         ),
       );
     } catch (e) {
-      _showError('Error al obtener lista: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Error al obtener lista: $e'),
+            duration: const Duration(seconds: 6)));
+      }
     }
   }
 
@@ -322,7 +309,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                   textAlign: TextAlign.start,
                 ),
               ),
-              /* ───────── utilidades TEST (borrar antes de publicar) ───────── */
+              /* ───────── utilidades TEST  TODO REMOVE ───────── */
               if (_showTestTools) ...[
                 const Divider(height: 32),
                 Text('Herramientas de prueba',
@@ -330,12 +317,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                 const SizedBox(height: 8),
                 ElevatedButton(
                   onPressed: _scheduleTestNotification,
-                  child: const Text('Probar notificación (10 s)'),
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton(
-                  onPressed: _sendImmediateNotification,
-                  child: const Text('Enviar ahora'),
+                  child: const Text('Probar notificación (10 s / 130 s)'),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton(
