@@ -159,25 +159,24 @@ class _ReflectionScreenState extends State<ReflectionScreen>
             ? 'Si lees esto, la alarma exacta funciona'
             : 'Esto es una prueba programada en modo inexacto',
         trigger,
-        NotificationDetails(                                   // CHANGE
+        const NotificationDetails(
           android: AndroidNotificationDetails(
             'test',
             'Pruebas',
             importance: Importance.high,
             priority: Priority.high,
-            alarmClock: exact,                                // CHANGE
           ),
-          iOS: const DarwinNotificationDetails(),
+          iOS: DarwinNotificationDetails(),
         ),
         androidScheduleMode: exact
-            ? AndroidScheduleMode.exactAllowWhileIdle
+            ? AndroidScheduleMode.alarmClock   // ← aquí el modo “reloj”
             : AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
       );
 
       dev.log('[TEST] $id programada para '
-          '${DateFormat.Hms().format(trigger.toLocal())} (exact=$exact)'); // CHANGE
+          '${DateFormat.Hms().format(trigger.toLocal())} (exact=$exact)');
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
