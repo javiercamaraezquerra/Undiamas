@@ -11,10 +11,10 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tzdb;
 import 'package:timezone/timezone.dart' as tz;
 
-///  ⚠️ Pon a false antes de compilar producción
+/// visible en todos los builds (ajusta a false antes de publicar)
 const bool _showTestTools = true;
 
-/// Pantalla de reflexión diaria (día actual o [dayIndex] 0‑364).
+/// Muestra la reflexión del día o la indicada por [dayIndex] (0‑364).
 class ReflectionScreen extends StatefulWidget {
   final int? dayIndex;
   const ReflectionScreen({super.key, this.dayIndex});
@@ -25,12 +25,15 @@ class ReflectionScreen extends StatefulWidget {
 
 class _ReflectionScreenState extends State<ReflectionScreen>
     with WidgetsBindingObserver {
-  String? _header, _body, _loadError;
-  late int _currentDoY; // 1‑365
+  String? _header;
+  String? _body;
+  String? _loadError;
+  late int _currentDoY; // 1‑365
   Timer? _midnightTimer;
 
   static const _soloPorHoyUrl = 'https://fzla.org/principio-diario/';
-  final _plugin = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _plugin =
+      FlutterLocalNotificationsPlugin();
 
   /* ───────────────────────────── lifecycle ───────────────────────────── */
   @override
@@ -38,10 +41,6 @@ class _ReflectionScreenState extends State<ReflectionScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadReflection();
-    // Cargamos BD de zonas una sola vez (no se llama a initialize otra vez)
-    try {
-      tzdb.initializeTimeZones();
-    } catch (_) {}
   }
 
   @override
@@ -69,7 +68,6 @@ class _ReflectionScreenState extends State<ReflectionScreen>
           .split('\n')
           .where((l) => !l.trimLeft().startsWith('//'))
           .join('\n');
-
       final data = jsonDecode(raw) as List<dynamic>;
       if (data.length < 365) throw const FormatException('Faltan reflexiones');
 
@@ -98,47 +96,58 @@ class _ReflectionScreenState extends State<ReflectionScreen>
     final now = DateTime.now();
     final nextMidnight =
         DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
-    _midnightTimer = Timer(
-        nextMidnight.difference(now) + const Duration(seconds: 1), () {
+    final ms = nextMidnight.difference(now).inMilliseconds;
+    _midnightTimer = Timer(Duration(milliseconds: ms + 1000), () {
       if (mounted) _loadReflection();
     });
   }
 
   int _dayOfYear(DateTime dt) => int.parse(DateFormat('D').format(dt));
 
-  /* ────────────────── utilidades de prueba de notificaciones ───────────────── */
+  /* ─────────────────── helpers notificaciones test ─────────────────── */
 
-  /// Notificación inmediata (para verificar que el canal funciona).
-  Future<void> _fireImmediateNotification() async {
+  Future<void> _ensurePluginReady() async {
+    // 1) zona horaria local
     try {
-      await _plugin.show(
-        1,
-        'Prueba inmediata',
-        'Si lees esto, el permiso de notificaciones está OK',
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-              'immediate', 'Inmediatas',
-              importance: Importance.high, priority: Priority.high),
-          iOS: DarwinNotificationDetails(),
-        ),
-      );
-    } catch (e) {
-      _showError('Error al mostrar notificación: $e');
-    }
+      tzdb.initializeTimeZones();
+    } catch (_) {}
+    // 2) inicialización rápida si fuera necesaria
+    await _plugin.initialize(const InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      iOS: DarwinInitializationSettings(),
+    ));
   }
 
-  /// Programa una notificación para dentro de 10 s.
+  void _showError(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), duration: const Duration(seconds: 6)),
+    );
+  }
+
+  /// Programa una notificación que saltará en 10 s (canal “test”).
   Future<void> _scheduleTestNotification() async {
     try {
+      await _ensurePluginReady();
+
+      // ── Comprobar / solicitar EXACT_ALARM si la API lo soporta ──
       final android = _plugin
           .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>();
 
-      bool exactGranted =
-          await (android as dynamic)?.hasExactAlarmPermission() ?? true;
-      if (!exactGranted) {
-        exactGranted =
-            await (android as dynamic)?.requestExactAlarmsPermission() ?? false;
+      bool exactGranted = false;
+      if (android != null) {
+        try {
+          exactGranted =
+              await (android as dynamic).hasExactAlarmPermission() ?? false;
+          if (!exactGranted) {
+            exactGranted =
+                await (android as dynamic).requestExactAlarmsPermission() ??
+                    false;
+          }
+        } catch (_) {
+          // Método no disponible en esta versión del plugin → usamos modo inexacto
+        }
       }
 
       final trigger =
@@ -164,18 +173,39 @@ class _ReflectionScreenState extends State<ReflectionScreen>
 
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(exactGranted
-              ? '⏰ Notificación exacta programada para 10 s.'
-              : '⏰ Programada (modo inexacto). Puede retrasarse.')));
+              ? '⏰ Notificación exacta programada (10 s).'
+              : '⏰ Programada en modo inexacto (puede retrasarse unos segundos).')));
     } catch (e) {
       _showError('Error al programar: $e');
     }
   }
 
-  /// Lista de notificaciones pendientes.
+  /// Envía una notificación inmediata (permite comprobar POST_NOTIFICATIONS).
+  Future<void> _sendImmediateNotification() async {
+    try {
+      await _ensurePluginReady();
+      await _plugin.show(
+        88888,
+        'Prueba inmediata',
+        'Si lees esto, el permiso de notificaciones está OK',
+        const NotificationDetails(
+          android: AndroidNotificationDetails('test', 'Pruebas',
+              importance: Importance.high, priority: Priority.high),
+          iOS: DarwinNotificationDetails(),
+        ),
+      );
+    } catch (e) {
+      _showError('Error al enviar: $e');
+    }
+  }
+
+  /// Muestra todas las notificaciones pendientes.
   Future<void> _showPendingNotifications() async {
     try {
+      await _ensurePluginReady();
       final list = await _plugin.pendingNotificationRequests();
       if (!mounted) return;
+
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
@@ -203,12 +233,6 @@ class _ReflectionScreenState extends State<ReflectionScreen>
     } catch (e) {
       _showError('Error al obtener lista: $e');
     }
-  }
-
-  void _showError(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg), duration: const Duration(seconds: 6)));
   }
 
   /* ────────────────────────────── UI ────────────────────────────── */
@@ -275,6 +299,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                 ),
               ),
               const SizedBox(height: 24),
+              /* ───────── enlace adicional ───────── */
               TextButton.icon(
                 icon: const Icon(Icons.open_in_new),
                 style: TextButton.styleFrom(
@@ -285,8 +310,10 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                     await launchUrl(uri,
                         mode: LaunchMode.externalApplication);
                   } else {
-                    _showError(
-                        'No se pudo abrir el enlace, inténtalo más tarde.');
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text(
+                            'No se pudo abrir el enlace, inténtalo más tarde.')));
                   }
                 },
                 label: const Text(
@@ -295,21 +322,20 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                   textAlign: TextAlign.start,
                 ),
               ),
-
-              /* ═══ Herramientas de prueba (eliminar/ocultar en producción) ═══ */
+              /* ───────── utilidades TEST (borrar antes de publicar) ───────── */
               if (_showTestTools) ...[
                 const Divider(height: 32),
                 Text('Herramientas de prueba',
                     style: theme.textTheme.titleMedium),
                 const SizedBox(height: 8),
                 ElevatedButton(
-                  onPressed: _fireImmediateNotification,
-                  child: const Text('Enviar ahora'),
+                  onPressed: _scheduleTestNotification,
+                  child: const Text('Probar notificación (10 s)'),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton(
-                  onPressed: _scheduleTestNotification,
-                  child: const Text('Probar notificación (10 s)'),
+                  onPressed: _sendImmediateNotification,
+                  child: const Text('Enviar ahora'),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton(
