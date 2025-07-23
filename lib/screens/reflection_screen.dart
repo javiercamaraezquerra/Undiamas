@@ -11,7 +11,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tzdb;
 import 'package:timezone/timezone.dart' as tz;
 
-/// visible en todos los builds (ajusta a false antes de publicar)
+/// Pon a false antes de publicar
 const bool _showTestTools = true;
 
 /// Muestra la reflexión del día o la indicada por [dayIndex] (0‑364).
@@ -25,18 +25,17 @@ class ReflectionScreen extends StatefulWidget {
 
 class _ReflectionScreenState extends State<ReflectionScreen>
     with WidgetsBindingObserver {
-  String? _header;
-  String? _body;
-  String? _loadError;
+  /* ------------------ Estado reflexión ------------------ */
+  String? _header, _body, _loadError;
   late int _currentDoY; // 1‑365
   Timer? _midnightTimer;
 
   static const _soloPorHoyUrl = 'https://fzla.org/principio-diario/';
 
-  final FlutterLocalNotificationsPlugin _plugin =
-      FlutterLocalNotificationsPlugin();
+  /* ------------------ Notificaciones ------------------ */
+  final _plugin = FlutterLocalNotificationsPlugin();
 
-  /* ───────────────────────────── lifecycle ───────────────────────────── */
+  /* ------------------ Ciclo de vida ------------------ */
   @override
   void initState() {
     super.initState();
@@ -54,12 +53,11 @@ class _ReflectionScreenState extends State<ReflectionScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && widget.dayIndex == null) {
-      final today = _dayOfYear(DateTime.now());
-      if (today != _currentDoY) _loadReflection();
+      if (_dayOfYear(DateTime.now()) != _currentDoY) _loadReflection();
     }
   }
 
-  /* ─────────────────────── carga de la reflexión ─────────────────────── */
+  /* ------------------ Reflexión diaria ------------------ */
   Future<void> _loadReflection() async {
     try {
       String raw = await rootBundle.loadString('assets/data/reflections.json');
@@ -105,53 +103,58 @@ class _ReflectionScreenState extends State<ReflectionScreen>
 
   int _dayOfYear(DateTime dt) => int.parse(DateFormat('D').format(dt));
 
-  /* ─────────────────── helpers notificaciones test ─────────────────── */
-
+  /* ------------------ Helpers notificaciones test ------------------ */
   Future<void> _ensurePluginReady() async {
-    // 1) zona horaria local
     try {
       tzdb.initializeTimeZones();
     } catch (_) {}
-    // 2) inicialización rápida si fuera necesaria
     await _plugin.initialize(const InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       iOS: DarwinInitializationSettings(),
     ));
   }
 
-  /// Programa una notificación test:
-  ///   • 10 s si se dispone de permiso de alarmas exactas.
-  ///   • 130 s (≈ >2 min) en modo inexacto si no.
-  Future<void> _scheduleTestNotification() async {
+  Future<void> _scheduleTest({required bool exact}) async {
     try {
       await _ensurePluginReady();
 
       final androidImpl = _plugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
 
-      bool exactAllowed = false;
-      try {
-        exactAllowed =
-            await (androidImpl as dynamic)?.hasExactAlarmPermission() ?? false;
-      } catch (_) {
-        // Método no disponible (API<31) → se permite exact
-        exactAllowed = true;
+      bool exactPermitted = true;
+      if (exact) {
+        try {
+          exactPermitted =
+              await (androidImpl as dynamic)?.hasExactAlarmPermission() ??
+                  true;
+          if (!exactPermitted) {
+            exactPermitted =
+                await (androidImpl as dynamic)?.requestExactAlarmsPermission() ??
+                    false;
+          }
+        } catch (_) {
+          exactPermitted = true; // API <31
+        }
       }
 
-      final int seconds = exactAllowed ? 10 : 130;
-      final mode = exactAllowed
-          ? AndroidScheduleMode.exactAllowWhileIdle
-          : AndroidScheduleMode.inexactAllowWhileIdle;
+      if (exact && !exactPermitted) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                '⛔️ El sistema no concede “Alarmas exactas”. Se necesitan para este modo.')));
+        return;
+      }
 
+      final int secs = exact ? 10 : 130;
       final trigger =
-          tz.TZDateTime.now(tz.local).add(Duration(seconds: seconds));
+          tz.TZDateTime.now(tz.local).add(Duration(seconds: secs));
 
       await _plugin.zonedSchedule(
-        99999,
-        'Prueba inmediata',
-        exactAllowed
-            ? 'Si lees esto, el permiso de notificaciones está OK'
-            : 'Esto es una prueba programada',
+        exact ? 99999 : 99998,
+        exact ? 'Prueba exacta' : 'Prueba inexacta',
+        exact
+            ? 'Si lees esto, la alarma exacta funciona'
+            : 'Esto es una prueba programada en modo inexacto',
         trigger,
         const NotificationDetails(
           android: AndroidNotificationDetails(
@@ -159,30 +162,29 @@ class _ReflectionScreenState extends State<ReflectionScreen>
               importance: Importance.high, priority: Priority.high),
           iOS: DarwinNotificationDetails(),
         ),
-        androidScheduleMode: mode,
+        androidScheduleMode: exact
+            ? AndroidScheduleMode.exactAllowWhileIdle
+            : AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
       );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(
-          exactAllowed
-              ? '⏰ Programada en modo **EXACTO** (10 s).'
-              : '⏰ Programada en modo inexacto (puede retrasarse unos segundos).',
-        ),
+        content: Text(exact
+            ? '⏰ Exacta programada para 10 s.'
+            : '⏰ Inexacta programada para 130 s (puede retrasarse).'),
         duration: const Duration(seconds: 5),
       ));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Error al programar: $e'),
+            content: Text('Error: $e'),
             duration: const Duration(seconds: 6)));
       }
     }
   }
 
-  /// Muestra todas las notificaciones pendientes.
   Future<void> _showPendingNotifications() async {
     try {
       await _ensurePluginReady();
@@ -222,7 +224,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
     }
   }
 
-  /* ────────────────────────────── UI ────────────────────────────── */
+  /* ------------------ UI ------------------ */
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -235,9 +237,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
     }
 
     if (_header == null || _body == null) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
@@ -270,7 +270,6 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                       blockquotePadding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 8),
                       blockquoteDecoration: BoxDecoration(
-                        color: theme.colorScheme.surface,
                         border: Border(
                           left: BorderSide(
                               color: theme.colorScheme.primary, width: 4),
@@ -286,7 +285,6 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                 ),
               ),
               const SizedBox(height: 24),
-              /* ───────── enlace adicional ───────── */
               TextButton.icon(
                 icon: const Icon(Icons.open_in_new),
                 style: TextButton.styleFrom(
@@ -309,15 +307,19 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                   textAlign: TextAlign.start,
                 ),
               ),
-              /* ───────── utilidades TEST  TODO REMOVE ───────── */
               if (_showTestTools) ...[
                 const Divider(height: 32),
                 Text('Herramientas de prueba',
                     style: theme.textTheme.titleMedium),
                 const SizedBox(height: 8),
                 ElevatedButton(
-                  onPressed: _scheduleTestNotification,
-                  child: const Text('Probar notificación (10 s / 130 s)'),
+                  onPressed: () => _scheduleTest(exact: true),
+                  child: const Text('Notificación exacta (10 s)'),
+                ),
+                const SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: () => _scheduleTest(exact: false),
+                  child: const Text('Notificación inexacta (130 s)'),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton(
