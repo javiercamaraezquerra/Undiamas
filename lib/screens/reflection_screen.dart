@@ -11,10 +11,11 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tzdb;
 import 'package:timezone/timezone.dart' as tz;
 
-/// visible en todos los builds (ajusta a false antes de publicar)
+///  ⚠️ Recuerda poner a false antes de publicar
 const bool _showTestTools = true;
 
-/// Muestra la reflexión del día o la indicada por [dayIndex] (0‑364).
+/// Pantalla de reflexión diaria ‑ muestra la reflexión del día actual
+/// o la indicada por [dayIndex] (0‑364).
 class ReflectionScreen extends StatefulWidget {
   final int? dayIndex;
   const ReflectionScreen({super.key, this.dayIndex});
@@ -32,10 +33,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
   Timer? _midnightTimer;
 
   static const _soloPorHoyUrl = 'https://fzla.org/principio-diario/';
-
-  final FlutterLocalNotificationsPlugin _plugin =
-      FlutterLocalNotificationsPlugin();
-  bool _pluginReady = false; // evita doble init
+  final _plugin = FlutterLocalNotificationsPlugin();
 
   /* ───────────────────────────── lifecycle ───────────────────────────── */
   @override
@@ -70,6 +68,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
           .split('\n')
           .where((l) => !l.trimLeft().startsWith('//'))
           .join('\n');
+
       final data = jsonDecode(raw) as List<dynamic>;
       if (data.length < 365) throw const FormatException('Faltan reflexiones');
 
@@ -108,118 +107,110 @@ class _ReflectionScreenState extends State<ReflectionScreen>
 
   /* ─────────────────── helpers notificaciones test ─────────────────── */
 
-  Future<void> _ensurePluginReady() async {
-    if (_pluginReady) return;
-    tzdb.initializeTimeZones();
+  Future<void> _bootstrapPlugin() async {
+    // 1 · Base de datos de zonas horarias (solo la 1ª vez tarda)
+    try {
+      tzdb.initializeTimeZones();
+    } catch (_) {}
+    // 2 · Inicialización mínima (si la app ya lo hizo, se ignora)
     await _plugin.initialize(const InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       iOS: DarwinInitializationSettings(),
     ));
-    _pluginReady = true;
   }
 
-  /// Programa una notificación que saltará en 10 s (canal “test”).
+  /// Programa una notificación para dentro de 10 s (“canal test”).
   Future<void> _scheduleTestNotification() async {
-    try {
-      await _ensurePluginReady();
+    await _bootstrapPlugin();
 
-      final trigger =
-          tz.TZDateTime.now(tz.local).add(const Duration(seconds: 10));
+    /* 1 · ¿Tenemos permiso para alarmas exactas? */
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+    bool exactGranted =
+        await (android as dynamic)?.hasExactAlarmPermission() ?? true;
+    if (!exactGranted) {
+      exactGranted =
+          await (android as dynamic)?.requestExactAlarmsPermission() ?? false;
+    }
 
-      await _plugin.zonedSchedule(
-        99999,
-        'TEST',
-        'Esto es una prueba programada',
-        trigger,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-              'test', 'Pruebas',
-              importance: Importance.high, priority: Priority.high),
-          iOS: DarwinNotificationDetails(),
-        ),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-      );
+    /* 2 · Construimos la hora de disparo */
+    final trigger =
+        tz.TZDateTime.now(tz.local).add(const Duration(seconds: 10));
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Notificación programada para 10 s 👍')));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Error al programar: $e'),
-            duration: const Duration(seconds: 6)));
-      }
+    /* 3 · Programamos con el modo adecuado */
+    await _plugin.zonedSchedule(
+      99999,
+      'TEST',
+      'Esto es una prueba programada',
+      trigger,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+            'test', 'Pruebas',
+            importance: Importance.high, priority: Priority.high),
+        iOS: DarwinNotificationDetails(),
+      ),
+      androidScheduleMode: exactGranted
+          ? AndroidScheduleMode.exactAllowWhileIdle
+          : AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+    );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(exactGranted
+              ? '⏰ Notificación exacta programada para 10 s.'
+              : '⏰ Programada (modo inexacto, sin permiso exacto).')));
     }
   }
 
-  /// Notificación inmediata — prueba básica de permisos.
-  Future<void> _sendNow() async {
-    try {
-      await _ensurePluginReady();
-      await _plugin.show(
-        778,
-        'Prueba inmediata',
-        'Si lees esto, el permiso de notificaciones está OK',
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'test',
-            'Pruebas',
-            importance: Importance.high,
-            priority: Priority.high,
-          ),
-          iOS: DarwinNotificationDetails(),
-        ),
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Error al mostrar: $e'),
-            duration: const Duration(seconds: 6)));
-      }
-    }
+  /// Notificación instantánea (útil para comprobar que el canal suena).
+  Future<void> _fireImmediateNotification() async {
+    await _bootstrapPlugin();
+    await _plugin.show(
+      0,
+      'Prueba inmediata',
+      'Si lees esto, el permiso de notificaciones está OK',
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+            'immediate', 'Inmediatas',
+            importance: Importance.high, priority: Priority.high),
+        iOS: DarwinNotificationDetails(),
+      ),
+    );
   }
 
-  /// Muestra todas las notificaciones pendientes.
+  /// Lista rápida de notificaciones en cola.
   Future<void> _showPendingNotifications() async {
-    try {
-      await _ensurePluginReady();
-      final list = await _plugin.pendingNotificationRequests();
-      if (!mounted) return;
+    await _bootstrapPlugin();
+    final list = await _plugin.pendingNotificationRequests();
+    if (!mounted) return;
 
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('Notificaciones en cola'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: list.isEmpty
-                ? const Text('No hay notificaciones pendientes.')
-                : ListView(
-                    children: list
-                        .map((n) => ListTile(
-                              title: Text('${n.id} – ${n.title ?? ''}'),
-                              subtitle: Text(n.body ?? ''),
-                            ))
-                        .toList(),
-                  ),
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cerrar')),
-          ],
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Notificaciones en cola'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: list.isEmpty
+              ? const Text('No hay notificaciones pendientes.')
+              : ListView(
+                  children: list
+                      .map((n) => ListTile(
+                            title: Text('${n.id} – ${n.title ?? ''}'),
+                            subtitle: Text(n.body ?? ''),
+                          ))
+                      .toList(),
+                ),
         ),
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Error al obtener lista: $e'),
-            duration: const Duration(seconds: 6)));
-      }
-    }
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cerrar')),
+        ],
+      ),
+    );
   }
 
   /* ────────────────────────────── UI ────────────────────────────── */
@@ -286,6 +277,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                 ),
               ),
               const SizedBox(height: 24),
+
               /* ───────── enlace adicional ───────── */
               TextButton.icon(
                 icon: const Icon(Icons.open_in_new),
@@ -309,20 +301,21 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                   textAlign: TextAlign.start,
                 ),
               ),
-              /* ───────── utilidades TEST  TODO REMOVE ───────── */
+
+              /* ───────── utilidades de prueba (ocúltalas antes de publicar) ───────── */
               if (_showTestTools) ...[
                 const Divider(height: 32),
                 Text('Herramientas de prueba',
                     style: theme.textTheme.titleMedium),
                 const SizedBox(height: 8),
                 ElevatedButton(
-                  onPressed: _scheduleTestNotification,
-                  child: const Text('Probar notificación (10 s)'),
+                  onPressed: _fireImmediateNotification,
+                  child: const Text('Enviar ahora'),
                 ),
                 const SizedBox(height: 8),
-                ElevatedButton(
-                  onPressed: _sendNow,
-                  child: const Text('Enviar ahora'),
+                OutlinedButton(
+                  onPressed: _scheduleTestNotification,
+                  child: const Text('Probar notificación (10 s)'),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton(
