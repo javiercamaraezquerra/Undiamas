@@ -121,7 +121,6 @@ class _ReflectionScreenState extends State<ReflectionScreen>
       final androidImpl = _plugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
 
-      // ── permiso alarmas exactas ────────────────────────────────
       bool exactPermitted = true;
       if (exact) {
         try {
@@ -137,33 +136,25 @@ class _ReflectionScreenState extends State<ReflectionScreen>
             (androidImpl as dynamic)?.openExactAlarmSettings();
           }
         } catch (_) {
-          exactPermitted = true; // API <31
+          exactPermitted = true; // API <31
         }
       }
 
-      if (exact && !exactPermitted) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text(
-                  'El sistema ha denegado “alarmas exactas”. Actívalas y vuelve a probar.')));
-        }
-        return;
-      }
-
-      // ── programar ──────────────────────────────────────────────
-      final int secs = exact ? 10 : 150; // 3 min aprox.
+      // Si no hay permiso programamos directamente la inexacta
+      final bool willUseExact = exact && exactPermitted;
+      final int secs = willUseExact ? 10 : 150;
       final trigger =
           tz.TZDateTime.now(tz.local).add(Duration(seconds: secs));
 
-      final id = exact ? 99999 : 99998;
+      final id = willUseExact ? 99999 : 99998;
       await _plugin.cancel(id);
 
       await _plugin.zonedSchedule(
         id,
-        exact ? 'Prueba exacta' : 'Prueba inexacta',
-        exact
+        willUseExact ? 'Prueba exacta' : 'Prueba inexacta',
+        willUseExact
             ? 'Si lees esto, la alarma exacta funciona'
-            : 'Esto es una prueba inexacta',
+            : 'Prueba inexacta (~3 min)',
         trigger,
         const NotificationDetails(
           android: AndroidNotificationDetails(
@@ -174,7 +165,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
           ),
           iOS: DarwinNotificationDetails(),
         ),
-        androidScheduleMode: exact
+        androidScheduleMode: willUseExact
             ? AndroidScheduleMode.exactAllowWhileIdle
             : AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
@@ -183,9 +174,8 @@ class _ReflectionScreenState extends State<ReflectionScreen>
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(exact
-              ? '⏰ Exacta programada para 10 s.'
-              : '⏰ Inexacta programada (~3 min).'),
+          content: Text(
+              willUseExact ? '⏰ Exacta en 10 s.' : '⏰ Inexacta en ~3 min.'),
         ));
       }
     } catch (e) {
