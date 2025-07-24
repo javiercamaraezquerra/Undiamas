@@ -1,14 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  Manifest principal de “Un Día Más”.
-  27 jul 2025 – Receivers para alarmas exactas:
-     • Marcados con tools:node="replace" para que
-       no se dupliquen con los del plugin.
--->
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    package="com.example.undiamas">   <!-- ← ¡IMPORTANTE! -->
+    package="com.example.undiamas">
 
     <!-- ───────── PERMISOS ───────── -->
     <uses-permission android:name="android.permission.INTERNET"/>
@@ -24,19 +18,18 @@
         android:allowBackup="false"
         android:fullBackupContent="false">
 
-        <!-- AdMob -->
+        <!-- Identificador de AdMob -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-4402835110551152~8514445452"/>
 
-        <!-- Registro del plugin de zona horaria (si lo usas) -->
+        <!-- Registro automático del plugin de zona horaria (opcional) -->
         <meta-data
             android:name="com.example.undiamas.TzPlugin"
             android:value="flutterEmbedding"/>
 
-        <!-- ═══════════════════════════════════════════════
-             RECEPTORES PARA ALARMAS PROGRAMADAS
-        ═══════════════════════════════════════════════ -->
+        <!-- Receivers para alarmas programadas (se marcan con tools:node="replace"
+             para no duplicar los que ya incluye el plugin) -->
         <receiver
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
             android:exported="false"
@@ -55,9 +48,8 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
             </intent-filter>
         </receiver>
-        <!-- ═══════════════════════════════════════════════ -->
 
-        <!-- -------- ACTIVIDAD PRINCIPAL -------- -->
+        <!-- Actividad principal -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -84,12 +76,11 @@
             android:value="2"/>
     </application>
 
-    <!-- Para el menú “Compartir → Procesar texto” -->
+    <!-- Declaración para la acción “Compartir → Procesar texto” -->
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
     </queries>
-
 </manifest>
