@@ -70,10 +70,11 @@ class AchievementService {
     await cancelMilestones();
     final now = tz.TZDateTime.now(tz.local);
 
+    // ★ El instante exacto del hito es: fecha‑hora de inicio + N días.
+    final base = tz.TZDateTime.from(start, tz.local);
+
     for (final e in _milestones.entries) {
-      final trigger =
-          tz.TZDateTime(tz.local, start.year, start.month, start.day, 9)
-              .add(Duration(days: e.key));
+      final trigger = base.add(Duration(days: e.key));             // ★
 
       if (trigger.isBefore(now)) continue;
 
@@ -91,7 +92,6 @@ class AchievementService {
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.dateAndTime,
       );
     }
   }
@@ -102,7 +102,7 @@ class AchievementService {
     }
   }
 
-  /* ── REFLEXIÓN DIARIA ─ */
+  /* ── REFLEXIÓN DIARIA (sin cambios) ─ */
   static Future<void> scheduleDailyReflections(String json,
       {int daysAhead = 60}) async {
     await cancelDailyReflections(daysAhead: daysAhead);
@@ -137,7 +137,6 @@ class AchievementService {
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.dateAndTime,
       );
     }
 
