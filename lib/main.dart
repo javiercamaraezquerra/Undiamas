@@ -80,7 +80,7 @@ Future<void> main() async {
   final hasStartDate = settings.containsKey('startDate');
   runApp(UnDiaMasApp(showOnboarding: !hasStartDate));
 
-  /* ── Diálogos de permisos + MIUI + programación ──────────────── */
+  /* ── Permisos + MIUI + programación ──────────────────────────── */
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     final ctx = _navKey.currentContext;
     if (ctx == null) return;
@@ -100,47 +100,11 @@ Future<void> main() async {
       final granted =
           await (androidImpl as dynamic)?.requestPermission() ?? false;
       if (!granted && ctx.mounted) {
-        await (androidImpl as dynamic)?.openNotificationSettings();
+        (androidImpl as dynamic)?.openNotificationSettings();
       }
     }
 
-    /* 2 · SCHEDULE_EXACT_ALARM (Android 12+) — intento y fallback */
-    bool exactAllowed = true;
-    try {
-      exactAllowed =
-          await (androidImpl as dynamic)?.hasExactAlarmPermission() ?? true;
-    } catch (_) {}
-
-    if (!exactAllowed && ctx.mounted) {
-      final grant =
-          await (androidImpl as dynamic)?.requestExactAlarmsPermission() ??
-              false;
-      if (!grant && ctx.mounted) {
-        final go = await showDialog<bool>(
-              context: ctx,
-              builder: (_) => AlertDialog(
-                title: const Text('Alarmas exactas'),
-                content: const Text(
-                  'Para que los recordatorios suenen a la hora exacta, '
-                  'actívalas en Ajustes > Alarmas y recordatorios.',
-                  textAlign: TextAlign.justify,
-                ),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('Omitir')),
-                  ElevatedButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('Abrir ajustes')),
-                ],
-              ),
-            ) ??
-            false;
-        if (go) (androidImpl as dynamic)?.openExactAlarmSettings();
-      }
-    }
-
-    /* 3 · Ayuda MIUI (inicio automático) */
+    /* 2 · Ayuda MIUI (inicio automático) */
     if (_showMiuiHelp &&
         Platform.isAndroid &&
         (await _isMiui()) &&
@@ -173,7 +137,7 @@ Future<void> main() async {
       await prefs.setBool('miuiHelpShown', true);
     }
 
-    /* 4 · Programar notificaciones si procede */
+    /* 3 · Programar notificaciones */
     final milestonesOn = prefs.getBool('notifyMilestones') ?? true;
     final reflectionOn = prefs.getBool('notifyDailyReflection') ?? true;
 
