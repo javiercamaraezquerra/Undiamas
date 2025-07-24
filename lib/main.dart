@@ -89,7 +89,7 @@ Future<void> main() async {
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
 
-    /* 1 · POST_NOTIFICATIONS (Android 13+) ─ runtime permission */
+    /* 1 · POST_NOTIFICATIONS (Android 13+) */
     bool notifAllowed = true;
     try {
       notifAllowed =
@@ -97,36 +97,14 @@ Future<void> main() async {
     } catch (_) {}
 
     if (!notifAllowed && ctx.mounted) {
-      final granted = await (androidImpl as dynamic)?.requestPermission() ?? false;
-
+      final granted =
+          await (androidImpl as dynamic)?.requestPermission() ?? false;
       if (!granted && ctx.mounted) {
-        await showDialog(
-          context: ctx,
-          builder: (_) => AlertDialog(
-            title: const Text('Permiso de notificaciones'),
-            content: const Text(
-              'Sin este permiso la app no podrá enviarte avisos. '
-              'Ábrelo en Ajustes > Notificaciones y actívalo manualmente.',
-              textAlign: TextAlign.justify,
-            ),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Cerrar')),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  (androidImpl as dynamic)?.openNotificationSettings();
-                },
-                child: const Text('Abrir ajustes'),
-              ),
-            ],
-          ),
-        );
+        await (androidImpl as dynamic)?.openNotificationSettings();
       }
     }
 
-    /* 2 · SCHEDULE_EXACT_ALARM (Android 12+) */
+    /* 2 · SCHEDULE_EXACT_ALARM (Android 12+) — intento y fallback */
     bool exactAllowed = true;
     try {
       exactAllowed =
@@ -134,12 +112,31 @@ Future<void> main() async {
     } catch (_) {}
 
     if (!exactAllowed && ctx.mounted) {
-      final grant = await (androidImpl as dynamic)
-              ?.requestExactAlarmsPermission() ??
-          false;
+      final grant =
+          await (androidImpl as dynamic)?.requestExactAlarmsPermission() ??
+              false;
       if (!grant && ctx.mounted) {
-        ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-            content: Text('No se pudo otorgar “Alarmas exactas”.')));
+        final go = await showDialog<bool>(
+              context: ctx,
+              builder: (_) => AlertDialog(
+                title: const Text('Alarmas exactas'),
+                content: const Text(
+                  'Para que los recordatorios suenen a la hora exacta, '
+                  'actívalas en Ajustes > Alarmas y recordatorios.',
+                  textAlign: TextAlign.justify,
+                ),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Omitir')),
+                  ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('Abrir ajustes')),
+                ],
+              ),
+            ) ??
+            false;
+        if (go) (androidImpl as dynamic)?.openExactAlarmSettings();
       }
     }
 
