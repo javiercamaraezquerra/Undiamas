@@ -68,7 +68,6 @@ Future<void> main() async {
       }
     });
   } catch (e, s) {
-    // Si falla seguimos sin notificaciones, la app arranca igual
     debugPrint('Init notifications error: $e\n$s');
   }
 
@@ -90,7 +89,7 @@ Future<void> main() async {
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
 
-    /* 1 · POST_NOTIFICATIONS */
+    /* 1 · POST_NOTIFICATIONS (Android 13+) ─ runtime permission */
     bool notifAllowed = true;
     try {
       notifAllowed =
@@ -98,34 +97,36 @@ Future<void> main() async {
     } catch (_) {}
 
     if (!notifAllowed && ctx.mounted) {
-      await showDialog(
-        context: ctx,
-        builder: (_) => AlertDialog(
-          title: const Text('Permiso de notificaciones'),
-          content: const Text(
-            'Activa las notificaciones para recibir reflexiones diarias y '
-            'avisos de logros.',
-            textAlign: TextAlign.justify,
+      final granted = await (androidImpl as dynamic)?.requestPermission() ?? false;
+
+      if (!granted && ctx.mounted) {
+        await showDialog(
+          context: ctx,
+          builder: (_) => AlertDialog(
+            title: const Text('Permiso de notificaciones'),
+            content: const Text(
+              'Sin este permiso la app no podrá enviarte avisos. '
+              'Ábrelo en Ajustes > Notificaciones y actívalo manualmente.',
+              textAlign: TextAlign.justify,
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cerrar')),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  (androidImpl as dynamic)?.openNotificationSettings();
+                },
+                child: const Text('Abrir ajustes'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Más tarde'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(ctx);
-                await (androidImpl as dynamic)?.requestPermission();
-                await (androidImpl as dynamic)?.openNotificationSettings();
-              },
-              child: const Text('Ajustes'),
-            ),
-          ],
-        ),
-      );
+        );
+      }
     }
 
-    /* 2 · SCHEDULE_EXACT_ALARM (Android 12+) */
+    /* 2 · SCHEDULE_EXACT_ALARM (Android 12+) */
     bool exactAllowed = true;
     try {
       exactAllowed =
@@ -133,40 +134,16 @@ Future<void> main() async {
     } catch (_) {}
 
     if (!exactAllowed && ctx.mounted) {
-      final grant = await showDialog<bool>(
-            context: ctx,
-            builder: (_) => AlertDialog(
-              title: const Text('Alarmas exactas'),
-              content: const Text(
-                'Para que las notificaciones se entreguen a la hora exacta, '
-                'Android necesita permitir “Alarmas exactas”. ¿Quieres activarlo ahora?',
-                textAlign: TextAlign.justify,
-              ),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    child: const Text('Más tarde')),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('Activar'),
-                ),
-              ],
-            ),
-          ) ??
+      final grant = await (androidImpl as dynamic)
+              ?.requestExactAlarmsPermission() ??
           false;
-
-      if (grant) {
-        exactAllowed =
-            await (androidImpl as dynamic)?.requestExactAlarmsPermission() ??
-                false;
-        if (!exactAllowed && ctx.mounted) {
-          ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-              content: Text('No se pudo otorgar “Alarmas exactas”.')));
-        }
+      if (!grant && ctx.mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+            content: Text('No se pudo otorgar “Alarmas exactas”.')));
       }
     }
 
-    /* 3 · Ayuda MIUI (inicio automático) */
+    /* 3 · Ayuda MIUI (inicio automático) */
     if (_showMiuiHelp &&
         Platform.isAndroid &&
         (await _isMiui()) &&
@@ -178,8 +155,7 @@ Future<void> main() async {
           title: const Text('Permiso de inicio automático'),
           content: const Text(
             'Para que las notificaciones se muestren con la pantalla apagada '
-            'MIUI debe permitir que la app se inicie automáticamente en '
-            'segundo plano.',
+            'MIUI debe permitir que la app se inicie automáticamente en segundo plano.',
             textAlign: TextAlign.justify,
           ),
           actions: [
@@ -200,7 +176,7 @@ Future<void> main() async {
       await prefs.setBool('miuiHelpShown', true);
     }
 
-    /* 4 · Programar notificaciones si procede */
+    /* 4 · Programar notificaciones si procede */
     final milestonesOn = prefs.getBool('notifyMilestones') ?? true;
     final reflectionOn = prefs.getBool('notifyDailyReflection') ?? true;
 
