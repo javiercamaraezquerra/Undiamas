@@ -121,6 +121,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
       final androidImpl = _plugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
 
+      // ── permiso alarmas exactas ────────────────────────────────
       bool exactPermitted = true;
       if (exact) {
         try {
@@ -132,32 +133,37 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                 await (androidImpl as dynamic)?.requestExactAlarmsPermission() ??
                     false;
           }
+          if (!exactPermitted) {
+            (androidImpl as dynamic)?.openExactAlarmSettings();
+          }
         } catch (_) {
-          exactPermitted = true; // API <31
+          exactPermitted = true; // API <31
         }
       }
 
       if (exact && !exactPermitted) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text(
-                '⛔️ El sistema no concede “Alarmas exactas”. Se necesitan para este modo.')));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text(
+                  'El sistema ha denegado “alarmas exactas”. Actívalas y vuelve a probar.')));
+        }
         return;
       }
 
-      final int secs = exact ? 10 : 130;
+      // ── programar ──────────────────────────────────────────────
+      final int secs = exact ? 10 : 150; // 3 min aprox.
       final trigger =
           tz.TZDateTime.now(tz.local).add(Duration(seconds: secs));
 
       final id = exact ? 99999 : 99998;
-      await _plugin.cancel(id); // evita duplicados en sucesivas pruebas
+      await _plugin.cancel(id);
 
       await _plugin.zonedSchedule(
         id,
         exact ? 'Prueba exacta' : 'Prueba inexacta',
         exact
             ? 'Si lees esto, la alarma exacta funciona'
-            : 'Esto es una prueba programada en modo inexacto',
+            : 'Esto es una prueba inexacta',
         trigger,
         const NotificationDetails(
           android: AndroidNotificationDetails(
@@ -169,27 +175,23 @@ class _ReflectionScreenState extends State<ReflectionScreen>
           iOS: DarwinNotificationDetails(),
         ),
         androidScheduleMode: exact
-            ? AndroidScheduleMode.alarmClock   // ← aquí el modo “reloj”
+            ? AndroidScheduleMode.exactAllowWhileIdle
             : AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
       );
 
-      dev.log('[TEST] $id programada para '
-          '${DateFormat.Hms().format(trigger.toLocal())} (exact=$exact)');
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(exact
-            ? '⏰ Exacta programada para 10 s.'
-            : '⏰ Inexacta programada para 130 s (puede retrasarse).'),
-        duration: const Duration(seconds: 5),
-      ));
-    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Error: $e'),
-            duration: const Duration(seconds: 6)));
+          content: Text(exact
+              ? '⏰ Exacta programada para 10 s.'
+              : '⏰ Inexacta programada (~3 min).'),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), duration: Duration(seconds: 8)));
       }
     }
   }
@@ -301,8 +303,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                 onPressed: () async {
                   final uri = Uri.parse(_soloPorHoyUrl);
                   if (await canLaunchUrl(uri)) {
-                    await launchUrl(uri,
-                        mode: LaunchMode.externalApplication);
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
                   } else {
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -328,7 +329,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                 const SizedBox(height: 8),
                 ElevatedButton(
                   onPressed: () => _scheduleTest(exact: false),
-                  child: const Text('Notificación inexacta (130 s)'),
+                  child: const Text('Notificación inexacta (~3 min)'),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton(
