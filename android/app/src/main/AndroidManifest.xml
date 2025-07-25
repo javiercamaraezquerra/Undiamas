@@ -1,13 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="com.example.undiamas">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools"
+          package="com.example.undiamas">
 
     <!-- ───────── PERMISOS ───────── -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <!-- ★ MOD – se retira el permiso de alarmas exactas -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <!-- ───────── APLICACIÓN ───────── -->
@@ -18,18 +17,17 @@
         android:allowBackup="false"
         android:fullBackupContent="false">
 
-        <!-- Identificador de AdMob -->
+        <!-- AdMob -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-4402835110551152~8514445452"/>
 
-        <!-- Registro automático del plugin de zona horaria (opcional) -->
+        <!-- Plugin zona horaria (opcional) -->
         <meta-data
             android:name="com.example.undiamas.TzPlugin"
             android:value="flutterEmbedding"/>
 
-        <!-- Receivers para alarmas programadas (se marcan con tools:node="replace"
-             para no duplicar los que ya incluye el plugin) -->
+        <!-- Receivers de flutter_local_notifications -->
         <receiver
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
             android:exported="false"
@@ -70,13 +68,10 @@
             </intent-filter>
         </activity>
 
-        <!-- Versión de la embedding -->
-        <meta-data
-            android:name="flutterEmbedding"
-            android:value="2"/>
+        <meta-data android:name="flutterEmbedding" android:value="2"/>
     </application>
 
-    <!-- Declaración para la acción “Compartir → Procesar texto” -->
+    <!-- “Compartir → Procesar texto” -->
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
