@@ -27,14 +27,14 @@ const bool _showMiuiHelp = true;
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  /* ── Hive (cifrado) ───────────────────────────────────────────── */
+  /* ── Hive (cifrado) ─ */
   await Hive.initFlutter();
   Hive.registerAdapter(DiaryEntryAdapter());
   Hive.registerAdapter(PostAdapter());
 
   final cipher = await EncryptionService.getCipher();
 
-  // Migraciones (cajas sin cifrar → cifradas)
+  // Migraciones  (cajas sin cifrar → cifradas)
   if (await Hive.boxExists('udm')) {
     final p = await Hive.openBox('udm');
     final s = await Hive.openBox('udm_secure', encryptionCipher: cipher);
@@ -51,13 +51,13 @@ Future<void> main() async {
     await p.deleteFromDisk();
   }
 
-  /* ── Ads ──────────────────────────────────────────────────────── */
+  /* ── Ads ─ */
   await MobileAds.instance.initialize();
   await MobileAds.instance.updateRequestConfiguration(
     RequestConfiguration(testDeviceIds: ['TEST_DEVICE_ID']),
   );
 
-  /* ── Notificaciones (init + deep‑link) ───────────────────────── */
+  /* ── Notificaciones (init + deep‑link) ─ */
   try {
     await AchievementService.init(onNotificationResponse: (resp) {
       final idx = int.tryParse(resp.payload ?? '');
@@ -71,7 +71,7 @@ Future<void> main() async {
     debugPrint('Init notifications error: $e\n$s');
   }
 
-  /* ── Preferencias / tema ─────────────────────────────────────── */
+  /* ── Preferencias / tema ─ */
   Intl.defaultLocale = 'es_ES';
   final prefs = await SharedPreferences.getInstance();
   themeNotifier.value =
@@ -80,7 +80,7 @@ Future<void> main() async {
   final hasStartDate = settings.containsKey('startDate');
   runApp(UnDiaMasApp(showOnboarding: !hasStartDate));
 
-  /* ── Permisos + MIUI + programación ──────────────────────────── */
+  /* ── Permisos + MIUI + programación ─ */
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     final ctx = _navKey.currentContext;
     if (ctx == null) return;
