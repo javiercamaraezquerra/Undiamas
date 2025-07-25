@@ -13,7 +13,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 2) (Opcional) Verificar que el MP3 está en el repo
+      # 2) Verificar el MP3 existe
       - name: Comprobar que el MP3 existe en el repo
         run: |
           if [ ! -f assets/audio/relax60s.mp3 ]; then
@@ -23,7 +23,7 @@ jobs:
           echo "✅ MP3 encontrado en el repo. Tamaño:"
           du -h assets/audio/relax60s.mp3
 
-      # 3) (Opcional) Instalar FFmpeg y recodificar el MP3
+      # 3) (opcional) Recodificación MP3
       - name: Instalar FFmpeg y recodificar MP3
         run: |
           sudo apt-get update -qq
@@ -76,7 +76,7 @@ jobs:
           storeFile=undiamas.jks
           EOF
 
-      # 7.1) Imprimir SHA‑1 de la UPLOAD KEY
+      # 7.1) Mostrar SHA‑1 de la UPLOAD KEY (informativo)
       - name: Show upload key SHA‑1
         run: |
           keytool -list -v \
@@ -85,7 +85,7 @@ jobs:
             -storepass ${{ secrets.STORE_PASSWORD }} \
             -keypass  ${{ secrets.KEY_PASSWORD }} | grep 'SHA1:' || true
 
-      # 7.1‑bis) Generar debug keystore (solo para obtener la huella)
+      # 7.1‑bis) Generar debug keystore (solo para la huella)
       - name: Generate debug keystore
         run: |
           mkdir -p ~/.android
@@ -94,7 +94,7 @@ jobs:
             -keystore ~/.android/debug.keystore \
             -storepass android -keypass android
 
-      # 7.2) Imprimir SHA‑1 de la DEBUG KEY
+      # 7.2) Mostrar SHA‑1 debug key
       - name: Show debug key SHA‑1
         run: |
           keytool -list -v \
@@ -102,7 +102,7 @@ jobs:
             -alias androiddebugkey \
             -storepass android -keypass android | grep 'SHA1:' || true
 
-      # 8) Compilar APK release
+      # 8) Compilar APK release (para pruebas locales)
       - name: Build release APK
         run: flutter build apk --release
 
@@ -110,7 +110,15 @@ jobs:
       - name: Build release AAB
         run: flutter build appbundle --release
 
-      # 10) Verificar que el MP3 viaja dentro del APK
+      # 9.1) Guardar el mapping.txt de R8  ★ NUEVO
+      - name: Archive R8 mapping file
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r8-mapping
+          path: build/app/outputs/mapping/release/mapping.txt
+
+      # 10) Verificar que el MP3 está dentro del APK
       - name: Verificar MP3 dentro del APK
         run: |
           APK=build/app/outputs/flutter-apk/app-release.apk
@@ -118,7 +126,7 @@ jobs:
             echo "❌ El MP3 no se incluyó en el APK"; exit 1; }
           echo "✅ MP3 presente en el APK"
 
-      # 11) Subir artefactos
+      # 11) Subir artefactos (APK y AAB)
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
