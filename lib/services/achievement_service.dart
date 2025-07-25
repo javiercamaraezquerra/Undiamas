@@ -65,16 +65,14 @@ class AchievementService {
     dev.log('[TZ] Zona local: $localName');
   }
 
-  /* ── LOGROS ─ */
+  /* ── LOGROS (inexactos) ─ */
   static Future<void> scheduleMilestones(DateTime start) async {
     await cancelMilestones();
-    final now = tz.TZDateTime.now(tz.local);
-
-    // ★ El instante exacto del hito es: fecha‑hora de inicio + N días.
-    final base = tz.TZDateTime.from(start, tz.local);
+    final now  = tz.TZDateTime.now(tz.local);
+    final base = tz.TZDateTime.from(start, tz.local);     // instante real inicio
 
     for (final e in _milestones.entries) {
-      final trigger = base.add(Duration(days: e.key));             // ★
+      final trigger = base.add(Duration(days: e.key));
 
       if (trigger.isBefore(now)) continue;
 
@@ -89,7 +87,7 @@ class AchievementService {
               importance: Importance.high, priority: Priority.high),
           iOS: DarwinNotificationDetails(),
         ),
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle, // ★ MOD
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
       );
@@ -102,7 +100,7 @@ class AchievementService {
     }
   }
 
-  /* ── REFLEXIÓN DIARIA (sin cambios) ─ */
+  /* ── REFLEXIÓN DIARIA (9:00 h locales) ─ */
   static Future<void> scheduleDailyReflections(String json,
       {int daysAhead = 60}) async {
     await cancelDailyReflections(daysAhead: daysAhead);
@@ -140,7 +138,7 @@ class AchievementService {
       );
     }
 
-    dev.log('[Notif] programadas $daysAhead reflexiones (modo inexacto)');
+    dev.log('[Notif] programadas $daysAhead reflexiones (inexacto)');
   }
 
   static Future<void> cancelDailyReflections({int daysAhead = 60}) async {
