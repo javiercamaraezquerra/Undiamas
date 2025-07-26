@@ -9,6 +9,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/encryption_service.dart';
 import 'sos_screen.dart';
 
+/* ───────── helper simple ───────── */
+class _YearMonth {
+  final int years;
+  final int months;
+  const _YearMonth(this.years, this.months);
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -35,10 +42,10 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _initDates().then((_) {
       _updateElapsed();
-      _ticker = Timer.periodic(const Duration(minutes: 1),
-          (_) => _updateElapsed());
+      _ticker =
+          Timer.periodic(const Duration(minutes: 1), (_) => _updateElapsed());
 
-      // refrescar si se modifica startDate desde otra pantalla
+      // Escucha cambios en la clave 'startDate'
       _sub = _box.watch(key: 'startDate').listen((e) {
         _startDate = DateTime.parse(e.value as String);
         _updateElapsed();
@@ -63,7 +70,6 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    // migración versiones antiguas (SharedPreferences)
     final prefs  = await SharedPreferences.getInstance();
     final legacy = prefs.getString(_prefsKey);
 
@@ -125,20 +131,19 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /* ───────── Helpers calendario ─────────
-     Calcula años y meses completos transcurridos para mostrar
-     los círculos de hitos.                                         */
-  (int years, int months) _yearsMonthsFrom(DateTime start, DateTime now) {
-    int years = now.year - start.year;
+  /* ───────── Años + meses desde inicio ───────── */
+  _YearMonth _yearsMonthsFrom(DateTime start, DateTime now) {
+    int years  = now.year  - start.year;
     int months = now.month - start.month;
-    if (now.day < start.day) months--;                 // mes incompleto
+
+    if (now.day < start.day) months--; // mes incompleto
 
     if (months < 0) {
       years--;
       months += 12;
     }
     if (years < 0) years = 0;
-    return (years, months);
+    return _YearMonth(years, months);
   }
 
   /* ───────── Build ───────── */
@@ -148,20 +153,27 @@ class _HomeScreenState extends State<HomeScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    final now = DateTime.now();
-    final (years, monthsAll) = _yearsMonthsFrom(_startDate!, now);
+    final now          = DateTime.now();
+    final ym           = _yearsMonthsFrom(_startDate!, now);
+    final years        = ym.years;
+    final monthsAll    = ym.months;
 
-    // días/horas/min restantes tras quitar años+meses completos
-    DateTime tmp = DateTime(_startDate!.year + years,
-        _startDate!.month + monthsAll, _startDate!.day,
-        _startDate!.hour, _startDate!.minute, _startDate!.second);
+    // restamos años+meses completos para calcular días/horas/min
+    DateTime tmp = DateTime(
+      _startDate!.year + years,
+      _startDate!.month + monthsAll,
+      _startDate!.day,
+      _startDate!.hour,
+      _startDate!.minute,
+      _startDate!.second,
+    );
     final durAfter = now.difference(tmp);
 
     final days    = durAfter.inDays;
     final hours   = durAfter.inHours % 24;
     final minutes = durAfter.inMinutes % 60;
 
-    /* --- determina tamaño de los círculos principales --- */
+    /* tamaño adaptativo */
     double mainSize;
     if (years > 0) {
       mainSize = 110;
@@ -171,18 +183,18 @@ class _HomeScreenState extends State<HomeScreen> {
       mainSize = 180;
     }
 
-    /* --- construye lista dinámica de círculos --- */
+    /* lista dinámica de círculos */
     final List<Widget> mainCircles = [];
     if (years > 0) {
-      mainCircles
-          .add(_circle(years.toString(), years == 1 ? 'año' : 'años', mainSize, context));
+      mainCircles.add(_circle(
+          years.toString(), years == 1 ? 'año' : 'años', mainSize, context));
     }
     if (monthsAll > 0 || years > 0) {
       mainCircles.add(_circle(monthsAll.toString(),
           monthsAll == 1 ? 'mes' : 'meses', mainSize, context));
     }
-    mainCircles
-        .add(_circle(days.toString(), days == 1 ? 'día' : 'días', mainSize, context));
+    mainCircles.add(_circle(days.toString(), days == 1 ? 'día' : 'días',
+        mainSize, context));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Inicio')),
@@ -192,7 +204,6 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              /* ---------- círculos años/meses/días ---------- */
               Wrap(
                 alignment: WrapAlignment.center,
                 spacing: 20,
@@ -200,7 +211,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: mainCircles,
               ),
               const SizedBox(height: 20),
-              /* ---------- horas + minutos ---------- */
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -212,7 +222,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
               const SizedBox(height: 32),
-              /* ---------- frase motivacional ---------- */
               if (_quote.isNotEmpty) ...[
                 Card(
                   margin: EdgeInsets.zero,
@@ -228,7 +237,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 32),
               ],
-              /* ---------- botón SOS ---------- */
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   padding:
