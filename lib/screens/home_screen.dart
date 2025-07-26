@@ -45,7 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _ticker =
           Timer.periodic(const Duration(minutes: 1), (_) => _updateElapsed());
 
-      // Escucha cambios en la clave 'startDate'
+      // refrescar si se modifica startDate desde otro sitio
       _sub = _box.watch(key: 'startDate').listen((e) {
         _startDate = DateTime.parse(e.value as String);
         _updateElapsed();
@@ -102,16 +102,25 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _quote = list[dayIndex % list.length] as String);
   }
 
-  /* ───────── Círculo reutilizable ───────── */
+  /* ───────── Círculo con gradiente ───────── */
   Widget _circle(String value, String label, double size, BuildContext ctx) {
+    final scheme = Theme.of(ctx).colorScheme;
+    final Color c1 = scheme.primary;
+    final Color c2 = scheme.primaryContainer;
+
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Theme.of(ctx).colorScheme.surface,
+        gradient: LinearGradient(
+          colors: [c1, c2],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         boxShadow: const [
-          BoxShadow(blurRadius: 8, spreadRadius: 1, color: Colors.black12),
+          BoxShadow(
+              blurRadius: 12, spreadRadius: 1, color: Colors.black26, offset: Offset(0, 4)),
         ],
       ),
       child: Center(
@@ -122,25 +131,50 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(
                     fontSize: size * 0.35,
                     fontWeight: FontWeight.bold,
-                    color: Theme.of(ctx).colorScheme.primary)),
+                    color: scheme.onPrimary)),
             const SizedBox(height: 2),
-            Text(label, style: Theme.of(ctx).textTheme.bodySmall),
+            Text(label,
+                style: Theme.of(ctx)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: scheme.onPrimary.withOpacity(0.9))),
           ],
         ),
       ),
     );
   }
 
-  /* ───────── Años + meses desde inicio ───────── */
+  /* ───────── Fecha clip al último día ───────── */
+  DateTime _clippedDate(DateTime start, int addYears, int addMonths) {
+    final int baseMonth = start.month + addMonths;
+    final int year = start.year + addYears + (baseMonth - 1) ~/ 12;
+    final int month = ((baseMonth - 1) % 12) + 1;
+
+    final int lastDay = DateTime(year, month + 1, 0).day;
+    final int day = start.day <= lastDay ? start.day : lastDay;
+
+    return DateTime(year, month, day, start.hour, start.minute, start.second);
+  }
+
+  /* ───────── Años + meses completos (clip) ───────── */
   _YearMonth _yearsMonthsFrom(DateTime start, DateTime now) {
     int years  = now.year  - start.year;
     int months = now.month - start.month;
 
-    if (now.day < start.day) months--; // mes incompleto
-
     if (months < 0) {
       years--;
       months += 12;
+    }
+
+    DateTime candidate = _clippedDate(start, years, months);
+
+    if (now.isBefore(candidate)) {
+      if (months == 0) {
+        years--;
+        months = 11;
+      } else {
+        months--;
+      }
     }
     if (years < 0) years = 0;
     return _YearMonth(years, months);
@@ -153,21 +187,13 @@ class _HomeScreenState extends State<HomeScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    final now          = DateTime.now();
-    final ym           = _yearsMonthsFrom(_startDate!, now);
-    final years        = ym.years;
-    final monthsAll    = ym.months;
+    final now         = DateTime.now();
+    final ym          = _yearsMonthsFrom(_startDate!, now);
+    final years       = ym.years;
+    final monthsAll   = ym.months;
 
-    // restamos años+meses completos para calcular días/horas/min
-    DateTime tmp = DateTime(
-      _startDate!.year + years,
-      _startDate!.month + monthsAll,
-      _startDate!.day,
-      _startDate!.hour,
-      _startDate!.minute,
-      _startDate!.second,
-    );
-    final durAfter = now.difference(tmp);
+    final anchor      = _clippedDate(_startDate!, years, monthsAll);
+    final durAfter    = now.difference(anchor);
 
     final days    = durAfter.inDays;
     final hours   = durAfter.inHours % 24;
@@ -183,7 +209,7 @@ class _HomeScreenState extends State<HomeScreen> {
       mainSize = 180;
     }
 
-    /* lista dinámica de círculos */
+    /* círculos principales */
     final List<Widget> mainCircles = [];
     if (years > 0) {
       mainCircles.add(_circle(
@@ -193,8 +219,8 @@ class _HomeScreenState extends State<HomeScreen> {
       mainCircles.add(_circle(monthsAll.toString(),
           monthsAll == 1 ? 'mes' : 'meses', mainSize, context));
     }
-    mainCircles.add(_circle(days.toString(), days == 1 ? 'día' : 'días',
-        mainSize, context));
+    mainCircles.add(_circle(
+        days.toString(), days == 1 ? 'día' : 'días', mainSize, context));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Inicio')),
