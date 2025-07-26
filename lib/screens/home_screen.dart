@@ -6,7 +6,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:hive/hive.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../services/encryption_service.dart';          // ← nuevo
+import '../services/encryption_service.dart';
 import 'sos_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -35,10 +35,10 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _initDates().then((_) {
       _updateElapsed();
-      _ticker =
-          Timer.periodic(const Duration(minutes: 1), (_) => _updateElapsed());
+      _ticker = Timer.periodic(const Duration(minutes: 1),
+          (_) => _updateElapsed());
 
-      // Escucha cambios en la clave 'startDate' para refrescar al instante
+      // refrescar si se modifica startDate desde otra pantalla
       _sub = _box.watch(key: 'startDate').listen((e) {
         _startDate = DateTime.parse(e.value as String);
         _updateElapsed();
@@ -63,7 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    // Migración desde SharedPreferences (versiones ≤ 1.0.6)
+    // migración versiones antiguas (SharedPreferences)
     final prefs  = await SharedPreferences.getInstance();
     final legacy = prefs.getString(_prefsKey);
 
@@ -77,7 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  /* ───────── Cálculo del tiempo transcurrido ───────── */
+  /* ───────── Actualiza duración y frase ───────── */
   void _updateElapsed() {
     if (_startDate == null) return;
     final diff = DateTime.now().difference(_startDate!);
@@ -89,7 +89,6 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _elapsed = diff);
   }
 
-  /* ───────── Frase motivacional diaria ───────── */
   Future<void> _loadQuote(int dayIndex) async {
     final data = await rootBundle.loadString('assets/data/quotes.json');
     final list = jsonDecode(data) as List<dynamic>;
@@ -97,7 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _quote = list[dayIndex % list.length] as String);
   }
 
-  /* ───────── Widget auxiliar: círculo contador ───────── */
+  /* ───────── Círculo reutilizable ───────── */
   Widget _circle(String value, String label, double size, BuildContext ctx) {
     return Container(
       width: size,
@@ -113,14 +112,11 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: size * 0.35,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(ctx).colorScheme.primary,
-              ),
-            ),
+            Text(value,
+                style: TextStyle(
+                    fontSize: size * 0.35,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(ctx).colorScheme.primary)),
             const SizedBox(height: 2),
             Text(label, style: Theme.of(ctx).textTheme.bodySmall),
           ],
@@ -129,12 +125,64 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /* ───────── Helpers calendario ─────────
+     Calcula años y meses completos transcurridos para mostrar
+     los círculos de hitos.                                         */
+  (int years, int months) _yearsMonthsFrom(DateTime start, DateTime now) {
+    int years = now.year - start.year;
+    int months = now.month - start.month;
+    if (now.day < start.day) months--;                 // mes incompleto
+
+    if (months < 0) {
+      years--;
+      months += 12;
+    }
+    if (years < 0) years = 0;
+    return (years, months);
+  }
+
   /* ───────── Build ───────── */
   @override
   Widget build(BuildContext context) {
-    final days    = _elapsed.inDays;
-    final hours   = _elapsed.inHours % 24;
-    final minutes = _elapsed.inMinutes % 60;
+    if (_startDate == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    final now = DateTime.now();
+    final (years, monthsAll) = _yearsMonthsFrom(_startDate!, now);
+
+    // días/horas/min restantes tras quitar años+meses completos
+    DateTime tmp = DateTime(_startDate!.year + years,
+        _startDate!.month + monthsAll, _startDate!.day,
+        _startDate!.hour, _startDate!.minute, _startDate!.second);
+    final durAfter = now.difference(tmp);
+
+    final days    = durAfter.inDays;
+    final hours   = durAfter.inHours % 24;
+    final minutes = durAfter.inMinutes % 60;
+
+    /* --- determina tamaño de los círculos principales --- */
+    double mainSize;
+    if (years > 0) {
+      mainSize = 110;
+    } else if (monthsAll > 0) {
+      mainSize = 140;
+    } else {
+      mainSize = 180;
+    }
+
+    /* --- construye lista dinámica de círculos --- */
+    final List<Widget> mainCircles = [];
+    if (years > 0) {
+      mainCircles
+          .add(_circle(years.toString(), years == 1 ? 'año' : 'años', mainSize, context));
+    }
+    if (monthsAll > 0 || years > 0) {
+      mainCircles.add(_circle(monthsAll.toString(),
+          monthsAll == 1 ? 'mes' : 'meses', mainSize, context));
+    }
+    mainCircles
+        .add(_circle(days.toString(), days == 1 ? 'día' : 'días', mainSize, context));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Inicio')),
@@ -144,17 +192,27 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _circle('$days', 'días', 180, context),
+              /* ---------- círculos años/meses/días ---------- */
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 20,
+                runSpacing: 20,
+                children: mainCircles,
+              ),
               const SizedBox(height: 20),
+              /* ---------- horas + minutos ---------- */
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _circle(hours.toString().padLeft(2, '0'), 'horas', 90, context),
+                  _circle(hours.toString().padLeft(2, '0'),
+                      'horas', 90, context),
                   const SizedBox(width: 16),
-                  _circle(minutes.toString().padLeft(2, '0'), 'min', 90, context),
+                  _circle(minutes.toString().padLeft(2, '0'),
+                      'min', 90, context),
                 ],
               ),
               const SizedBox(height: 32),
+              /* ---------- frase motivacional ---------- */
               if (_quote.isNotEmpty) ...[
                 Card(
                   margin: EdgeInsets.zero,
@@ -162,20 +220,19 @@ class _HomeScreenState extends State<HomeScreen> {
                       borderRadius: BorderRadius.circular(12)),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
-                    child: Text(
-                      _quote,
-                      style: const TextStyle(
-                          fontSize: 18, fontStyle: FontStyle.italic),
-                      textAlign: TextAlign.center,
-                    ),
+                    child: Text(_quote,
+                        style: const TextStyle(
+                            fontSize: 18, fontStyle: FontStyle.italic),
+                        textAlign: TextAlign.center),
                   ),
                 ),
                 const SizedBox(height: 32),
               ],
+              /* ---------- botón SOS ---------- */
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 48, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 48, vertical: 12),
                   shape: const StadiumBorder(),
                 ),
                 onPressed: () => Navigator.push(
