@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
 
-import 'ad_banner.dart';
 import '../screens/home_screen.dart';
 import '../screens/journal_screen.dart';
 import '../screens/reflection_screen.dart';
 import '../screens/resources_screen.dart';
 import '../screens/profile_screen.dart';
-
-const _bannerId = 'ca-app-pub-4402835110551152/9099084606';
+import 'mountain_background.dart';
 
 class BottomNavBar extends StatefulWidget {
-  const BottomNavBar({super.key});            // ← key añadido
+  const BottomNavBar({super.key});
 
   @override
   State<BottomNavBar> createState() => _BottomNavBarState();
@@ -19,7 +17,7 @@ class BottomNavBar extends StatefulWidget {
 class _BottomNavBarState extends State<BottomNavBar> {
   int _selectedIndex = 0;
 
-  static const _pages = <Widget>[              // ← const list
+  static const _pages = <Widget>[
     HomeScreen(),
     JournalScreen(),
     ReflectionScreen(),
@@ -32,34 +30,30 @@ class _BottomNavBarState extends State<BottomNavBar> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _pages[_selectedIndex],
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
+      backgroundColor: Colors.transparent,     // ← transparencia
+      body: Stack(
         children: [
-          if (_shouldShowAds(_selectedIndex))
-            const AdBanner(adUnitId: _bannerId),
-          BottomNavigationBar(
-            currentIndex: _selectedIndex,
-            selectedItemColor: Theme.of(context).primaryColor,
-            unselectedItemColor: Colors.grey,
-            onTap: _onItemTapped,
-            items: const [
-              BottomNavigationBarItem(
-                  icon: Icon(Icons.home), label: 'Inicio'),
-              BottomNavigationBarItem(
-                  icon: Icon(Icons.edit), label: 'Diario'),
-              BottomNavigationBarItem(
-                  icon: Icon(Icons.auto_stories), label: 'Reflexión'),
-              BottomNavigationBarItem(
-                  icon: Icon(Icons.lightbulb_outline), label: 'Recursos'),
-              BottomNavigationBarItem(
-                  icon: Icon(Icons.person), label: 'Perfil'),
-            ],
-          ),
+          MountainBackground(pageIndex: _selectedIndex),
+
+          // Contenido frontal
+          Positioned.fill(child: _pages[_selectedIndex]),
+        ],
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        selectedItemColor: Theme.of(context).colorScheme.primary,
+        unselectedItemColor: Colors.grey,
+        onTap: _onItemTapped,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
+          BottomNavigationBarItem(icon: Icon(Icons.edit), label: 'Diario'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.nightlight_round), label: 'Reflexión'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.menu_book), label: 'Recursos'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
         ],
       ),
     );
   }
-
-  bool _shouldShowAds(int index) => index == 0 || index == 3 || index == 4;
 }
