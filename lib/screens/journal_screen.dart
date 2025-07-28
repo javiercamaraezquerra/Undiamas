@@ -34,12 +34,10 @@ class _JournalScreenState extends State<JournalScreen> {
     );
     await box.add(entry);
 
-    /* ── copia automática si está activada ── */
     final prefs = await SharedPreferences.getInstance();
     if (prefs.getBool('autoBackup') ?? false) {
       final cipher = await EncryptionService.getCipher();
-      final udm =
-          await Hive.openBox('udm_secure', encryptionCipher: cipher);
+      final udm = await Hive.openBox('udm_secure', encryptionCipher: cipher);
       await DriveBackupService.uploadBackup(
           DriveBackupService.exportHive(udm, box));
     }
@@ -59,7 +57,8 @@ class _JournalScreenState extends State<JournalScreen> {
   @override
   Widget build(BuildContext context) {
     const moods = ['😢', '😕', '😐', '🙂', '😄'];
-    final canSave = _selectedMood != null && _controller.text.trim().isNotEmpty;
+    final canSave =
+        _selectedMood != null && _controller.text.trim().isNotEmpty;
 
     return FutureBuilder<Box<DiaryEntry>>(
       future: _futureBox,
@@ -75,7 +74,13 @@ class _JournalScreenState extends State<JournalScreen> {
           builder: (context, Box<DiaryEntry> b, _) {
             final entries = b.values.toList().reversed.toList();
             return Scaffold(
-              appBar: AppBar(title: const Text('Diario')),
+              extendBodyBehindAppBar: true,
+              backgroundColor: Colors.transparent,
+              appBar: AppBar(
+                title: const Text('Diario'),
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+              ),
               body: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
