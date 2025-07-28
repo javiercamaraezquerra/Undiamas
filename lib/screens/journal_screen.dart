@@ -34,6 +34,7 @@ class _JournalScreenState extends State<JournalScreen> {
     );
     await box.add(entry);
 
+    /* ── copia automática ── */
     final prefs = await SharedPreferences.getInstance();
     if (prefs.getBool('autoBackup') ?? false) {
       final cipher = await EncryptionService.getCipher();
@@ -54,11 +55,11 @@ class _JournalScreenState extends State<JournalScreen> {
     super.dispose();
   }
 
+  /* ───────── UI ───────── */
   @override
   Widget build(BuildContext context) {
     const moods = ['😢', '😕', '😐', '🙂', '😄'];
-    final canSave =
-        _selectedMood != null && _controller.text.trim().isNotEmpty;
+    final canSave = _selectedMood != null && _controller.text.trim().isNotEmpty;
 
     return FutureBuilder<Box<DiaryEntry>>(
       future: _futureBox,
@@ -81,92 +82,90 @@ class _JournalScreenState extends State<JournalScreen> {
                 backgroundColor: Colors.transparent,
                 elevation: 0,
               ),
-              body: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    Text(
-                      '¿Cómo te sientes hoy?',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: List.generate(moods.length, (i) {
-                        final sel = i == _selectedMood;
-                        return GestureDetector(
-                          onTap: () => setState(() => _selectedMood = i),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            padding: EdgeInsets.all(sel ? 12 : 8),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: sel
-                                  ? Theme.of(context)
-                                      .colorScheme
-                                      .primary
-                                      .withAlpha(0x33)
-                                  : Colors.transparent,
+              body: SafeArea(
+                top: true,
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      Text('¿Cómo te sientes hoy?',
+                          style: Theme.of(context).textTheme.headlineSmall),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: List.generate(moods.length, (i) {
+                          final sel = i == _selectedMood;
+                          return GestureDetector(
+                            onTap: () => setState(() => _selectedMood = i),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: EdgeInsets.all(sel ? 12 : 8),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: sel
+                                    ? Theme.of(context)
+                                        .colorScheme
+                                        .primary
+                                        .withAlpha(0x33)
+                                    : Colors.transparent,
+                              ),
+                              child: Text(moods[i],
+                                  style: TextStyle(fontSize: sel ? 32 : 28)),
                             ),
-                            child: Text(
-                              moods[i],
-                              style: TextStyle(fontSize: sel ? 32 : 28),
-                            ),
+                          );
+                        }),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _controller,
+                        maxLines: 3,
+                        decoration: InputDecoration(
+                          hintText: 'Escribe tus pensamientos…',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                        );
-                      }),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _controller,
-                      maxLines: 3,
-                      decoration: InputDecoration(
-                        hintText: 'Escribe tus pensamientos…',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    ElevatedButton(
-                      onPressed: canSave ? () => _saveEntry(box) : null,
-                      style: ElevatedButton.styleFrom(
-                        shape: const StadiumBorder(),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 32,
-                          vertical: 12,
+                      const SizedBox(height: 12),
+                      ElevatedButton(
+                        onPressed: canSave ? () => _saveEntry(box) : null,
+                        style: ElevatedButton.styleFrom(
+                          shape: const StadiumBorder(),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 32,
+                            vertical: 12,
+                          ),
                         ),
+                        child: const Text('Guardar mi día'),
                       ),
-                      child: const Text('Guardar mi día'),
-                    ),
-                    const SizedBox(height: 24),
-                    Expanded(
-                      child: entries.isEmpty
-                          ? const Center(child: Text('No hay entradas aún.'))
-                          : ListView.builder(
-                              itemCount: entries.length,
-                              itemBuilder: (_, i) {
-                                final e = entries[i];
-                                final date =
-                                    '${e.createdAt.day}/${e.createdAt.month}/${e.createdAt.year} '
-                                    '${e.createdAt.hour.toString().padLeft(2, '0')}:'
-                                    '${e.createdAt.minute.toString().padLeft(2, '0')}';
-                                return Card(
-                                  margin:
-                                      const EdgeInsets.symmetric(vertical: 4),
-                                  child: ListTile(
-                                    leading: Text(
-                                      moods[e.mood],
-                                      style: const TextStyle(fontSize: 24),
+                      const SizedBox(height: 24),
+                      Expanded(
+                        child: entries.isEmpty
+                            ? const Center(child: Text('No hay entradas aún.'))
+                            : ListView.builder(
+                                itemCount: entries.length,
+                                itemBuilder: (_, i) {
+                                  final e = entries[i];
+                                  final date =
+                                      '${e.createdAt.day}/${e.createdAt.month}/${e.createdAt.year} '
+                                      '${e.createdAt.hour.toString().padLeft(2, '0')}:'
+                                      '${e.createdAt.minute.toString().padLeft(2, '0')}';
+                                  return Card(
+                                    margin:
+                                        const EdgeInsets.symmetric(vertical: 4),
+                                    child: ListTile(
+                                      leading: Text(moods[e.mood],
+                                          style: const TextStyle(fontSize: 24)),
+                                      title: Text(e.text),
+                                      subtitle: Text(date),
                                     ),
-                                    title: Text(e.text),
-                                    subtitle: Text(date),
-                                  ),
-                                );
-                              },
-                            ),
-                    ),
-                  ],
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
