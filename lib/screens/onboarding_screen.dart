@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 
 import '../widgets/bottom_nav_bar.dart';
+import '../widgets/mountain_background.dart';
 import '../services/achievement_service.dart';
 import '../services/encryption_service.dart';
 
@@ -33,8 +34,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   /* ───────── Guardar en Hive y entrar ───────── */
   Future<void> _finish() async {
     final cipher = await EncryptionService.getCipher();
-    final box =
-        await Hive.openBox('udm_secure', encryptionCipher: cipher);
+    final box = await Hive.openBox('udm_secure', encryptionCipher: cipher);
 
     await box.putAll({
       'startDate': _startDateTime!.toIso8601String(),
@@ -44,16 +44,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (!mounted) return;
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => BottomNavBar()),
+      MaterialPageRoute(builder: (_) => const BottomNavBar()),
     );
 
-    // Programa los hitos sin bloquear la UI principal
     AchievementService.scheduleMilestones(_startDateTime!);
   }
 
   /* ───────── Selector de fecha y hora ───────── */
   Future<void> _pickDateTime() async {
-    // Hereda el locale español desde MaterialApp, no hace falta pasarlo aquí
     final pickedDate = await showDatePicker(
       context: context,
       firstDate: DateTime(2000),
@@ -90,64 +88,71 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final primary = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
-      body: PageView(
-        controller: _pageCtrl,
-        physics: const NeverScrollableScrollPhysics(),
+      extendBodyBehindAppBar: true,
+      backgroundColor: Colors.transparent,
+      body: Stack(
         children: [
-          // ── PASO 1 ──
-          _StepContainer(
-            headline: 'Selecciona la fecha y hora\nde tu sobriedad',
-            center: ElevatedButton.icon(
-              icon: const Icon(Icons.calendar_month_outlined),
-              label: const Text('Elegir fecha y hora'),
-              onPressed: _pickDateTime,
-            ),
-            subhead: _startDateTime == null
-                ? null
-                : '${_startDateTime!.day}/${_startDateTime!.month}/${_startDateTime!.year} – '
-                  '${_startDateTime!.hour.toString().padLeft(2, '0')}:'
-                  '${_startDateTime!.minute.toString().padLeft(2, '0')}',
-          ),
+          const MountainBackground(pageIndex: 0),
+          PageView(
+            controller: _pageCtrl,
+            physics: const NeverScrollableScrollPhysics(),
+            children: [
+              // ── PASO 1 ──
+              _StepContainer(
+                headline: 'Selecciona la fecha y hora\nde tu sobriedad',
+                center: ElevatedButton.icon(
+                  icon: const Icon(Icons.calendar_month_outlined),
+                  label: const Text('Elegir fecha y hora'),
+                  onPressed: _pickDateTime,
+                ),
+                subhead: _startDateTime == null
+                    ? null
+                    : '${_startDateTime!.day}/${_startDateTime!.month}/${_startDateTime!.year} – '
+                      '${_startDateTime!.hour.toString().padLeft(2, '0')}:'
+                      '${_startDateTime!.minute.toString().padLeft(2, '0')}',
+              ),
 
-          // ── PASO 2 ──
-          _StepContainer(
-            headline: '¿Cuál es tu sustancia principal?',
-            center: Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              alignment: WrapAlignment.center,
-              children: _options
-                  .map((e) => ChoiceChip(
-                        label: Text(e),
-                        selected: _substance == e,
-                        selectedColor: primary.withAlpha(0x26),
-                        onSelected: (_) => setState(() => _substance = e),
-                      ))
-                  .toList(),
-            ),
-            bottom: ElevatedButton(
-              onPressed: _substance == null
-                  ? null
-                  : () => _pageCtrl.nextPage(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.ease,
-                      ),
-              child: const Text('Siguiente'),
-            ),
-          ),
+              // ── PASO 2 ──
+              _StepContainer(
+                headline: '¿Cuál es tu sustancia principal?',
+                center: Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  alignment: WrapAlignment.center,
+                  children: _options
+                      .map((e) => ChoiceChip(
+                            label: Text(e),
+                            selected: _substance == e,
+                            selectedColor: primary.withAlpha(0x26),
+                            onSelected: (_) => setState(() => _substance = e),
+                          ))
+                      .toList(),
+                ),
+                bottom: ElevatedButton(
+                  onPressed: _substance == null
+                      ? null
+                      : () => _pageCtrl.nextPage(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.ease,
+                          ),
+                  child: const Text('Siguiente'),
+                ),
+              ),
 
-          // ── PASO 3 ──
-          _StepContainer(
-            headline: '¡Todo listo!',
-            subhead: 'Recibirás frases motivacionales cada mañana.',
-            center: Icon(Icons.celebration_rounded,
-                size: 96, color: primary.withOpacity(.8)),
-            bottom: ElevatedButton(
-              onPressed: (_startDateTime != null && _substance != null)
-                  ? _finish
-                  : null,
-              child: const Text('Comenzar'),
-            ),
+              // ── PASO 3 ──
+              _StepContainer(
+                headline: '¡Todo listo!',
+                subhead: 'Recibirás frases motivacionales cada mañana.',
+                center: Icon(Icons.celebration_rounded,
+                    size: 96, color: primary.withOpacity(.8)),
+                bottom: ElevatedButton(
+                  onPressed: (_startDateTime != null && _substance != null)
+                      ? _finish
+                      : null,
+                  child: const Text('Comenzar'),
+                ),
+              ),
+            ],
           ),
         ],
       ),
