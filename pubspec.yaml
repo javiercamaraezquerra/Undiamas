@@ -38,8 +38,6 @@ dependencies:
   path_provider: ^2.1.1
   encrypt: ^5.0.1
 
-  # --- (Rive eliminado; ya no se usa) ---
-
 #########################
 #  DEPENDENCIAS DEV
 #########################
@@ -62,9 +60,8 @@ flutter:
     - assets/audio/relax60s.mp3
     - assets/data/reflections.json
     - packages/timezone/data/latest_all.tzf
-    # ——— NUEVO fondo fijo ———
-    - assets/images/bg_mountains.png        # <‑‑ coloca aquí tu PNG
-    # Si más adelante separas sol/figura en PNG independientes, añade:
+    - assets/images/bg_mountains.png      # fondo fijo
+    # Si algún día separas sol/figura:
     # - assets/images/sun.png
     # - assets/images/figure.png
 
