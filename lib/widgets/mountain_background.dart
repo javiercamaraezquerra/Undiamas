@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
+/// Fondo ilustrado con montañas (imagen), sol recortado y figura distinta
+/// por cada pestaña.  No usa filtros de opacidad: la ilustración conserva
+/// sus colores originales.
 class MountainBackground extends StatelessWidget {
-  final int pageIndex;
-  final Duration duration;
+  final int pageIndex;                       // 0‑4: pestaña actual
+  final Duration duration;                   // velocidad de transición
 
   const MountainBackground({
     super.key,
@@ -10,14 +13,16 @@ class MountainBackground extends StatelessWidget {
     this.duration = const Duration(milliseconds: 800),
   });
 
+  /* ───────────────── posiciones relativas ───────────────── */
   Alignment _sunPos(int i) {
+    // Más alto para que no lo tape el contenido central
     switch (i) {
-      case 0: return const Alignment( 0.00, -0.82);
-      case 1: return const Alignment(-0.55, -0.78);
-      case 2: return const Alignment( 0.55, -0.76);
-      case 3: return const Alignment(-0.25, -0.74);
-      case 4: return const Alignment( 0.20, -0.80);
-      default:return const Alignment(0, -0.78);
+      case 0: return const Alignment( 0.00, -0.90);
+      case 1: return const Alignment(-0.55, -0.88);
+      case 2: return const Alignment( 0.55, -0.86);
+      case 3: return const Alignment(-0.25, -0.87);
+      case 4: return const Alignment( 0.25, -0.89);
+      default:return const Alignment(0, -0.88);
     }
   }
 
@@ -39,27 +44,26 @@ class MountainBackground extends StatelessWidget {
     'assets/images/figure_3.png',
   ];
 
+  /* ───────────────── build ───────────────── */
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (_, cs) {
-      final size      = cs.biggest;
-      final sunDia    = size.width * .25;
-      final figureDia = size.width * .26;
+      final size       = cs.biggest;
+      final sunDia     = size.width * .35; // 35 % del ancho = más grande
+      final figureSize = size.width * .26;
 
       return Stack(
         children: [
+          // 1 · Imagen de montañas (sin filtros)
           Positioned.fill(
-            child: ColorFiltered(
-              colorFilter: ColorFilter.mode(
-                  Colors.white.withOpacity(0.15), BlendMode.srcATop),
-              child: Image.asset(
-                'assets/images/bg_mountains_vert.jpg',
-                alignment: Alignment.topCenter,
-                fit: BoxFit.cover,
-              ),
+            child: Image.asset(
+              'assets/images/bg_mountains_vert.jpg',
+              alignment: Alignment.topCenter,
+              fit: BoxFit.cover,
             ),
           ),
-          // —— Sol usando sun.png + ClipOval ——
+
+          // 2 · Sol PNG recortado con ClipOval
           AnimatedAlign(
             alignment: _sunPos(pageIndex),
             duration: duration,
@@ -69,18 +73,19 @@ class MountainBackground extends StatelessWidget {
                 'assets/images/sun.png',
                 width: sunDia,
                 height: sunDia,
-                fit: BoxFit.cover,
+                fit: BoxFit.contain,
               ),
             ),
           ),
-          // —— Figura ——
+
+          // 3 · Figura estática (una distinta por pestaña)
           AnimatedAlign(
             alignment: _figPos(pageIndex),
             duration: duration,
             curve: Curves.easeInOut,
             child: Image.asset(
               _figures[pageIndex % _figures.length],
-              width: figureDia,
+              width: figureSize,
               fit: BoxFit.contain,
               color: const Color(0xFF0D47A1),
               colorBlendMode: BlendMode.srcATop,
