@@ -7,12 +7,19 @@ version: 1.0.0+11        # recuerda aumentar cuando subas versión
 environment:
   sdk: ">=2.17.0 <3.0.0"
 
+#########################
+#  DEPENDENCIAS
+#########################
 dependencies:
   flutter:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
+
+  # --- UI / Íconos ---
   cupertino_icons: ^1.0.2
+
+  # --- Tu lógica existente ---
   url_launcher: ^6.1.7
   intl: ^0.20.2
   shared_preferences: ^2.0.15
@@ -21,7 +28,7 @@ dependencies:
   google_mobile_ads: ^5.0.0
   just_audio: ^0.9.36
   flutter_local_notifications: ^17.1.2
-  timezone: ^0.9.2           # base de datos TZ
+  timezone: ^0.9.2
   fl_chart: ^0.66.0
   flutter_markdown: ^0.6.18
   flutter_secure_storage: ^9.0.0
@@ -31,6 +38,11 @@ dependencies:
   path_provider: ^2.1.1
   encrypt: ^5.0.1
 
+  # --- (Rive eliminado; ya no se usa) ---
+
+#########################
+#  DEPENDENCIAS DEV
+#########################
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -39,19 +51,23 @@ dev_dependencies:
   flutter_launcher_icons: ^0.13.1
   flutter_lints: ^3.0.0
 
+#########################
+#  CONFIGURACIÓN FLUTTER
+#########################
 flutter:
   uses-material-design: true
+
   assets:
     - assets/data/quotes.json
     - assets/audio/relax60s.mp3
     - assets/data/reflections.json
     - packages/timezone/data/latest_all.tzf
-    # Imagen de fondo (la que me mostraste o la que prefieras)
-    - assets/images/bg_mountains.jpg
-    # Si en el futuro añades PNG separados, declara aquí:
+    # ——— NUEVO fondo fijo ———
+    - assets/images/bg_mountains.png        # <‑‑ coloca aquí tu PNG
+    # Si más adelante separas sol/figura en PNG independientes, añade:
     # - assets/images/sun.png
     # - assets/images/figure.png
-    
+
 flutter_icons:
   image_path: assets/images/logo.png
   android: true
