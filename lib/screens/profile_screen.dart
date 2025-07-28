@@ -11,7 +11,6 @@ import '../services/encryption_service.dart';
 import '../utils/mood_trend.dart';
 import '../widgets/mood_trend_chart.dart';
 
-/// Descargo de responsabilidad general
 const _kDisclaimer =
     'La información y los recordatorios de esta aplicación son de carácter '
     'educativo y de apoyo. No sustituyen la valoración ni el tratamiento de '
@@ -24,17 +23,14 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  /* –– preferencias –– */
-  bool _isDark            = false;
-  bool _notifDaily        = true;
-  bool _notifMilestones   = true;
-  bool _autoBackup        = false;
+  bool _isDark = false;
+  bool _notifDaily = true;
+  bool _notifMilestones = true;
+  bool _autoBackup = false;
 
-  /* –– progreso –– */
   DateTime? _startDate;
   int _daysClean = 0;
 
-  /* –– cajas Hive –– */
   late Future<Box<DiaryEntry>> _diaryBoxFuture;
 
   @override
@@ -46,13 +42,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadPrefs();
   }
 
-  /* ───────────────── prefs ───────────────── */
   Future<void> _loadPrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    _isDark           = prefs.getBool('isDarkMode') ?? false;
-    _notifDaily       = prefs.getBool('notifyDailyReflection') ?? true;
-    _notifMilestones  = prefs.getBool('notifyMilestones') ?? true;
-    _autoBackup       = prefs.getBool('autoBackup') ?? false;
+    _isDark = prefs.getBool('isDarkMode') ?? false;
+    _notifDaily = prefs.getBool('notifyDailyReflection') ?? true;
+    _notifMilestones = prefs.getBool('notifyMilestones') ?? true;
+    _autoBackup = prefs.getBool('autoBackup') ?? false;
 
     final cipher = await EncryptionService.getCipher();
     final box = await Hive.openBox('udm_secure', encryptionCipher: cipher);
@@ -63,7 +58,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (mounted) setState(() {});
   }
 
-  /* ─────────── toggles básicos ─────────── */
+  /* ───────── toggles ───────── */
   Future<void> _toggleTheme(bool v) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isDarkMode', v);
@@ -97,21 +92,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  /* ─────────── copia automática ─────────── */
   Future<void> _toggleAutoBackup(bool v) async {
     final prefs = await SharedPreferences.getInstance();
 
     if (v && !_autoBackup) {
-      // Primera activación → pedir consentimiento y subir copia inicial
       if (!await _confirmDriveConsent()) return;
 
-      final wait   = _showSnack('Subiendo copia inicial…', persistent: true);
+      final wait = _showSnack('Subiendo copia inicial…', persistent: true);
       final cipher = await EncryptionService.getCipher();
-      final udm    = await Hive.openBox('udm_secure', encryptionCipher: cipher);
-      final diary  = await Hive.openBox<DiaryEntry>('diary_secure', encryptionCipher: cipher);
+      final udm = await Hive.openBox('udm_secure', encryptionCipher: cipher);
+      final diary =
+          await Hive.openBox<DiaryEntry>('diary_secure', encryptionCipher: cipher);
 
-      final res = await DriveBackupService.uploadBackup(
-          DriveBackupService.exportHive(udm, diary));
+      final res =
+          await DriveBackupService.uploadBackup(DriveBackupService.exportHive(udm, diary));
 
       wait.close();
       if (!res.ok) {
@@ -124,7 +118,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _autoBackup = v);
   }
 
-  /* ─────────── restaurar ─────────── */
   Future<bool> _confirmDriveConsent() async {
     return await showDialog<bool>(
           context: context,
@@ -157,8 +150,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
-    final wait    = _showSnack('Descargando copia…', persistent: true);
-    final result  = await DriveBackupService.downloadBackup();
+    final wait = _showSnack('Descargando copia…', persistent: true);
+    final result = await DriveBackupService.downloadBackup();
     wait.close();
 
     if (!result.ok || result.data == null) {
@@ -167,15 +160,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     final cipher = await EncryptionService.getCipher();
-    final udm    = await Hive.openBox('udm_secure', encryptionCipher: cipher);
-    final diary  = await Hive.openBox<DiaryEntry>('diary_secure', encryptionCipher: cipher);
+    final udm = await Hive.openBox('udm_secure', encryptionCipher: cipher);
+    final diary =
+        await Hive.openBox<DiaryEntry>('diary_secure', encryptionCipher: cipher);
 
     final imported =
         await DriveBackupService.importHive(result.data!, udm, diary);
 
-    _showSnack(imported
-        ? 'Datos restaurados.'
-        : 'La copia estaba vacía o dañada.');
+    _showSnack(imported ? 'Datos restaurados.' : 'La copia estaba vacía o dañada.');
 
     if (imported) {
       setState(() {
@@ -187,11 +179,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  /* ─────────── reset contador ─────────── */
   Future<void> _resetSoberDate() async {
-    final now   = DateTime.now();
+    final now = DateTime.now();
     final cipher = await EncryptionService.getCipher();
-    final box    = await Hive.openBox('udm_secure', encryptionCipher: cipher);
+    final box = await Hive.openBox('udm_secure', encryptionCipher: cipher);
     await box.put('startDate', now.toIso8601String());
 
     final prefs = await SharedPreferences.getInstance();
@@ -205,7 +196,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _showSnack('¡Contador reiniciado!');
   }
 
-  /* ─────────── Snack helper ─────────── */
   ScaffoldFeatureController<SnackBar, SnackBarClosedReason> _showSnack(
       String msg,
       {bool persistent = false}) {
@@ -216,11 +206,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return ScaffoldMessenger.of(context).showSnackBar(sb);
   }
 
-  /* ─────────── UI ─────────── */
+  /* ───────── UI ───────── */
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Perfil')),
+      extendBodyBehindAppBar: true,
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        title: const Text('Perfil'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -237,7 +233,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ListTile(
             leading: const Icon(Icons.flag),
             title: const Text('Notificaciones de logros'),
-            trailing: Switch(value: _notifMilestones, onChanged: _toggleMilestoneNotif),
+            trailing:
+                Switch(value: _notifMilestones, onChanged: _toggleMilestoneNotif),
           ),
           ListTile(
             leading: const Icon(Icons.cloud_sync),
@@ -262,13 +259,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const Divider(),
           _buildMoodSection(),
           const SizedBox(height: 16),
-          _buildDisclaimer(),           // ← descargo FUERA de la tarjeta
+          _buildDisclaimer(),
         ],
       ),
     );
   }
 
-  /* –– widgets auxiliares –– */
+  /* –– helpers UI –– */
   List<Widget> _buildProgressSection() {
     final milestones = AchievementService.milestones.keys.toList()..sort();
     final next = milestones.firstWhere((d) => _daysClean < d, orElse: () => -1);
@@ -316,7 +313,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       aspectRatio: 1.6,
                       child: MoodTrendChart(entries: entries),
                     ),
-                    // (el mensaje motivacional con icono se eliminó)
                   ],
                 ),
               ),
