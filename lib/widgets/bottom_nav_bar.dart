@@ -35,7 +35,7 @@ class _BottomNavBarState extends State<BottomNavBar> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,            // transparencia
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           MountainBackground(pageIndex: _selectedIndex),
