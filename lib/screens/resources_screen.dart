@@ -9,6 +9,7 @@ class ResourcesScreen extends StatefulWidget {
 }
 
 class _ResourcesScreenState extends State<ResourcesScreen> {
+  /* ───────── datos internos ───────── */
   final List<_Resource> _all = _resources;
   final Set<String> _favorites = {};
 
@@ -47,6 +48,7 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
     });
   }
 
+  /* ───────── UI ───────── */
   @override
   Widget build(BuildContext context) {
     final filtered = _all.where((r) {
@@ -59,88 +61,93 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('Recursos'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: TextField(
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                hintText: 'Buscar…',
-                border: OutlineInputBorder(),
+      appBar: AppBar(title: const Text('Recursos')),
+      body: SafeArea(               // ← desplazamos el contenido bajo la barra
+        top: true,
+        bottom: false,
+        child: Column(
+          children: [
+            // ── Buscador ──
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: TextField(
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search),
+                  hintText: 'Buscar…',
+                ),
+                onChanged: (q) => setState(() => _query = q),
               ),
-              onChanged: (q) => setState(() => _query = q),
             ),
-          ),
-          SizedBox(
-            height: 40,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              children: _categories
-                  .map(
-                    (c) => Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: ChoiceChip(
-                        label: Text(c),
-                        selected: _category == c,
-                        onSelected: (_) => setState(() => _category = c),
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: filtered.length,
-              itemBuilder: (_, i) {
-                final r = filtered[i];
-                final fav = _favorites.contains(r.id);
-                return Card(
-                  margin: const EdgeInsets.symmetric(vertical: 6),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  child: ListTile(
-                    title: Text(r.title,
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text(r.category),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (r.url != null)
-                          Icon(
-                            r.typeIcon,
-                            size: 20,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                        IconButton(
-                          icon: Icon(
-                            fav ? Icons.star : Icons.star_border,
-                            color: fav ? Colors.amber : null,
-                          ),
-                          onPressed: () => _toggleFav(r.id),
+
+            // ── Chips de categoría ──
+            SizedBox(
+              height: 40,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                children: _categories
+                    .map(
+                      (c) => Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: ChoiceChip(
+                          label: Text(c),
+                          selected: _category == c,
+                          onSelected: (_) => setState(() => _category = c),
                         ),
-                      ],
-                    ),
-                    onTap: () => _showDetail(context, r),
-                  ),
-                );
-              },
+                      ),
+                    )
+                    .toList(),
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+
+            // ── Lista de recursos ──
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: filtered.length,
+                itemBuilder: (_, i) {
+                  final r = filtered[i];
+                  final fav = _favorites.contains(r.id);
+                  return Card(
+                    margin: const EdgeInsets.symmetric(vertical: 6),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    child: ListTile(
+                      title: Text(r.title,
+                          style: const TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: Text(r.category),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (r.url != null)
+                            Icon(
+                              r.typeIcon,
+                              size: 20,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          IconButton(
+                            icon: Icon(
+                              fav ? Icons.star : Icons.star_border,
+                              color: fav ? Colors.amber : null,
+                            ),
+                            onPressed: () => _toggleFav(r.id),
+                          ),
+                        ],
+                      ),
+                      onTap: () => _showDetail(context, r),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
+  /* ───────── Detalle modal ───────── */
   void _showDetail(BuildContext context, _Resource r) {
     showModalBottomSheet(
       context: context,
