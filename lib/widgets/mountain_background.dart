@@ -47,7 +47,7 @@ class MountainBackground extends StatelessWidget {
           // Imagen vertical (rellena arriba, recorta laterales si hace falta)
           Positioned.fill(
             child: Image.asset(
-              'assets/images/bg_mountains.jpg',
+              'assets/images/bg_mountains.png',
               alignment: Alignment.topCenter,
               fit: BoxFit.cover,
             ),
