@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 
 /// Escena de fondo animada (montañas + sol + figura).
 ///
-/// Si más adelante sustituyes los place‑holders por PNG independientes,
-/// basta con reemplazar los widgets `_sun()` y `_figure()` por sendos
-/// `Image.asset('assets/images/sun.png')` y `Image.asset('assets/images/figure.png')`.
+/// De momento usamos place‑holders vectoriales para el sol y la figura.
+/// Más adelante podrás sustituirlos por PNG independientes:
+///   child: Image.asset('assets/images/sun.png', width: 180),
+///   child: Image.asset('assets/images/figure.png', width: 220),
 class MountainBackground extends StatelessWidget {
   final int pageIndex;
-  /// Animación lenta (1,2 s). Ajusta si lo ves necesario.
-  final Duration duration;
+  final Duration duration; // Animación lenta (1,2 s por defecto)
 
   const MountainBackground({
     super.key,
@@ -16,9 +16,7 @@ class MountainBackground extends StatelessWidget {
     this.duration = const Duration(milliseconds: 1200),
   });
 
-  //─────────────────────────────────────────────────────────────────────────────
-  // Posiciones predefinidas por pestaña
-  //─────────────────────────────────────────────────────────────────────────────
+  //──────────────────────── Posiciones predefinidas ──────────────────────────
   Alignment _sunPos(int i) {
     switch (i) {
       case 0: return const Alignment( 0.00,  0.15); // Home
@@ -41,9 +39,7 @@ class MountainBackground extends StatelessWidget {
     }
   }
 
-  //─────────────────────────────────────────────────────────────────────────────
-  // Widgets auxiliares (place‑holders)
-  //─────────────────────────────────────────────────────────────────────────────
+  //───────────────────────── Widgets place‑holder ────────────────────────────
   Widget _sun() => Container(
         width: 180,
         height: 180,
@@ -60,24 +56,22 @@ class MountainBackground extends StatelessWidget {
   Widget _figure() => const Icon(
         Icons.self_improvement,
         size: 220,
-        color: Color(0xFF0D47A1), // azul oscuro aprox. silueta
+        color: Color(0xFF0D47A1), // azul oscuro
       );
 
-  //─────────────────────────────────────────────────────────────────────────────
-  // Build
-  //─────────────────────────────────────────────────────────────────────────────
+  //──────────────────────────────── Build ────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Positioned.fill(
       child: Stack(
         children: [
-          // Fondo estático
+          // 1) Imagen de fondo
           Image.asset(
             'assets/images/bg_mountains.jpg',
             fit: BoxFit.cover,
           ),
 
-          // Sol animado
+          // 2) Sol animado
           Hero(
             tag: 'hero_sun',
             child: AnimatedAlign(
@@ -88,7 +82,7 @@ class MountainBackground extends StatelessWidget {
             ),
           ),
 
-          // Figura animada
+          // 3) Figura animada
           Hero(
             tag: 'hero_figure',
             child: AnimatedAlign(
