@@ -60,10 +60,12 @@ flutter:
     - assets/audio/relax60s.mp3
     - assets/data/reflections.json
     - packages/timezone/data/latest_all.tzf
-    - assets/images/bg_mountains.png      # fondo fijo
-    # Si algún día separas sol/figura:
-    # - assets/images/sun.png
-    # - assets/images/figure.png
+    - assets/images/bg_mountains.jpg
+    - assets/images/sun.png
+    - assets/images/figure_0.png
+    - assets/images/figure_1.png
+    - assets/images/figure_2.png
+    - assets/images/figure_3.png
 
 flutter_icons:
   image_path: assets/images/logo.png
