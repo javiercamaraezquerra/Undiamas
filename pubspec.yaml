@@ -60,7 +60,7 @@ flutter:
     - assets/audio/relax60s.mp3
     - assets/data/reflections.json
     - packages/timezone/data/latest_all.tzf
-    - assets/images/bg_mountains.jpg
+    - assets/images/bg_mountains.png
     - assets/images/sun.png
     - assets/images/figure_0.png
     - assets/images/figure_1.png
