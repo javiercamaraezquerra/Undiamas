@@ -45,6 +45,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
     }
   }
 
+  /* ───────── cargar reflexión ───────── */
   Future<void> _loadReflection() async {
     try {
       String raw = await rootBundle.loadString('assets/data/reflections.json');
@@ -87,6 +88,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
 
   int _dayOfYear(DateTime dt) => int.parse(DateFormat('D').format(dt));
 
+  /* ───────── UI ───────── */
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -95,12 +97,10 @@ class _ReflectionScreenState extends State<ReflectionScreen>
       return Scaffold(
         extendBodyBehindAppBar: true,
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          title: const Text('Reflexión diaria'),
-          backgroundColor: Colors.transparent,
-          elevation: 0,
+        appBar: AppBar(title: const Text('Reflexión diaria')),
+        body: SafeArea(
+          child: Center(child: Text(_loadError!, textAlign: TextAlign.center)),
         ),
-        body: Center(child: Text(_loadError!, textAlign: TextAlign.center)),
       );
     }
 
@@ -111,73 +111,73 @@ class _ReflectionScreenState extends State<ReflectionScreen>
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('Reflexión diaria'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(_header!,
-                style: theme.textTheme.headlineMedium
-                    ?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            Card(
-              elevation: 1,
-              color: theme.colorScheme.surface,
-              shape:
-                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              margin: EdgeInsets.zero,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: MarkdownBody(
-                  data: _body!,
-                  styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
-                    p: theme.textTheme.bodyMedium
-                        ?.copyWith(color: theme.colorScheme.onSurface),
-                    blockquotePadding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    blockquoteDecoration: BoxDecoration(
-                      border: Border(
-                        left: BorderSide(
-                            color: theme.colorScheme.primary, width: 4),
+      appBar: AppBar(title: const Text('Reflexión diaria')),
+      body: SafeArea(
+        top: true,
+        bottom: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(_header!,
+                  style: theme.textTheme.headlineMedium
+                      ?.copyWith(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              Card(
+                elevation: 1,
+                color: theme.colorScheme.surface,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                margin: EdgeInsets.zero,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: MarkdownBody(
+                    data: _body!,
+                    styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
+                      p: theme.textTheme.bodyMedium
+                          ?.copyWith(color: theme.colorScheme.onSurface),
+                      blockquotePadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      blockquoteDecoration: BoxDecoration(
+                        border: Border(
+                          left: BorderSide(
+                              color: theme.colorScheme.primary, width: 4),
+                        ),
                       ),
+                      blockquote: theme.textTheme.bodyMedium?.copyWith(
+                        fontStyle: FontStyle.italic,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                      blockSpacing: 12,
                     ),
-                    blockquote: theme.textTheme.bodyMedium?.copyWith(
-                      fontStyle: FontStyle.italic,
-                      color: theme.colorScheme.onSurface,
-                    ),
-                    blockSpacing: 12,
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-            TextButton.icon(
-              icon: const Icon(Icons.open_in_new),
-              style:
-                  TextButton.styleFrom(foregroundColor: theme.colorScheme.primary),
-              onPressed: () async {
-                final uri = Uri.parse(_soloPorHoyUrl);
-                if (await canLaunchUrl(uri)) {
-                  await launchUrl(uri, mode: LaunchMode.externalApplication);
-                } else {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text(
-                          'No se pudo abrir el enlace, inténtalo más tarde.')));
-                }
-              },
-              label: const Text(
-                'Si también quieres ver la reflexión diaria de “Sólo por hoy”, '
-                'haz clic aquí para verla gratuitamente.',
-                textAlign: TextAlign.start,
+              const SizedBox(height: 24),
+              TextButton.icon(
+                icon: const Icon(Icons.open_in_new),
+                style:
+                    TextButton.styleFrom(foregroundColor: theme.colorScheme.primary),
+                onPressed: () async {
+                  final uri = Uri.parse(_soloPorHoyUrl);
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  } else {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text(
+                            'No se pudo abrir el enlace, inténtalo más tarde.')));
+                  }
+                },
+                label: const Text(
+                  'Si también quieres ver un principio espiritual por día de “Sólo por hoy”, '
+                  'haz clic aquí para verla gratuitamente.',
+                  textAlign: TextAlign.start,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
