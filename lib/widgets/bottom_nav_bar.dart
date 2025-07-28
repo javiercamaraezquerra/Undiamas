@@ -30,12 +30,10 @@ class _BottomNavBarState extends State<BottomNavBar> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,     // ← transparencia
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           MountainBackground(pageIndex: _selectedIndex),
-
-          // Contenido frontal
           Positioned.fill(child: _pages[_selectedIndex]),
         ],
       ),
