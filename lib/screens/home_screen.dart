@@ -25,7 +25,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   static const _prefsKey = 'start_date';
-  static const _boxName  = 'udm_secure';
+  static const _boxName = 'udm_secure';
 
   late Box _box;
   StreamSubscription<BoxEvent>? _sub;
@@ -45,7 +45,6 @@ class _HomeScreenState extends State<HomeScreen> {
       _ticker =
           Timer.periodic(const Duration(minutes: 1), (_) => _updateElapsed());
 
-      // refrescar si se modifica startDate desde otro sitio
       _sub = _box.watch(key: 'startDate').listen((e) {
         _startDate = DateTime.parse(e.value as String);
         _updateElapsed();
@@ -70,7 +69,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    final prefs  = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
     final legacy = prefs.getString(_prefsKey);
 
     if (legacy != null) {
@@ -120,7 +119,10 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         boxShadow: const [
           BoxShadow(
-              blurRadius: 12, spreadRadius: 1, color: Colors.black26, offset: Offset(0, 4)),
+              blurRadius: 12,
+              spreadRadius: 1,
+              color: Colors.black26,
+              offset: Offset(0, 4)),
         ],
       ),
       child: Center(
@@ -156,9 +158,8 @@ class _HomeScreenState extends State<HomeScreen> {
     return DateTime(year, month, day, start.hour, start.minute, start.second);
   }
 
-  /* ───────── Años + meses completos (clip) ───────── */
   _YearMonth _yearsMonthsFrom(DateTime start, DateTime now) {
-    int years  = now.year  - start.year;
+    int years = now.year - start.year;
     int months = now.month - start.month;
 
     if (months < 0) {
@@ -187,19 +188,18 @@ class _HomeScreenState extends State<HomeScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    final now         = DateTime.now();
-    final ym          = _yearsMonthsFrom(_startDate!, now);
-    final years       = ym.years;
-    final monthsAll   = ym.months;
+    final now = DateTime.now();
+    final ym = _yearsMonthsFrom(_startDate!, now);
+    final years = ym.years;
+    final monthsAll = ym.months;
 
-    final anchor      = _clippedDate(_startDate!, years, monthsAll);
-    final durAfter    = now.difference(anchor);
+    final anchor = _clippedDate(_startDate!, years, monthsAll);
+    final durAfter = now.difference(anchor);
 
-    final days    = durAfter.inDays;
-    final hours   = durAfter.inHours % 24;
+    final days = durAfter.inDays;
+    final hours = durAfter.inHours % 24;
     final minutes = durAfter.inMinutes % 60;
 
-    /* tamaño adaptativo */
     double mainSize;
     if (years > 0) {
       mainSize = 110;
@@ -209,21 +209,26 @@ class _HomeScreenState extends State<HomeScreen> {
       mainSize = 180;
     }
 
-    /* círculos principales */
     final List<Widget> mainCircles = [];
     if (years > 0) {
-      mainCircles.add(_circle(
-          years.toString(), years == 1 ? 'año' : 'años', mainSize, context));
+      mainCircles.add(
+          _circle(years.toString(), years == 1 ? 'año' : 'años', mainSize, context));
     }
     if (monthsAll > 0 || years > 0) {
       mainCircles.add(_circle(monthsAll.toString(),
           monthsAll == 1 ? 'mes' : 'meses', mainSize, context));
     }
-    mainCircles.add(_circle(
-        days.toString(), days == 1 ? 'día' : 'días', mainSize, context));
+    mainCircles.add(
+        _circle(days.toString(), days == 1 ? 'día' : 'días', mainSize, context));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Inicio')),
+      extendBodyBehindAppBar: true,
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        title: const Text('Inicio'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
@@ -240,11 +245,9 @@ class _HomeScreenState extends State<HomeScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _circle(hours.toString().padLeft(2, '0'),
-                      'horas', 90, context),
+                  _circle(hours.toString().padLeft(2, '0'), 'horas', 90, context),
                   const SizedBox(width: 16),
-                  _circle(minutes.toString().padLeft(2, '0'),
-                      'min', 90, context),
+                  _circle(minutes.toString().padLeft(2, '0'), 'min', 90, context),
                 ],
               ),
               const SizedBox(height: 32),
@@ -255,18 +258,18 @@ class _HomeScreenState extends State<HomeScreen> {
                       borderRadius: BorderRadius.circular(12)),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
-                    child: Text(_quote,
-                        style: const TextStyle(
-                            fontSize: 18, fontStyle: FontStyle.italic),
-                        textAlign: TextAlign.center),
+                    child: Text(
+                      _quote,
+                      style: const TextStyle(fontSize: 18, fontStyle: FontStyle.italic),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 32),
               ],
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 48, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 12),
                   shape: const StadiumBorder(),
                 ),
                 onPressed: () => Navigator.push(
