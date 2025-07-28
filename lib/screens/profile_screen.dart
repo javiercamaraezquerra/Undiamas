@@ -23,14 +23,17 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  /* –– preferencias –– */
   bool _isDark = false;
   bool _notifDaily = true;
   bool _notifMilestones = true;
   bool _autoBackup = false;
 
+  /* –– progreso –– */
   DateTime? _startDate;
   int _daysClean = 0;
 
+  /* –– cajas Hive –– */
   late Future<Box<DiaryEntry>> _diaryBoxFuture;
 
   @override
@@ -42,6 +45,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadPrefs();
   }
 
+  /* ───────── prefs ───────── */
   Future<void> _loadPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     _isDark = prefs.getBool('isDarkMode') ?? false;
@@ -212,55 +216,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('Perfil'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          ListTile(
-            leading: const Icon(Icons.brightness_6),
-            title: const Text('Modo oscuro'),
-            trailing: Switch(value: _isDark, onChanged: _toggleTheme),
-          ),
-          ListTile(
-            leading: const Icon(Icons.notifications_active_outlined),
-            title: const Text('Notificación diaria de reflexión'),
-            trailing: Switch(value: _notifDaily, onChanged: _toggleDailyNotif),
-          ),
-          ListTile(
-            leading: const Icon(Icons.flag),
-            title: const Text('Notificaciones de logros'),
-            trailing:
-                Switch(value: _notifMilestones, onChanged: _toggleMilestoneNotif),
-          ),
-          ListTile(
-            leading: const Icon(Icons.cloud_sync),
-            title: const Text('Copias automáticas en Drive'),
-            trailing: Switch(value: _autoBackup, onChanged: _toggleAutoBackup),
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.cloud_download),
-            title: const Text('Restaurar desde Drive'),
-            onTap: _restoreFromDrive,
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.refresh),
-            title: const Text('Reiniciar contador'),
-            subtitle: const Text('Establece hoy y ahora como inicio'),
-            onTap: _resetSoberDate,
-          ),
-          const Divider(),
-          if (_startDate != null) ..._buildProgressSection(),
-          const Divider(),
-          _buildMoodSection(),
-          const SizedBox(height: 16),
-          _buildDisclaimer(),
-        ],
+      appBar: AppBar(title: const Text('Perfil')),
+      body: SafeArea(
+        top: true,
+        bottom: false,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            ListTile(
+              leading: const Icon(Icons.brightness_6),
+              title: const Text('Modo oscuro'),
+              trailing: Switch(value: _isDark, onChanged: _toggleTheme),
+            ),
+            ListTile(
+              leading: const Icon(Icons.notifications_active_outlined),
+              title: const Text('Notificación diaria de reflexión'),
+              trailing: Switch(value: _notifDaily, onChanged: _toggleDailyNotif),
+            ),
+            ListTile(
+              leading: const Icon(Icons.flag),
+              title: const Text('Notificaciones de logros'),
+              trailing:
+                  Switch(value: _notifMilestones, onChanged: _toggleMilestoneNotif),
+            ),
+            ListTile(
+              leading: const Icon(Icons.cloud_sync),
+              title: const Text('Copias automáticas en Drive'),
+              trailing: Switch(value: _autoBackup, onChanged: _toggleAutoBackup),
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.cloud_download),
+              title: const Text('Restaurar desde Drive'),
+              onTap: _restoreFromDrive,
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.refresh),
+              title: const Text('Reiniciar contador'),
+              subtitle: const Text('Establece hoy y ahora como inicio'),
+              onTap: _resetSoberDate,
+            ),
+            const Divider(),
+            if (_startDate != null) ..._buildProgressSection(),
+            const Divider(),
+            _buildMoodSection(),
+            const SizedBox(height: 16),
+            _buildDisclaimer(),
+          ],
+        ),
       ),
     );
   }
@@ -326,8 +330,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildDisclaimer() {
     return Text(
       _kDisclaimer,
-      style:
-          Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+      style: Theme.of(context)
+          .textTheme
+          .bodySmall
+          ?.copyWith(color: Colors.grey[600]),
       textAlign: TextAlign.justify,
     );
   }
