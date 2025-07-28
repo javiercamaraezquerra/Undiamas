@@ -46,7 +46,12 @@ flutter:
     - assets/audio/relax60s.mp3
     - assets/data/reflections.json
     - packages/timezone/data/latest_all.tzf
-
+    # Imagen de fondo (la que me mostraste o la que prefieras)
+    - assets/images/bg_mountains.jpg
+    # Si en el futuro añades PNG separados, declara aquí:
+    # - assets/images/sun.png
+    # - assets/images/figure.png
+    
 flutter_icons:
   image_path: assets/images/logo.png
   android: true
