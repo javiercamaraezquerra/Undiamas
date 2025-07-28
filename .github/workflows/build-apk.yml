@@ -4,137 +4,173 @@ on:
   push:
     branches: [ Final-2 ]
 
+# ★ MOD ────────────────────────────────────────────────────────────
+# Cancela ejecuciones anteriores en la misma rama (ahorra minutos)
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+# ──────────────────────────────────────────────────────────────────
+
 jobs:
   build-release:
     runs-on: ubuntu-latest
 
     steps:
-      # 1) Obtener el código
-      - name: Checkout code
-        uses: actions/checkout@v3
+    # 1) Checkout
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 1                       # ★ MOD (más rápido)
 
-      # 2) Verificar el MP3 existe
-      - name: Comprobar que el MP3 existe en el repo
-        run: |
-          if [ ! -f assets/audio/relax60s.mp3 ]; then
-            echo "❌ El archivo assets/audio/relax60s.mp3 no existe"
-            exit 1
-          fi
-          echo "✅ MP3 encontrado en el repo. Tamaño:"
-          du -h assets/audio/relax60s.mp3
-
-      # 3) (opcional) Recodificación MP3
-      - name: Instalar FFmpeg y recodificar MP3
-        run: |
+    # 2) Asegurar FFmpeg (la imagen ubuntu‑24 ya lo suele traer)
+    - name: Ensure FFmpeg
+      # ★ MOD instala sólo si falta → evita apt-get update de 40‑60 s
+      run: |
+        if ! command -v ffmpeg &>/dev/null; then
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg
-          ffmpeg -i assets/audio/relax60s.mp3 -codec:a libmp3lame -b:a 128k assets/audio/relax_fixed.mp3
-          rm assets/audio/relax60s.mp3
-          mv assets/audio/relax_fixed.mp3 assets/audio/relax60s.mp3
-          echo "✅ MP3 recodificado (128 kbps CBR)"
+        fi
+        ffmpeg -version | head -n1
 
-      # 4) Instalar Flutter
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
+    # 3) Re‑codificar MP3 (mantiene funcionalidad)
+    - name: Re‑encode MP3
+      run: |
+        if [ ! -f assets/audio/relax60s.mp3 ]; then
+          echo "❌ assets/audio/relax60s.mp3 no existe"; exit 1;
+        fi
+        ffmpeg -y -i assets/audio/relax60s.mp3 -codec:a libmp3lame -b:a 128k /tmp/relax.mp3
+        mv /tmp/relax.mp3 assets/audio/relax60s.mp3
+        echo "✅ MP3 recodificado (128 kbps CBR)"
 
-      # 5) Dependencias
-      - name: Install Pub dependencies
-        run: flutter pub get
+    # 4) Flutter SDK (con caché interno)  ★ MOD cache:true
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: stable
+        cache: true
 
-      # 6) Generar iconos
-      - name: Generate launcher icons
-        run: dart run flutter_launcher_icons
+    # 5) Restaurar caches Pub y Gradle  ★ MOD (acelera builds sucesivos)
+    - name: Restore Pub cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.pub-cache
+        key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+        restore-keys: ${{ runner.os }}-pub-
 
-      # 6.1) Auto‑fixes y formato
-      - name: Dart fix (apply)
-        run: dart fix --apply
+    - name: Restore Gradle cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: ${{ runner.os }}-gradle-
 
-      - name: Dart format
-        run: dart format --output=none .
+    # 6) Dependencias
+    - name: Install Pub dependencies
+      run: flutter pub get
 
-      # 6.2) Análisis estático (no bloquea la build)
-      - name: Flutter analyze
-        run: flutter analyze --no-pub --no-fatal-warnings --no-fatal-infos
+    # 7) Generar iconos
+    - name: Generate launcher icons
+      run: dart run flutter_launcher_icons
 
-      # 6.3) Tests unitarios
-      - name: Flutter tests
-        run: flutter test
+    # 7.1) Auto‑fixes y formato
+    - name: Dart fix (apply)
+      run: dart fix --apply
 
-      # 7) Keystore
-      - name: Decode keystore
-        run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/undiamas.jks
+    - name: Dart format
+      run: dart format --output=none .
 
-      - name: Create key.properties
-        run: |
-          cat > android/key.properties <<EOF
-          storePassword=${{ secrets.STORE_PASSWORD }}
-          keyPassword=${{ secrets.KEY_PASSWORD }}
-          keyAlias=${{ secrets.KEY_ALIAS }}
-          storeFile=undiamas.jks
-          EOF
+    # 7.2) Análisis estático (no bloquea la build)
+    - name: Flutter analyze
+      run: flutter analyze --no-pub --no-fatal-warnings --no-fatal-infos
 
-      # 7.1) Mostrar SHA‑1 de la UPLOAD KEY (informativo)
-      - name: Show upload key SHA‑1
-        run: |
-          keytool -list -v \
-            -keystore android/app/undiamas.jks \
-            -alias ${{ secrets.KEY_ALIAS }} \
-            -storepass ${{ secrets.STORE_PASSWORD }} \
-            -keypass  ${{ secrets.KEY_PASSWORD }} | grep 'SHA1:' || true
+    # 7.3) Tests unitarios
+    - name: Flutter tests
+      run: flutter test
 
-      # 7.1‑bis) Generar debug keystore (solo para la huella)
-      - name: Generate debug keystore
-        run: |
-          mkdir -p ~/.android
-          keytool -genkeypair -dname "CN=Android,O=Android,C=US" \
-            -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
-            -keystore ~/.android/debug.keystore \
-            -storepass android -keypass android
+    # 8) Keystore
+    - name: Decode keystore
+      run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/undiamas.jks
 
-      # 7.2) Mostrar SHA‑1 debug key
-      - name: Show debug key SHA‑1
-        run: |
-          keytool -list -v \
-            -keystore ~/.android/debug.keystore \
-            -alias androiddebugkey \
-            -storepass android -keypass android | grep 'SHA1:' || true
+    - name: Create key.properties
+      run: |
+        cat > android/key.properties <<EOF
+        storePassword=${{ secrets.STORE_PASSWORD }}
+        keyPassword=${{ secrets.KEY_PASSWORD }}
+        keyAlias=${{ secrets.KEY_ALIAS }}
+        storeFile=undiamas.jks
+        EOF
 
-      # 8) Compilar APK release (para pruebas locales)
-      - name: Build release APK
-        run: flutter build apk --release
+    - name: Show upload key SHA‑1 (info)
+      run: |
+        keytool -list -v \
+          -keystore android/app/undiamas.jks \
+          -alias ${{ secrets.KEY_ALIAS }} \
+          -storepass ${{ secrets.STORE_PASSWORD }} \
+          -keypass  ${{ secrets.KEY_PASSWORD }} | grep 'SHA1:' || true
 
-      # 9) Compilar AAB release
-      - name: Build release AAB
-        run: flutter build appbundle --release
+    - name: Generate debug keystore
+      run: |
+        mkdir -p ~/.android
+        keytool -genkeypair -dname "CN=Android,O=Android,C=US" \
+          -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+          -keystore ~/.android/debug.keystore \
+          -storepass android -keypass android
 
-      # 9.1) Guardar el mapping.txt de R8  ★ NUEVO
-      - name: Archive R8 mapping file
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: r8-mapping
-          path: build/app/outputs/mapping/release/mapping.txt
+    - name: Show debug key SHA‑1
+      run: |
+        keytool -list -v \
+          -keystore ~/.android/debug.keystore \
+          -alias androiddebugkey \
+          -storepass android -keypass android | grep 'SHA1:' || true
 
-      # 10) Verificar que el MP3 está dentro del APK
-      - name: Verificar MP3 dentro del APK
-        run: |
-          APK=build/app/outputs/flutter-apk/app-release.apk
-          unzip -l $APK | grep assets/audio/relax60s.mp3 || {
-            echo "❌ El MP3 no se incluyó en el APK"; exit 1; }
-          echo "✅ MP3 presente en el APK"
+    # 9) Build AAB primero  ★ MOD  (el más pesado)
+    - name: Build release AAB
+      run: flutter build appbundle --release --verbose
 
-      # 11) Subir artefactos (APK y AAB)
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: undiamas-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+    # 10) Build APK reutilizando cache Gradle  ★ MOD (≈30‑40 s)
+    - name: Build release APK
+      run: flutter build apk --release --verbose
 
-      - name: Upload AAB artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: undiamas-aab
-          path: build/app/outputs/bundle/release/app-release.aab
+    # 11) Guardar mapping.txt
+    - name: Archive R8 mapping file
+      uses: actions/upload-artifact@v4
+      with:
+        name: r8-mapping
+        path: build/app/outputs/mapping/release/mapping.txt
+
+    # 12) Verificar MP3 dentro del APK
+    - name: Check MP3 in APK
+      run: |
+        unzip -l build/app/outputs/flutter-apk/app-release.apk assets/audio/relax60s.mp3
+
+    # 13) Subir artefactos
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: undiamas-apk
+        path: build/app/outputs/flutter-apk/app-release.apk
+
+    - name: Upload AAB artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: undiamas-aab
+        path: build/app/outputs/bundle/release/app-release.aab
+
+    # 14) Guardar caches tras la build  ★ MOD
+    - name: Save Pub cache
+      if: always()
+      uses: actions/cache/save@v4
+      with:
+        path: ~/.pub-cache
+        key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+
+    - name: Save Gradle cache
+      if: always()
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
