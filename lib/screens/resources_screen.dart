@@ -57,10 +57,15 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
     }).toList();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Recursos')),
+      extendBodyBehindAppBar: true,
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        title: const Text('Recursos'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
       body: Column(
         children: [
-          // ── Buscador ───────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.all(12),
             child: TextField(
@@ -72,7 +77,6 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
               onChanged: (q) => setState(() => _query = q),
             ),
           ),
-          // ── Chips de categoría ─────────────────────────────────────
           SizedBox(
             height: 40,
             child: ListView(
@@ -93,7 +97,6 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          // ── Lista de recursos ──────────────────────────────────────
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -191,7 +194,7 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
   }
 }
 
-// ─────────────────── Modelo ───────────────────
+/* ─────────────────── Modelo ─────────────────── */
 enum _ResType { web, pdf, video, podcast }
 
 class _Resource {
