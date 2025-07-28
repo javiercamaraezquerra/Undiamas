@@ -57,7 +57,7 @@ class MountainBackground extends StatelessWidget {
           // 1 · Imagen de montañas (sin filtros)
           Positioned.fill(
             child: Image.asset(
-              'assets/images/bg_mountains_vert.jpg',
+              'assets/images/bg_mountains.png',
               alignment: Alignment.topCenter,
               fit: BoxFit.cover,
             ),
