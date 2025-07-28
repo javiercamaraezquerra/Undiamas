@@ -7,6 +7,8 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:just_audio/just_audio.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../widgets/mountain_background.dart';
+
 class SosScreen extends StatefulWidget {
   const SosScreen({super.key});
   @override
@@ -26,9 +28,8 @@ class _SosScreenState extends State<SosScreen> {
   void initState() {
     super.initState();
     _player = AudioPlayer();
-    _playerSub = _player.playerStateStream.listen(
-      (s) => setState(() => _isPlaying = s.playing),
-    );
+    _playerSub =
+        _player.playerStateStream.listen((s) => setState(() => _isPlaying = s.playing));
     _preloadAudio();
     _loadQuote();
   }
@@ -38,8 +39,8 @@ class _SosScreenState extends State<SosScreen> {
       await _player.setAsset('assets/audio/relax60s.mp3');
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('No se encontró el audio de meditación')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('No se encontró el audio de meditación')));
       }
     }
   }
@@ -58,8 +59,8 @@ class _SosScreenState extends State<SosScreen> {
       _isPlaying ? await _player.pause() : await _player.play();
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Error al reproducir el audio de meditación')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Error al reproducir el audio')));
       }
     }
   }
@@ -79,84 +80,87 @@ class _SosScreenState extends State<SosScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Necesito ayuda')),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Text('Tengo ganas de consumir',
-                style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 12),
-
-            // ── CALMA INMEDIATA ──────────────────────────────────────────
-            _sectionTitle('Calma inmediata'),
-            _actionButton(
-              icon: Icons.self_improvement,
-              label: 'Respirar 60 s',
-              onTap: _showBreathingDialog,
-            ),
-            _actionButton(
-              icon: Icons.fitness_center,
-              label: 'Relajación muscular',
-              onTap: _showMuscleDialog,
-            ),
-            _actionButton(
-              icon: Icons.landscape,
-              label: 'Visualización guiada',
-              onTap: _showVisualizationDialog,
-            ),
-            _actionButton(
-              icon: Icons.spa,
-              label: 'Grounding 5‑4‑3‑2‑1',
-              onTap: _showGroundingDialog,
-            ),
-
-            // ── DISTRÁETE ───────────────────────────────────────────────
-            const SizedBox(height: 16),
-            _sectionTitle('Distráete'),
-            if (_quote != null)
-              Card(
-                margin: const EdgeInsets.symmetric(vertical: 6),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(_quote!, textAlign: TextAlign.center),
+      extendBodyBehindAppBar: true,
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        title: const Text('Necesito ayuda'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: Stack(
+        children: [
+          const MountainBackground(pageIndex: 0),
+          SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Text('Tengo ganas de consumir',
+                    style: Theme.of(context).textTheme.headlineSmall),
+                const SizedBox(height: 12),
+                _sectionTitle('Calma inmediata'),
+                _actionButton(
+                  icon: Icons.self_improvement,
+                  label: 'Respirar 60 s',
+                  onTap: _showBreathingDialog,
                 ),
-              ),
-            _actionButton(
-              icon: Icons.refresh,
-              label: 'Otra cita',
-              onTap: _loadQuote,
+                _actionButton(
+                  icon: Icons.fitness_center,
+                  label: 'Relajación muscular',
+                  onTap: _showMuscleDialog,
+                ),
+                _actionButton(
+                  icon: Icons.landscape,
+                  label: 'Visualización guiada',
+                  onTap: _showVisualizationDialog,
+                ),
+                _actionButton(
+                  icon: Icons.spa,
+                  label: 'Grounding 5‑4‑3‑2‑1',
+                  onTap: _showGroundingDialog,
+                ),
+                const SizedBox(height: 16),
+                _sectionTitle('Distráete'),
+                if (_quote != null)
+                  Card(
+                    margin: const EdgeInsets.symmetric(vertical: 6),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(_quote!, textAlign: TextAlign.center),
+                    ),
+                  ),
+                _actionButton(
+                  icon: Icons.refresh,
+                  label: 'Otra cita',
+                  onTap: _loadQuote,
+                ),
+                _actionButton(
+                  icon: _isPlaying ? Icons.pause : Icons.headset,
+                  label: _isPlaying ? 'Pausar audio' : 'Audio de meditación',
+                  onTap: _toggleAudio,
+                ),
+                const SizedBox(height: 16),
+                _sectionTitle('Pide ayuda'),
+                _actionButton(
+                  icon: Icons.support_agent,
+                  label: 'Línea ayuda',
+                  onTap: () => _callNumber(_helpline),
+                ),
+                _actionButton(
+                  icon: Icons.warning,
+                  label: 'Emergencias 112',
+                  onTap: () => _callNumber(_emergency),
+                ),
+              ],
             ),
-            _actionButton(
-              icon: _isPlaying ? Icons.pause : Icons.headset,
-              label: _isPlaying ? 'Pausar audio' : 'Audio de meditación',
-              onTap: _toggleAudio,
-            ),
-
-            // ── PIDE AYUDA ──────────────────────────────────────────────
-            const SizedBox(height: 16),
-            _sectionTitle('Pide ayuda'),
-            _actionButton(
-              icon: Icons.support_agent,
-              label: 'Línea ayuda',
-              onTap: () => _callNumber(_helpline),
-            ),
-            _actionButton(
-              icon: Icons.warning,
-              label: 'Emergencias 112',
-              onTap: () => _callNumber(_emergency),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  // ── Utilidades UI ─────────────────────────────────────────────────────
-  Widget _sectionTitle(String text) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Text(text, style: Theme.of(context).textTheme.titleMedium),
-      );
+  /* ───────── utilidades UI ───────── */
+  Widget _sectionTitle(String text) =>
+      Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Text(text, style: Theme.of(context).textTheme.titleMedium));
 
   Widget _actionButton(
           {required IconData icon,
@@ -176,7 +180,7 @@ class _SosScreenState extends State<SosScreen> {
         ),
       );
 
-  // ── Diálogos guiados ──────────────────────────────────────────────────
+  /* ───────── diálogos guiados ───────── */
   void _showBreathingDialog() => showDialog(
         context: context,
         barrierDismissible: false,
@@ -193,9 +197,7 @@ class _SosScreenState extends State<SosScreen> {
               '3) Inhala al tensar, exhala al soltar.\n'
               'Tarda ~2 min y reduce la activación simpática.'),
           actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cerrar')),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar')),
           ],
         ),
       );
@@ -209,9 +211,7 @@ class _SosScreenState extends State<SosScreen> {
               'Observa colores, sonidos y temperatura.\n'
               'Respira lento y mantén la imagen 60 s.'),
           actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cerrar')),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar')),
           ],
         ),
       );
@@ -229,15 +229,13 @@ class _SosScreenState extends State<SosScreen> {
               '✔ 1 que puedas SABOREAR\n\n'
               'Lleva ~2 min.'),
           actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Iniciar')),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Iniciar')),
           ],
         ),
       );
 }
 
-// ── Widget de respiración (círculo animado + temporizador) ─────────────
+/* ───────── widget respiración ───────── */
 class _BreathingDialog extends StatefulWidget {
   const _BreathingDialog();
 
@@ -253,10 +251,8 @@ class _BreathingDialogState extends State<_BreathingDialog>
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 4),
-    )..repeat(reverse: true);
+    _ctrl = AnimationController(vsync: this, duration: const Duration(seconds: 4))
+      ..repeat(reverse: true);
     Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) return t.cancel();
       setState(() => _seconds--);
