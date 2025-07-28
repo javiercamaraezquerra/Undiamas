@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 /// Fondo ilustrado con montañas, sol y figura.
-/// Incluye un *scrim* (degradado negro → transparente) en la parte superior
-/// para garantizar contraste de los títulos independientemente del fondo.
+///   · Scrim superior para contraste (negro → transparente).  
+///   · Figura estática (no se anima al cambiar de pestaña) y ligeramente
+///     desplazada a la izquierda.
+///   · Imagen de figura se muestra con sus colores originales (sin tinte).
 class MountainBackground extends StatelessWidget {
-  final int pageIndex;              // pestaña actual (0‑4)
+  final int pageIndex;              // sigue moviendo sólo el sol
   final Duration duration;
 
   const MountainBackground({
@@ -13,22 +15,16 @@ class MountainBackground extends StatelessWidget {
     this.duration = const Duration(milliseconds: 800),
   });
 
-  /* ───────── Posiciones ───────── */
-  Alignment _sunPos(int i) => [
-        const Alignment(0.00, -0.90),
-        const Alignment(-0.55, -0.88),
-        const Alignment(0.55, -0.86),
+  Alignment get _sunAlignment => [
+        const Alignment(0.65, -0.90),
+        const Alignment(0.75, -0.95),
+        const Alignment(0.55, -0.95),
         const Alignment(-0.25, -0.87),
         const Alignment(0.25, -0.90),
-      ][i % 5];
+      ][pageIndex % 5];
 
-  Alignment _figPos(int i) => [
-        const Alignment(0.00, 0.86),
-        const Alignment(-0.40, 0.88),
-        const Alignment(0.40, 0.86),
-        const Alignment(0.10, 0.90),
-        const Alignment(0.28, 0.86),
-      ][i % 5];
+  // figura fija
+  static const Alignment _figureAlignment = Alignment(-0.65, 0.86);
 
   static const _figures = [
     'assets/images/figure_0.png',
@@ -37,13 +33,12 @@ class MountainBackground extends StatelessWidget {
     'assets/images/figure_3.png',
   ];
 
-  /* ───────── Build ───────── */
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (_, cs) {
-      final width   = cs.biggest.width;
-      final sunDia  = width * .35;
-      final figDia  = width * .26;
+      final w = cs.biggest.width;
+      final sunDia = w * .35;
+      final figDia = w * .26;
 
       return Stack(
         children: [
@@ -56,7 +51,7 @@ class MountainBackground extends StatelessWidget {
             ),
           ),
 
-          /* 2 · Scrim superior para contraste */
+          /* 2 · Scrim superior */
           const Positioned(
             top: 0,
             left: 0,
@@ -73,9 +68,9 @@ class MountainBackground extends StatelessWidget {
             ),
           ),
 
-          /* 3 · Sol */
+          /* 3 · Sol (animado) */
           AnimatedAlign(
-            alignment: _sunPos(pageIndex),
+            alignment: _sunAlignment,
             duration: duration,
             curve: Curves.easeInOut,
             child: ClipOval(
@@ -88,17 +83,13 @@ class MountainBackground extends StatelessWidget {
             ),
           ),
 
-          /* 4 · Figura */
-          AnimatedAlign(
-            alignment: _figPos(pageIndex),
-            duration: duration,
-            curve: Curves.easeInOut,
+          /* 4 · Figura (estática, sin tinte) */
+          Align(
+            alignment: _figureAlignment,
             child: Image.asset(
               _figures[pageIndex % _figures.length],
               width: figDia,
               fit: BoxFit.contain,
-              color: const Color(0xFF0D47A1),
-              colorBlendMode: BlendMode.srcATop,
             ),
           ),
         ],
