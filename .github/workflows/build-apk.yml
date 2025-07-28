@@ -4,12 +4,10 @@ on:
   push:
     branches: [ Final-2 ]
 
-# ★ MOD ────────────────────────────────────────────────────────────
-# Cancela ejecuciones anteriores en la misma rama (ahorra minutos)
+# Cancela ejecuciones anteriores en la misma rama
 concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
-# ──────────────────────────────────────────────────────────────────
 
 jobs:
   build-release:
@@ -20,45 +18,40 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
       with:
-        fetch-depth: 1                       # ★ MOD (más rápido)
+        fetch-depth: 1            # más rápido: shallow clone
 
-    # 2) Asegurar FFmpeg (la imagen ubuntu‑24 ya lo suele traer)
+    # 2) FFmpeg sólo si falta
     - name: Ensure FFmpeg
-      # ★ MOD instala sólo si falta → evita apt-get update de 40‑60 s
       run: |
-        if ! command -v ffmpeg &>/dev/null; then
+        command -v ffmpeg >/dev/null || {
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg
-        fi
+        }
         ffmpeg -version | head -n1
 
-    # 3) Re‑codificar MP3 (mantiene funcionalidad)
+    # 3) Re‑codificar MP3
     - name: Re‑encode MP3
       run: |
-        if [ ! -f assets/audio/relax60s.mp3 ]; then
-          echo "❌ assets/audio/relax60s.mp3 no existe"; exit 1;
-        fi
+        [ -f assets/audio/relax60s.mp3 ] || { echo "❌ MP3 no existe"; exit 1; }
         ffmpeg -y -i assets/audio/relax60s.mp3 -codec:a libmp3lame -b:a 128k /tmp/relax.mp3
         mv /tmp/relax.mp3 assets/audio/relax60s.mp3
-        echo "✅ MP3 recodificado (128 kbps CBR)"
+        echo "✅ MP3 recodificado (128 kbps CBR)"
 
-    # 4) Flutter SDK (con caché interno)  ★ MOD cache:true
-    - name: Setup Flutter
-      uses: subosito/flutter-action@v2
+    # 4) Flutter SDK + caché
+    - uses: subosito/flutter-action@v2
       with:
         channel: stable
         cache: true
 
-    # 5) Restaurar caches Pub y Gradle  ★ MOD (acelera builds sucesivos)
-    - name: Restore Pub cache
-      uses: actions/cache@v4
+    # 5) Restaurar caches Pub & Gradle
+    - uses: actions/cache@v4
+      name: Restore Pub cache
       with:
         path: ~/.pub-cache
         key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
         restore-keys: ${{ runner.os }}-pub-
-
-    - name: Restore Gradle cache
-      uses: actions/cache@v4
+    - uses: actions/cache@v4
+      name: Restore Gradle cache
       with:
         path: |
           ~/.gradle/caches
@@ -66,109 +59,76 @@ jobs:
         key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
         restore-keys: ${{ runner.os }}-gradle-
 
-    # 6) Dependencias
-    - name: Install Pub dependencies
-      run: flutter pub get
+    # 6) Dependencias + generación de recursos + quality‑gates
+    - run: flutter pub get
+    - run: dart run flutter_launcher_icons
+    - run: dart fix --apply
+    - run: dart format --output=none .
+    - run: flutter analyze --no-pub --no-fatal-warnings --no-fatal-infos
+    - run: flutter test
 
-    # 7) Generar iconos
-    - name: Generate launcher icons
-      run: dart run flutter_launcher_icons
-
-    # 7.1) Auto‑fixes y formato
-    - name: Dart fix (apply)
-      run: dart fix --apply
-
-    - name: Dart format
-      run: dart format --output=none .
-
-    # 7.2) Análisis estático (no bloquea la build)
-    - name: Flutter analyze
-      run: flutter analyze --no-pub --no-fatal-warnings --no-fatal-infos
-
-    # 7.3) Tests unitarios
-    - name: Flutter tests
-      run: flutter test
-
-    # 8) Keystore
-    - name: Decode keystore
-      run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/undiamas.jks
-
-    - name: Create key.properties
-      run: |
+    # 7) Keystore y propiedades
+    - run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/undiamas.jks
+    - run: |
         cat > android/key.properties <<EOF
         storePassword=${{ secrets.STORE_PASSWORD }}
         keyPassword=${{ secrets.KEY_PASSWORD }}
         keyAlias=${{ secrets.KEY_ALIAS }}
         storeFile=undiamas.jks
         EOF
+    - run: |
+        keytool -list -v -keystore android/app/undiamas.jks -alias ${{ secrets.KEY_ALIAS }} \
+          -storepass ${{ secrets.STORE_PASSWORD }} -keypass ${{ secrets.KEY_PASSWORD }} | grep 'SHA1:' || true
 
-    - name: Show upload key SHA‑1 (info)
-      run: |
-        keytool -list -v \
-          -keystore android/app/undiamas.jks \
-          -alias ${{ secrets.KEY_ALIAS }} \
-          -storepass ${{ secrets.STORE_PASSWORD }} \
-          -keypass  ${{ secrets.KEY_PASSWORD }} | grep 'SHA1:' || true
-
-    - name: Generate debug keystore
-      run: |
+    # 8) Debug keystore (para huella)
+    - run: |
         mkdir -p ~/.android
-        keytool -genkeypair -dname "CN=Android,O=Android,C=US" \
-          -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
-          -keystore ~/.android/debug.keystore \
-          -storepass android -keypass android
-
-    - name: Show debug key SHA‑1
-      run: |
-        keytool -list -v \
-          -keystore ~/.android/debug.keystore \
-          -alias androiddebugkey \
+        keytool -genkeypair -dname "CN=Android,O=Android,C=US" -alias androiddebugkey \
+          -keyalg RSA -keysize 2048 -validity 10000 \
+          -keystore ~/.android/debug.keystore -storepass android -keypass android
+    - run: |
+        keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey \
           -storepass android -keypass android | grep 'SHA1:' || true
 
-    # 9) Build AAB primero  ★ MOD  (el más pesado)
+    # 9) Build AAB y luego APK (el APK reutiliza los artefactos)
     - name: Build release AAB
-      run: flutter build appbundle --release --verbose
-
-    # 10) Build APK reutilizando cache Gradle  ★ MOD (≈30‑40 s)
+      run: flutter build appbundle --release
     - name: Build release APK
-      run: flutter build apk --release --verbose
+      run: flutter build apk --release
 
-    # 11) Guardar mapping.txt
-    - name: Archive R8 mapping file
-      uses: actions/upload-artifact@v4
+    # 10) Subir mapping.txt
+    - uses: actions/upload-artifact@v4
       with:
         name: r8-mapping
         path: build/app/outputs/mapping/release/mapping.txt
 
-    # 12) Verificar MP3 dentro del APK
+    # 11) Verificar MP3 dentro del APK (corregido)
     - name: Check MP3 in APK
       run: |
-        unzip -l build/app/outputs/flutter-apk/app-release.apk assets/audio/relax60s.mp3
+        unzip -l build/app/outputs/flutter-apk/app-release.apk | \
+          grep -q 'assets/audio/relax60s.mp3' && \
+          echo "✅ MP3 presente en el APK" || { echo "❌ MP3 no encontrado"; exit 1; }
 
-    # 13) Subir artefactos
-    - name: Upload APK artifact
-      uses: actions/upload-artifact@v4
+    # 12) Subir artefactos finales
+    - uses: actions/upload-artifact@v4
       with:
         name: undiamas-apk
         path: build/app/outputs/flutter-apk/app-release.apk
-
-    - name: Upload AAB artifact
-      uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v4
       with:
         name: undiamas-aab
         path: build/app/outputs/bundle/release/app-release.aab
 
-    # 14) Guardar caches tras la build  ★ MOD
-    - name: Save Pub cache
+    # 13) Guardar caches (Pub + Gradle)
+    - uses: actions/cache/save@v4
       if: always()
-      uses: actions/cache/save@v4
+      name: Save Pub cache
       with:
         path: ~/.pub-cache
         key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
-
-    - name: Save Gradle cache
+    - uses: actions/cache/save@v4
       if: always()
-      uses: actions/cache/save@v4
+      name: Save Gradle cache
       with:
         path: |
           ~/.gradle/caches
