@@ -2,7 +2,7 @@ name: Build APK and AAB
 
 on:
   push:
-    branches: [ final-2 ]
+    branches: [ Final-2 ]
 
 jobs:
   build-release:
