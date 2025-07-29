@@ -16,8 +16,8 @@ class MountainBackground extends StatelessWidget {
   });
 
   Alignment get _sunAlignment => [
-        const Alignment(0.65, -0.90),
-        const Alignment(0.75, -0.95),
+        const Alignment(0.95, -0.90),
+        const Alignment(0.85, -0.95),
         const Alignment(0.55, -0.95),
         const Alignment(-0.25, -0.87),
         const Alignment(0.25, -0.90),
