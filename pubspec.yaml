@@ -62,10 +62,6 @@ flutter:
     - packages/timezone/data/latest_all.tzf
     - assets/images/bg_mountains.png
     - assets/images/sun.png
-    - assets/images/figure_0.png
-    - assets/images/figure_1.png
-    - assets/images/figure_2.png
-    - assets/images/figure_3.png
 
 flutter_icons:
   image_path: assets/images/logo.png
