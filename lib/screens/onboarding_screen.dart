@@ -8,6 +8,7 @@ import '../services/encryption_service.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
+
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
@@ -17,6 +18,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   DateTime? _startDateTime;
   String? _substance;
 
+  /* Sustancias sugeridas */
   final _options = [
     'Alcohol',
     'Hachís',
@@ -50,33 +52,31 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     AchievementService.scheduleMilestones(_startDateTime!);
   }
 
-  /* ───────── Selector de fecha y hora ───────── */
+  /* ───────── Selector fecha + hora ───────── */
   Future<void> _pickDateTime() async {
-    final pickedDate = await showDatePicker(
+    final date = await showDatePicker(
       context: context,
       firstDate: DateTime(2000),
       lastDate: DateTime.now(),
       initialDate: DateTime.now(),
     );
-    if (!mounted || pickedDate == null) return;
+    if (!mounted || date == null) return;
 
-    final pickedTime = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.now(),
-    );
-    if (!mounted || pickedTime == null) return;
+    final time =
+        await showTimePicker(context: context, initialTime: TimeOfDay.now());
+    if (!mounted || time == null) return;
 
     setState(() {
       _startDateTime = DateTime(
-        pickedDate.year,
-        pickedDate.month,
-        pickedDate.day,
-        pickedTime.hour,
-        pickedTime.minute,
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
       );
     });
 
-    await _pageCtrl.nextPage(
+    _pageCtrl.nextPage(
       duration: const Duration(milliseconds: 300),
       curve: Curves.ease,
     );
@@ -85,6 +85,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   /* ───────── UI ───────── */
   @override
   Widget build(BuildContext context) {
+    final onPrimary = Theme.of(context).colorScheme.onPrimary;
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
@@ -95,22 +97,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             controller: _pageCtrl,
             physics: const NeverScrollableScrollPhysics(),
             children: [
-              // ── PASO 1 ──
+              // ── PASO 1 ────────────────────────────────────────────────
               _StepContainer(
                 headline: 'Selecciona la fecha y hora\nde tu sobriedad',
                 center: ElevatedButton.icon(
                   icon: const Icon(Icons.calendar_month_outlined),
                   label: const Text('Elegir fecha y hora'),
-                  onPressed: _pickDateTime,
+                  onPressed: _pickDateTime,            // ⬅ botones SIN estilo extra
                 ),
                 subhead: _startDateTime == null
                     ? null
                     : '${_startDateTime!.day}/${_startDateTime!.month}/${_startDateTime!.year} – '
-                      '${_startDateTime!.hour.toString().padLeft(2, '0')}:'
-                      '${_startDateTime!.minute.toString().padLeft(2, '0')}',
+                        '${_startDateTime!.hour.toString().padLeft(2, '0')}:'
+                        '${_startDateTime!.minute.toString().padLeft(2, '0')}',
               ),
 
-              // ── PASO 2 ──
+              // ── PASO 2 ────────────────────────────────────────────────
               _StepContainer(
                 headline: '¿Cuál es tu sustancia principal?',
                 center: Wrap(
@@ -118,17 +120,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   runSpacing: 12,
                   alignment: WrapAlignment.center,
                   children: _options
-                      .map((e) => ChoiceChip(
-                            label: Text(e),
-                            selected: _substance == e,
-                            selectedColor: Colors.white.withOpacity(.25),
-                            labelStyle: const TextStyle(color: Colors.white),
-                            backgroundColor: Colors.white24,
-                            onSelected: (_) => setState(() => _substance = e),
-                          ))
+                      .map(
+                        (e) => ChoiceChip(
+                          label: Text(
+                            e,
+                            style: TextStyle(color: onPrimary), // ⇦ mismo color que “Siguiente”
+                          ),
+                          selected: _substance == e,
+                          selectedColor: Colors.white.withOpacity(.25),
+                          backgroundColor: Colors.white24,
+                          onSelected: (_) => setState(() => _substance = e),
+                        ),
+                      )
                       .toList(),
                 ),
                 bottom: ElevatedButton(
+                  // botón “Siguiente” queda con su color por defecto
                   onPressed: _substance == null
                       ? null
                       : () => _pageCtrl.nextPage(
@@ -139,7 +146,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
               ),
 
-              // ── PASO 3 ──
+              // ── PASO 3 ────────────────────────────────────────────────
               _StepContainer(
                 headline: '¡Todo listo!',
                 subhead: 'Recibirás frases motivacionales cada mañana.',
@@ -178,7 +185,7 @@ class _StepContainer extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
