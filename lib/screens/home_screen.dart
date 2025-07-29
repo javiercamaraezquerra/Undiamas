@@ -59,7 +59,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  /* ───────── Carga (y migración) de fecha ───────── */
+  /* ───────── Carga / migración ───────── */
   Future<void> _initDates() async {
     final cipher = await EncryptionService.getCipher();
     _box = await Hive.openBox(_boxName, encryptionCipher: cipher);
@@ -82,7 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  /* ───────── Actualiza duración y frase ───────── */
+  /* ───────── actualización ───────── */
   void _updateElapsed() {
     if (_startDate == null) return;
     final diff = DateTime.now().difference(_startDate!);
@@ -101,11 +101,11 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _quote = list[dayIndex % list.length] as String);
   }
 
-  /* ───────── Círculo con gradiente ───────── */
+  /* ───────── Glass chip ───────── */
   Widget _circle(String value, String label, double size, BuildContext ctx) {
-    final scheme = Theme.of(ctx).colorScheme;
-    final Color c1 = scheme.primary;
-    final Color c2 = scheme.primaryContainer;
+    final Color border = Colors.white.withOpacity(.40);
+    final Color c1 = Colors.white.withOpacity(.60);
+    final Color c2 = Colors.white.withOpacity(.25);
 
     return Container(
       width: size,
@@ -117,12 +117,14 @@ class _HomeScreenState extends State<HomeScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
+        border: Border.all(color: border, width: 1.4),
         boxShadow: const [
           BoxShadow(
-              blurRadius: 12,
-              spreadRadius: 1,
-              color: Colors.black26,
-              offset: Offset(0, 4)),
+            blurRadius: 12,
+            spreadRadius: 1,
+            color: Colors.black26,
+            offset: Offset(0, 4),
+          ),
         ],
       ),
       child: Center(
@@ -133,20 +135,20 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(
                     fontSize: size * 0.35,
                     fontWeight: FontWeight.bold,
-                    color: scheme.onPrimary)),
+                    color: Colors.black87)),
             const SizedBox(height: 2),
             Text(label,
                 style: Theme.of(ctx)
                     .textTheme
                     .bodySmall
-                    ?.copyWith(color: scheme.onPrimary.withOpacity(0.9))),
+                    ?.copyWith(color: Colors.black87)),
           ],
         ),
       ),
     );
   }
 
-  /* ───────── Fecha clip al último día ───────── */
+  /* ───────── utilidades tiempo ───────── */
   DateTime _clippedDate(DateTime start, int addYears, int addMonths) {
     final int baseMonth = start.month + addMonths;
     final int year = start.year + addYears + (baseMonth - 1) ~/ 12;
@@ -218,17 +220,11 @@ class _HomeScreenState extends State<HomeScreen> {
       mainCircles.add(_circle(monthsAll.toString(),
           monthsAll == 1 ? 'mes' : 'meses', mainSize, context));
     }
-    mainCircles.add(
-        _circle(days.toString(), days == 1 ? 'día' : 'días', mainSize, context));
+    mainCircles
+        .add(_circle(days.toString(), days == 1 ? 'día' : 'días', mainSize, context));
 
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('Inicio'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('Inicio')),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
@@ -253,16 +249,14 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 32),
               if (_quote.isNotEmpty) ...[
                 Card(
-                  margin: EdgeInsets.zero,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                  color: Colors.white.withOpacity(.8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
-                    child: Text(
-                      _quote,
-                      style: const TextStyle(fontSize: 18, fontStyle: FontStyle.italic),
-                      textAlign: TextAlign.center,
-                    ),
+                    child: Text(_quote,
+                        style:
+                            const TextStyle(fontSize: 18, fontStyle: FontStyle.italic),
+                        textAlign: TextAlign.center),
                   ),
                 ),
                 const SizedBox(height: 32),
