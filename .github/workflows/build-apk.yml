@@ -4,7 +4,6 @@ on:
   push:
     branches: [ Final-2 ]
 
-# Cancela ejecuciones anteriores en la misma rama
 concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
@@ -13,37 +12,50 @@ jobs:
   build-release:
     runs-on: ubuntu-latest
 
+    env:                                   # ★ NEW ➊ opciones Gradle
+      GRADLE_OPTS: -Dorg.gradle.configuration-cache=true -Dorg.gradle.parallel=true
+
     steps:
     # 1) Checkout
     - name: Checkout code
       uses: actions/checkout@v3
-      with:
-        fetch-depth: 1            # más rápido: shallow clone
+      with: { fetch-depth: 1 }
 
-    # 2) FFmpeg sólo si falta
+    # 2) ------- Android SDK / CMake ------------------------------------ #
+    # Restaura (o crea) la carpeta con CMake 3.22.1 para que Gradle no
+    # la vuelva a descargar cada vez.
+    - name: Restore Android‑SDK cache (CMake 3.22.1)
+      uses: actions/cache@v4
+      id: cmake-cache
+      with:
+        path: ${{ env.ANDROID_SDK_ROOT }}/cmake/3.22.1
+        key:  ${{ runner.os }}-cmake-3.22.1
+
+    - name: Install CMake 3.22.1 (only first run)
+      if: steps.cmake-cache.outputs.cache-hit != 'true'
+      run: |
+        echo "→ instalando CMake 3.22.1 en el SDK"
+        yes | $ANDROID_SDK_ROOT/tools/bin/sdkmanager "cmake;3.22.1" > /dev/null
+
+    # 3) FFmpeg (sólo si falta)
     - name: Ensure FFmpeg
       run: |
         command -v ffmpeg >/dev/null || {
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg
         }
-        ffmpeg -version | head -n1
 
-    # 3) Re‑codificar MP3
-    - name: Re‑encode MP3
-      run: |
+    # 4) Re‑encode MP3
+    - run: |
         [ -f assets/audio/relax60s.mp3 ] || { echo "❌ MP3 no existe"; exit 1; }
         ffmpeg -y -i assets/audio/relax60s.mp3 -codec:a libmp3lame -b:a 128k /tmp/relax.mp3
         mv /tmp/relax.mp3 assets/audio/relax60s.mp3
-        echo "✅ MP3 recodificado (128 kbps CBR)"
 
-    # 4) Flutter SDK + caché
+    # 5) Flutter SDK (con caché interno)
     - uses: subosito/flutter-action@v2
-      with:
-        channel: stable
-        cache: true
+      with: { channel: stable, cache: true }
 
-    # 5) Restaurar caches Pub & Gradle
+    # 6) -------- caches Pub & Gradle ----------------------------------- #
     - uses: actions/cache@v4
       name: Restore Pub cache
       with:
@@ -59,7 +71,7 @@ jobs:
         key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
         restore-keys: ${{ runner.os }}-gradle-
 
-    # 6) Dependencias + generación de recursos + quality‑gates
+    # 7) Dependencias + QA
     - run: flutter pub get
     - run: dart run flutter_launcher_icons
     - run: dart fix --apply
@@ -67,7 +79,7 @@ jobs:
     - run: flutter analyze --no-pub --no-fatal-warnings --no-fatal-infos
     - run: flutter test
 
-    # 7) Keystore y propiedades
+    # 8) Keystore
     - run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/undiamas.jks
     - run: |
         cat > android/key.properties <<EOF
@@ -76,40 +88,24 @@ jobs:
         keyAlias=${{ secrets.KEY_ALIAS }}
         storeFile=undiamas.jks
         EOF
-    - run: |
-        keytool -list -v -keystore android/app/undiamas.jks -alias ${{ secrets.KEY_ALIAS }} \
-          -storepass ${{ secrets.STORE_PASSWORD }} -keypass ${{ secrets.KEY_PASSWORD }} | grep 'SHA1:' || true
 
-    # 8) Debug keystore (para huella)
-    - run: |
-        mkdir -p ~/.android
-        keytool -genkeypair -dname "CN=Android,O=Android,C=US" -alias androiddebugkey \
-          -keyalg RSA -keysize 2048 -validity 10000 \
-          -keystore ~/.android/debug.keystore -storepass android -keypass android
-    - run: |
-        keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey \
-          -storepass android -keypass android | grep 'SHA1:' || true
-
-    # 9) Build AAB y luego APK (el APK reutiliza los artefactos)
+    # 9) Build AAB → APK  (Gradle usa config‑cache y CMake ya está)
     - name: Build release AAB
       run: flutter build appbundle --release
     - name: Build release APK
       run: flutter build apk --release
 
-    # 10) Subir mapping.txt
+    # 10) mapping.txt
     - uses: actions/upload-artifact@v4
       with:
         name: r8-mapping
         path: build/app/outputs/mapping/release/mapping.txt
 
-    # 11) Verificar MP3 dentro del APK (corregido)
-    - name: Check MP3 in APK
-      run: |
-        unzip -l build/app/outputs/flutter-apk/app-release.apk | \
-          grep -q 'assets/audio/relax60s.mp3' && \
-          echo "✅ MP3 presente en el APK" || { echo "❌ MP3 no encontrado"; exit 1; }
+    # 11) Verificar MP3
+    - run: |
+        unzip -l build/app/outputs/flutter-apk/app-release.apk | grep -q 'assets/audio/relax60s.mp3'
 
-    # 12) Subir artefactos finales
+    # 12) Artefactos
     - uses: actions/upload-artifact@v4
       with:
         name: undiamas-apk
@@ -119,18 +115,21 @@ jobs:
         name: undiamas-aab
         path: build/app/outputs/bundle/release/app-release.aab
 
-    # 13) Guardar caches (Pub + Gradle)
+    # 13) Guarda caches (Pub / Gradle / CMake)
     - uses: actions/cache/save@v4
       if: always()
-      name: Save Pub cache
       with:
         path: ~/.pub-cache
         key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
     - uses: actions/cache/save@v4
       if: always()
-      name: Save Gradle cache
       with:
         path: |
           ~/.gradle/caches
           ~/.gradle/wrapper
         key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+    - uses: actions/cache/save@v4
+      if: always()
+      with:
+        path: ${{ env.ANDROID_SDK_ROOT }}/cmake/3.22.1
+        key:  ${{ runner.os }}-cmake-3.22.1
