@@ -43,21 +43,17 @@ class AppTheme {
       bodyMedium: TextStyle(fontSize: 16),
     ).apply(bodyColor: Colors.black87, displayColor: Colors.black87),
     appBarTheme: const AppBarTheme(
-      foregroundColor: Colors.white,           // texto / iconos
-      backgroundColor: Colors.transparent,     // lo oscurece el scrim
+      foregroundColor: Colors.white,
+      backgroundColor: Colors.transparent,
       elevation: 0,
-      titleTextStyle: TextStyle(
-        fontSize: 24,
-        fontWeight: FontWeight.bold,
-        color: Colors.white,
-      ),
+      titleTextStyle:
+          TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: Colors.white.withOpacity(.15), // fondo semitransparente
+      fillColor: Colors.white.withOpacity(.15),
       border: const OutlineInputBorder(),
     ),
-    //  ⬇⬇⬇  Evita destello blanco entre pantallas
     pageTransitionsTheme: const PageTransitionsTheme(
       builders: {
         TargetPlatform.android: _NoFlashBuilder(),
@@ -75,11 +71,16 @@ class AppTheme {
       headlineMedium: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
       headlineSmall: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
       bodyMedium: TextStyle(fontSize: 16),
-    ),
+    ).apply(bodyColor: Colors.white, displayColor: Colors.white), // ← texto claro
     appBarTheme: const AppBarTheme(
       foregroundColor: Colors.white,
       backgroundColor: Colors.transparent,
       elevation: 0,
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: Colors.white.withOpacity(.10),
+      border: const OutlineInputBorder(),
     ),
     pageTransitionsTheme: const PageTransitionsTheme(
       builders: {
