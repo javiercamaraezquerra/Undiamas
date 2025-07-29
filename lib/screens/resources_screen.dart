@@ -235,12 +235,12 @@ class _Resource {
   }
 }
 
-// ───────────────── Lista de recursos verificados (jul‑2025) ─────────────────
+// ───────────────── Lista de recursos verificados (jul-2025) ─────────────────
 final List<_Resource> _resources = [
   // ── CONOCIMIENTO ───────────────────────────────────────────────
   _Resource(
     id: 'neuro',
-    title: 'La ciencia de la adicción (NIDA)',
+    title: 'La ciencia de la adicción (NIDA)',
     category: 'Conocimiento',
     content:
         'Folleto ilustrado que explica cómo las drogas alteran el cerebro y por qué '
@@ -262,32 +262,32 @@ final List<_Resource> _resources = [
   // ── ESTRATEGIAS ────────────────────────────────────────────────
   _Resource(
     id: 'urge',
-    title: 'Guion de meditación “Urge‑surfing”',
+    title: 'Guion de meditación “Urge-surfing”',
     category: 'Estrategias',
     content:
-        'Script paso a paso (4 pág.) para “surfear” la ola de craving sin ceder al impulso.',
+        'Script paso a paso (4 pág.) para “surfear” la ola de craving sin ceder al impulso.',
     url:
         'https://www.therapistaid.com/worksheets/urge-surfing-script?language=es',
     type: _ResType.pdf,
   ),
   _Resource(
     id: 'relapse',
-    title: 'Plan personal de prevención de recaídas',
+    title: 'Manual del Programa de Prevención de Recaídas',
     category: 'Estrategias',
     content:
-        'Plantilla oficial SAMHSA (español) para anticipar señales y actuar a tiempo.',
+        'Guía CONADIC (152 págs.) basada en el modelo Marlatt & Gordon, con ejercicios prácticos.',
     url:
-        'https://store.samhsa.gov/sites/default/files/SAMHSA_Digital_Download/pep20-02-01-spa.pdf',
+        'https://raulmartindelcampo.files.wordpress.com/2016/11/manual-recaidas-mexico-1.pdf',
     type: _ResType.pdf,
   ),
   _Resource(
     id: 'thought_record',
-    title: 'Registro de pensamientos (TCC)',
+    title: 'Registro de pensamientos (TCC) – hoja de trabajo',
     category: 'Estrategias',
     content:
-        'Plantilla cognitivo-conductual para cuestionar pensamientos automáticos y prevenir recaídas.',
+        'Plantilla de Therapist Aid (1 pág.) para identificar y reestructurar pensamientos automáticos.',
     url:
-        'https://www.fundacionmar.org.ar/images/fichas/registro-pensamientos.pdf',
+        'https://www.therapistaid.com/worksheets/thought-record?language=es',
     type: _ResType.pdf,
   ),
   _Resource(
@@ -314,12 +314,12 @@ final List<_Resource> _resources = [
   ),
   _Resource(
     id: 'selfcomp',
-    title: 'Ejercicios de autocompasión',
+    title: 'Ejercicios de autocompasión (Kristin Neff)',
     category: 'Bienestar',
     content:
-        'Hoja de trabajo (Kristin Neff) para cultivar un diálogo interno amable.',
+        'Cuaderno breve (9 pág.) que adapta los ejercicios del libro “Sé amable contigo mismo”.',
     url:
-        'https://self-compassion.org/wp-content/uploads/2020/11/ejercicios-de-autocompasion.pdf',
+        'https://eliarocapsicologa.wordpress.com/wp-content/uploads/2019/01/neff-ejercicios-se-amable.pdf',
     type: _ResType.pdf,
   ),
   _Resource(
@@ -335,13 +335,13 @@ final List<_Resource> _resources = [
   // ── FAMILIA ────────────────────────────────────────────────────
   _Resource(
     id: 'craft',
-    title: 'Guía CRAFT para familias',
+    title: 'CRAFT: Comunicarte con tus seres queridos',
     category: 'Familia',
     content:
-        'Método basado en evidencia para apoyar sin confrontar (PDF Castilla y León).',
+        'Artículo-web y audio (Cigna, 2022) que explica paso a paso el enfoque CRAFT para apoyar sin confrontar.',
     url:
-        'https://www.lasdrogas.info/wp-content/uploads/2020/03/Guia-CRAFT-familias-2018.pdf',
-    type: _ResType.pdf,
+        'https://www.cigna.com/es-us/knowledge-center/substance-use-disorders-seminars/craft',
+    type: _ResType.web,
   ),
 
   // ── SUEÑO ──────────────────────────────────────────────────────
@@ -356,25 +356,25 @@ final List<_Resource> _resources = [
   ),
   _Resource(
     id: 'sleep_diary',
-    title: 'Diario de sueño (7 días)',
+    title: 'Diario de sueño (7 días) – Therapist Aid',
     category: 'Sueño',
     content:
-        'Formulario para registrar horarios y calidad del sueño durante una semana.',
+        'Registro matutino y nocturno en español para monitorizar hábitos y calidad del sueño durante una semana.',
     url:
-        'https://www.sepeap.org/wp-content/uploads/2014/10/DIARIO-DE-SUEÑO.pdf',
+        'https://www.therapistaid.com/worksheets/sleep-diary?language=es',
     type: _ResType.pdf,
   ),
 
   // ── NUTRICIÓN ──────────────────────────────────────────────────
   _Resource(
     id: 'nutrition',
-    title: 'Comer para tu recuperación',
+    title: 'Dieta y recuperación de la drogadicción',
     category: 'Nutrición',
     content:
-        'Guía de la FAD sobre nutrientes que estabilizan el ánimo y previenen recaídas.',
+        'Artículo MedlinePlus que detalla el papel de los nutrientes durante la abstinencia de distintas sustancias.',
     url:
-        'https://www.fad.es/wp-content/uploads/2021/02/Guia_Nutricion_Adicciones.pdf',
-    type: _ResType.pdf,
+        'https://medlineplus.gov/spanish/ency/article/002149.htm',
+    type: _ResType.web,
   ),
 
   // ── FAQ ────────────────────────────────────────────────────────
@@ -383,7 +383,7 @@ final List<_Resource> _resources = [
     title: 'Preguntas frecuentes sobre adicciones',
     category: 'FAQ',
     content:
-        'Hospital Clínic Barcelona: preguntas y respuestas comunes sobre tratamiento y recaída.',
+        'Hospital Clínic Barcelona: preguntas y respuestas comunes sobre tratamiento y recaída.',
     url:
         'https://www.clinicbarcelona.org/asistencia/enfermedades/adicciones/preguntas-frecuentes',
     type: _ResType.web,
@@ -392,29 +392,30 @@ final List<_Resource> _resources = [
   // ── MULTIMEDIA ────────────────────────────────────────────────
   _Resource(
     id: 'podcast',
-    title: 'Podcast “Sobriedad a la Carta”',
+    title: 'Podcast “Adiós Adicción”',
     category: 'Multimedia',
     content:
-        'Historias de recuperación y entrevistas en castellano (Spotify).',
-    url: 'https://open.spotify.com/show/5pNZWfG8tFvctgPpZ5NdZ8',
+        'Testimonios y herramientas prácticas para mantener la sobriedad (Spotify).',
+    url: 'https://open.spotify.com/show/3yGznj4I9JbG8qFW1ebs4N',
     type: _ResType.podcast,
   ),
   _Resource(
     id: 'mindfulness',
-    title: 'Audio mindfulness 3 min',
+    title: 'Audio mindfulness: pausa de 3 minutos',
     category: 'Multimedia',
     content:
-        'Pausa breve guiada para centrar la atención y bajar la ansiedad.',
-    url: 'https://www.youtube.com/watch?v=ZTuR8tlkHH8',
+        'Meditación guiada breve para centrar la atención y calmar la mente.',
+    url: 'https://www.youtube.com/watch?v=jh2nMVmkM1o',
     type: _ResType.video,
   ),
   _Resource(
     id: 'box_breath',
-    title: 'Respiración cuadrada 4‑4‑4‑4',
+    title: 'Respiración en caja 4-4-4-4',
     category: 'Multimedia',
     content:
-        'Vídeo guiado en castellano para activar el sistema parasimpático.',
-    url: 'https://www.youtube.com/watch?v=ngR5c7N4VaE',
+        'Vídeo guiado (5 min) para activar el sistema parasimpático y reducir el estrés.',
+    url: 'https://www.youtube.com/watch?v=7lwvDIBppP0',
     type: _ResType.video,
   ),
 ];
+
