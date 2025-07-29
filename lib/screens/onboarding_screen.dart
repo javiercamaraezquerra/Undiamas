@@ -85,8 +85,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   /* ───────── UI ───────── */
   @override
   Widget build(BuildContext context) {
-    final onPrimary = Theme.of(context).colorScheme.onPrimary;
-
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
@@ -103,7 +101,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 center: ElevatedButton.icon(
                   icon: const Icon(Icons.calendar_month_outlined),
                   label: const Text('Elegir fecha y hora'),
-                  onPressed: _pickDateTime,            // ⬅ botones SIN estilo extra
+                  onPressed: _pickDateTime,
                 ),
                 subhead: _startDateTime == null
                     ? null
@@ -124,7 +122,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         (e) => ChoiceChip(
                           label: Text(
                             e,
-                            style: TextStyle(Colors.black70), // ⇦ negro al 70%
+                            style:
+                                TextStyle(color: Colors.black.withOpacity(.70)),
                           ),
                           selected: _substance == e,
                           selectedColor: Colors.white.withOpacity(.25),
@@ -135,7 +134,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       .toList(),
                 ),
                 bottom: ElevatedButton(
-                  // botón “Siguiente” queda con su color por defecto
                   onPressed: _substance == null
                       ? null
                       : () => _pageCtrl.nextPage(
