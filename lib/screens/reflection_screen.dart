@@ -92,6 +92,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final bool dark = theme.brightness == Brightness.dark;
 
     if (_loadError != null) {
       return Scaffold(
@@ -108,6 +109,8 @@ class _ReflectionScreenState extends State<ReflectionScreen>
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    final double bottomExtra = kBottomNavigationBarHeight + 24;
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
@@ -116,7 +119,8 @@ class _ReflectionScreenState extends State<ReflectionScreen>
         top: true,
         bottom: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+          padding:
+              EdgeInsets.fromLTRB(20, 20, 20, bottomExtra), // espacio extra
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -157,8 +161,8 @@ class _ReflectionScreenState extends State<ReflectionScreen>
               const SizedBox(height: 24),
               TextButton.icon(
                 icon: const Icon(Icons.open_in_new),
-                style:
-                    TextButton.styleFrom(foregroundColor: theme.colorScheme.primary),
+                style: TextButton.styleFrom(
+                    foregroundColor: theme.colorScheme.primary),
                 onPressed: () async {
                   final uri = Uri.parse(_soloPorHoyUrl);
                   if (await canLaunchUrl(uri)) {
@@ -170,11 +174,12 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                             'No se pudo abrir el enlace, inténtalo más tarde.')));
                   }
                 },
-                label: const Text(
+                label: Text(
                   'Si también quieres ver un principio espiritual por día de “Sólo por hoy”, '
                   'haz clic aquí para verla gratuitamente.',
                   textAlign: TextAlign.start,
-                  style: TextStyle(color: Colors.white)
+                  style: TextStyle(
+                      color: dark ? Colors.white : Colors.black87),
                 ),
               ),
             ],
