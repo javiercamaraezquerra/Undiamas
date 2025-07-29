@@ -97,7 +97,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             children: [
               // ── PASO 1 ────────────────────────────────────────────────
               _StepContainer(
-                headline: 'Selecciona la fecha y hora\nde tu sobriedad',
+                headline: 'Selecciona la fecha y hora\nde tu último consumo',
                 center: ElevatedButton.icon(
                   icon: const Icon(Icons.calendar_month_outlined),
                   label: const Text('Elegir fecha y hora'),
