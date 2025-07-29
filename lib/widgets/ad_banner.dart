@@ -2,10 +2,8 @@ import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
-/// Banner reutilizable.
-/// • Carga un **anchored‑adaptive banner** que ocupa todo el ancho disponible,  
-///   por lo que desaparecen las “barras negras” laterales.  
-/// • La zona que no ocupa el anuncio es transparente para que se vea el fondo.
+/// Banner reutilizable (anchored‑adaptive) sin bandas laterales.
+/// El contenedor sobrante es transparente para mostrar el fondo.
 class AdBanner extends StatefulWidget {
   final String adUnitId;
   const AdBanner({super.key, required this.adUnitId});
@@ -18,21 +16,21 @@ class _AdBannerState extends State<AdBanner> {
   BannerAd? _banner;
   bool _loaded = false;
 
+  /*───────────────────────────── lifecycle ───────────────────────────────*/
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _loadAdaptiveBanner();               // necesita MediaQuery → en didChange
+    _loadAdaptiveBanner(); // necesita MediaQuery → aquí
   }
 
-  /*───────────────────────────  Carga banner adaptativo  ───────────────────*/
+  /*─────────────────── carga de Banner adaptativo ────────────────────────*/
   Future<void> _loadAdaptiveBanner() async {
-    if (_banner != null) return;         // ya creado
+    if (_banner != null) return;
 
     final width = MediaQuery.of(context).size.width.truncate();
-    final size = await AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(width);
-
-    // Fallback si size == null (caso muy raro en emulador)
-    final adSize = size ?? AdSize.banner;
+    final adSize =
+        await AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(width) ??
+            AdSize.banner; // fallback
 
     _banner = BannerAd(
       size: adSize,
@@ -40,8 +38,10 @@ class _AdBannerState extends State<AdBanner> {
       request: const AdRequest(),
       listener: BannerAdListener(
         onAdLoaded: (ad) {
-          dev.log('✅ Banner loaded (${ad.size.width}×${ad.size.height})');
-          setState(() => _loaded = true);
+          // cast necesario para acceder a .size
+          final size = (ad as BannerAd).size;
+          dev.log('✅ Banner loaded (${size.width}×${size.height})');
+          if (mounted) setState(() => _loaded = true);
         },
         onAdFailedToLoad: (ad, err) {
           dev.log('⛔️ Banner failed: ${err.code} – ${err.message}');
@@ -63,11 +63,10 @@ class _AdBannerState extends State<AdBanner> {
     if (!_loaded || _banner == null) return const SizedBox.shrink();
 
     return Container(
-      color: Colors
-          .transparent,                // ← mantiene visible el fondo del Scaffold
-      width: double.infinity,         // ocupa todo el ancho del dispositivo
-      height: _banner!.size.height.toDouble(),
-      alignment: Alignment.center,    // centra el anuncio dentro del contenedor
+      color: Colors.transparent,                 // deja ver el fondo
+      width: double.infinity,                   // ancho completo
+      height: _banner!.size.height.toDouble(),  // alto del banner real
+      alignment: Alignment.center,
       child: AdWidget(ad: _banner!),
     );
   }
