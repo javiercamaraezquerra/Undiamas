@@ -24,7 +24,7 @@ class MountainBackground extends StatelessWidget {
       ][pageIndex % 5];
 
   // figura fija
-  static const Alignment _figureAlignment = Alignment(-0.85, 0.86);
+  static const Alignment _figureAlignment = Alignment(-0.85, 0.56);
 
   static const _figures = [
     'assets/images/figure_0.png',
