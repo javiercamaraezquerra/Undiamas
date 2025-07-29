@@ -23,4 +23,9 @@ class EncryptionService {
     }
     return Uint8List.fromList(base64Url.decode(key));
   }
+
+  /* ── NUEVO · Elimina la clave para “Reset total” ── */
+  static Future<void> wipeKey() async {
+    await _secure.delete(key: _k);
+  }
 }
