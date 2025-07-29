@@ -124,7 +124,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         (e) => ChoiceChip(
                           label: Text(
                             e,
-                            style: TextStyle(color: onPrimary), // ⇦ mismo color que “Siguiente”
+                            style: TextStyle(Colors.black70), // ⇦ negro al 70%
                           ),
                           selected: _substance == e,
                           selectedColor: Colors.white.withOpacity(.25),
