@@ -85,8 +85,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   /* ───────── UI ───────── */
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
@@ -123,7 +121,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       .map((e) => ChoiceChip(
                             label: Text(e),
                             selected: _substance == e,
-                            selectedColor: primary.withAlpha(0x26),
+                            selectedColor: Colors.white.withOpacity(.25),
+                            labelStyle: const TextStyle(color: Colors.white),
+                            backgroundColor: Colors.white24,
                             onSelected: (_) => setState(() => _substance = e),
                           ))
                       .toList(),
@@ -143,8 +143,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               _StepContainer(
                 headline: '¡Todo listo!',
                 subhead: 'Recibirás frases motivacionales cada mañana.',
-                center: Icon(Icons.celebration_rounded,
-                    size: 96, color: primary.withOpacity(.8)),
+                center: const Icon(Icons.celebration_rounded,
+                    size: 96, color: Colors.white),
                 bottom: ElevatedButton(
                   onPressed: (_startDateTime != null && _substance != null)
                       ? _finish
@@ -182,10 +182,18 @@ class _StepContainer extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(headline, style: t.headlineMedium, textAlign: TextAlign.center),
+          Text(
+            headline,
+            style: t.headlineMedium!.copyWith(color: Colors.white),
+            textAlign: TextAlign.center,
+          ),
           if (subhead != null) ...[
             const SizedBox(height: 8),
-            Text(subhead!, style: t.bodyMedium, textAlign: TextAlign.center),
+            Text(
+              subhead!,
+              style: t.bodyMedium!.copyWith(color: Colors.white),
+              textAlign: TextAlign.center,
+            ),
           ],
           const SizedBox(height: 36),
           center,
