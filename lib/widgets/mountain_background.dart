@@ -16,15 +16,15 @@ class MountainBackground extends StatelessWidget {
   });
 
   Alignment get _sunAlignment => [
-        const Alignment(0.95, -0.80),
-        const Alignment(0.85, -0.95),
-        const Alignment(0.55, -1.00),
-        const Alignment(-0.30, -1.10),
-        const Alignment(-0.40, -1.20),
+        const Alignment(1.00, -0.70),
+        const Alignment(0.85, -0.82),
+        const Alignment(0.70, -0.94),
+        const Alignment(0.55, -1.06),
+        const Alignment(0.40, -1.18),
       ][pageIndex % 5];
 
   // figura fija
-  static const Alignment _figureAlignment = Alignment(-0.75, 0.86);
+  static const Alignment _figureAlignment = Alignment(-0.85, 0.86);
 
   static const _figures = [
     'assets/images/figure_0.png',
