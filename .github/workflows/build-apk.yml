@@ -12,32 +12,15 @@ jobs:
   build-release:
     runs-on: ubuntu-latest
 
-    env:                                   # ★ NEW ➊ opciones Gradle
+    env:
       GRADLE_OPTS: -Dorg.gradle.configuration-cache=true -Dorg.gradle.parallel=true
 
     steps:
     # 1) Checkout
-    - name: Checkout code
-      uses: actions/checkout@v3
+    - uses: actions/checkout@v3
       with: { fetch-depth: 1 }
 
-    # 2) ------- Android SDK / CMake ------------------------------------ #
-    # Restaura (o crea) la carpeta con CMake 3.22.1 para que Gradle no
-    # la vuelva a descargar cada vez.
-    - name: Restore Android‑SDK cache (CMake 3.22.1)
-      uses: actions/cache@v4
-      id: cmake-cache
-      with:
-        path: ${{ env.ANDROID_SDK_ROOT }}/cmake/3.22.1
-        key:  ${{ runner.os }}-cmake-3.22.1
-
-    - name: Install CMake 3.22.1 (only first run)
-      if: steps.cmake-cache.outputs.cache-hit != 'true'
-      run: |
-        echo "→ instalando CMake 3.22.1 en el SDK"
-        yes | $ANDROID_SDK_ROOT/tools/bin/sdkmanager "cmake;3.22.1" > /dev/null
-
-    # 3) FFmpeg (sólo si falta)
+    # 2) FFmpeg (solo si falta)
     - name: Ensure FFmpeg
       run: |
         command -v ffmpeg >/dev/null || {
@@ -45,17 +28,32 @@ jobs:
           sudo apt-get install -y ffmpeg
         }
 
-    # 4) Re‑encode MP3
+    # 3) Re‑encode MP3
     - run: |
         [ -f assets/audio/relax60s.mp3 ] || { echo "❌ MP3 no existe"; exit 1; }
         ffmpeg -y -i assets/audio/relax60s.mp3 -codec:a libmp3lame -b:a 128k /tmp/relax.mp3
         mv /tmp/relax.mp3 assets/audio/relax60s.mp3
 
-    # 5) Flutter SDK (con caché interno)
-    - uses: subosito/flutter-action@v2
+    # 4) Flutter SDK + Android SDK (crea cmdline‑tools/latest)
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
       with: { channel: stable, cache: true }
 
-    # 6) -------- caches Pub & Gradle ----------------------------------- #
+    # 5) Cache/instala CMake 3.22.1 ──── (DESPUÉS de flutter-action)
+    - name: Restore CMake 3.22.1 cache
+      id: cmake-cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.ANDROID_SDK_ROOT }}/cmake/3.22.1
+        key:  ${{ runner.os }}-cmake-3.22.1
+
+    - name: Install CMake 3.22.1 (first run only)
+      if: steps.cmake-cache.outputs.cache-hit != 'true'
+      run: |
+        echo "→ instalando CMake 3.22.1 en el SDK"
+        yes | "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" "cmake;3.22.1" > /dev/null
+
+    # 6) Restaurar caches Pub & Gradle
     - uses: actions/cache@v4
       name: Restore Pub cache
       with:
@@ -89,7 +87,7 @@ jobs:
         storeFile=undiamas.jks
         EOF
 
-    # 9) Build AAB → APK  (Gradle usa config‑cache y CMake ya está)
+    # 9) Build AAB y APK
     - name: Build release AAB
       run: flutter build appbundle --release
     - name: Build release APK
@@ -97,9 +95,7 @@ jobs:
 
     # 10) mapping.txt
     - uses: actions/upload-artifact@v4
-      with:
-        name: r8-mapping
-        path: build/app/outputs/mapping/release/mapping.txt
+      with: { name: r8-mapping, path: build/app/outputs/mapping/release/mapping.txt }
 
     # 11) Verificar MP3
     - run: |
@@ -107,15 +103,11 @@ jobs:
 
     # 12) Artefactos
     - uses: actions/upload-artifact@v4
-      with:
-        name: undiamas-apk
-        path: build/app/outputs/flutter-apk/app-release.apk
+      with: { name: undiamas-apk, path: build/app/outputs/flutter-apk/app-release.apk }
     - uses: actions/upload-artifact@v4
-      with:
-        name: undiamas-aab
-        path: build/app/outputs/bundle/release/app-release.aab
+      with: { name: undiamas-aab, path: build/app/outputs/bundle/release/app-release.aab }
 
-    # 13) Guarda caches (Pub / Gradle / CMake)
+    # 13) Guardar caches
     - uses: actions/cache/save@v4
       if: always()
       with:
