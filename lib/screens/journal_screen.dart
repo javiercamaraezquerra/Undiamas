@@ -60,6 +60,7 @@ class _JournalScreenState extends State<JournalScreen> {
   Widget build(BuildContext context) {
     const moods = ['😢', '😕', '😐', '🙂', '😄'];
     final canSave = _selectedMood != null && _controller.text.trim().isNotEmpty;
+    final bool dark = Theme.of(context).brightness == Brightness.dark;
 
     return FutureBuilder<Box<DiaryEntry>>(
       future: _futureBox,
@@ -90,7 +91,11 @@ class _JournalScreenState extends State<JournalScreen> {
                   child: Column(
                     children: [
                       Text('¿Cómo te sientes hoy?',
-                          style: Theme.of(context).textTheme.headlineSmall),
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineSmall
+                              ?.copyWith(
+                                  color: dark ? Colors.white : Colors.black)),
                       const SizedBox(height: 12),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -120,8 +125,14 @@ class _JournalScreenState extends State<JournalScreen> {
                       TextField(
                         controller: _controller,
                         maxLines: 3,
+                        style: TextStyle(
+                            color: dark ? Colors.white : Colors.black87),
                         decoration: InputDecoration(
                           hintText: 'Escribe tus pensamientos…',
+                          hintStyle: TextStyle(
+                              color: dark
+                                  ? Colors.white70
+                                  : Colors.grey.shade700),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -131,6 +142,14 @@ class _JournalScreenState extends State<JournalScreen> {
                       ElevatedButton(
                         onPressed: canSave ? () => _saveEntry(box) : null,
                         style: ElevatedButton.styleFrom(
+                          backgroundColor: dark
+                              ? Theme.of(context).colorScheme.primaryContainer
+                              : Theme.of(context).colorScheme.primary,
+                          foregroundColor: dark
+                              ? Theme.of(context)
+                                  .colorScheme
+                                  .onPrimaryContainer
+                              : Colors.white,
                           shape: const StadiumBorder(),
                           padding: const EdgeInsets.symmetric(
                             horizontal: 32,
@@ -152,6 +171,9 @@ class _JournalScreenState extends State<JournalScreen> {
                                       '${e.createdAt.hour.toString().padLeft(2, '0')}:'
                                       '${e.createdAt.minute.toString().padLeft(2, '0')}';
                                   return Card(
+                                    color: dark
+                                        ? Colors.black.withOpacity(.75)
+                                        : null,
                                     margin:
                                         const EdgeInsets.symmetric(vertical: 4),
                                     child: ListTile(
