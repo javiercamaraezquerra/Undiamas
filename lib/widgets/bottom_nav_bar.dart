@@ -30,11 +30,17 @@ class _BottomNavBarState extends State<BottomNavBar> {
 
   void _onItemTapped(int index) => setState(() => _selectedIndex = index);
 
-  bool _shouldShowAds(int index) => index == 0 || index == 3 || index == 4;
+  bool _shouldShowAds(int index) => index == 0 || index== 1 || index == 3 || index == 4;
+
+  Color _barColor(BuildContext ctx) =>
+      Theme.of(ctx).brightness == Brightness.dark
+          ? Colors.black54
+          : Colors.white70;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBody: true,                     // ← cuerpo bajo la nav bar + banner
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
@@ -48,8 +54,11 @@ class _BottomNavBarState extends State<BottomNavBar> {
           if (_shouldShowAds(_selectedIndex))
             const AdBanner(adUnitId: _bannerId),
           BottomNavigationBar(
+            type: BottomNavigationBarType.fixed,
+            backgroundColor: _barColor(context),
+            elevation: 0,
             currentIndex: _selectedIndex,
-            selectedItemColor: Theme.of(context).primaryColor,
+            selectedItemColor: Theme.of(context).colorScheme.primary,
             unselectedItemColor: Colors.grey,
             onTap: _onItemTapped,
             items: const [
