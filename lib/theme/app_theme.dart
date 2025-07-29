@@ -1,5 +1,22 @@
 import 'package:flutter/material.dart';
 
+/// Pequeño builder que evita el “flash” blanco entre pantallas
+class _NoFlashBuilder extends PageTransitionsBuilder {
+  const _NoFlashBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    // Desvanecemos la pantalla nueva sobre la anterior manteniendo el fondo
+    return FadeTransition(opacity: animation, child: child);
+  }
+}
+
 class AppTheme {
   /// Índigo original como color semilla
   static const _seed = Color(0xFF354DFF);
@@ -29,13 +46,23 @@ class AppTheme {
       foregroundColor: Colors.white,           // texto / iconos
       backgroundColor: Colors.transparent,     // lo oscurece el scrim
       elevation: 0,
-      titleTextStyle:
-          TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+      titleTextStyle: TextStyle(
+        fontSize: 24,
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+      ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: Colors.white.withOpacity(.15), // fondo semitransparente
       border: const OutlineInputBorder(),
+    ),
+    //  ⬇⬇⬇  Evita destello blanco entre pantallas
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: {
+        TargetPlatform.android: _NoFlashBuilder(),
+        TargetPlatform.iOS: _NoFlashBuilder(),
+      },
     ),
   );
 
@@ -53,6 +80,12 @@ class AppTheme {
       foregroundColor: Colors.white,
       backgroundColor: Colors.transparent,
       elevation: 0,
+    ),
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: {
+        TargetPlatform.android: _NoFlashBuilder(),
+        TargetPlatform.iOS: _NoFlashBuilder(),
+      },
     ),
   );
 }
