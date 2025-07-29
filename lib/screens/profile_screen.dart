@@ -23,7 +23,7 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  /* –– preferencias –– */
+  /* –– prefs –– */
   bool _isDark = false;
   bool _notifDaily = true;
   bool _notifMilestones = true;
@@ -33,7 +33,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   DateTime? _startDate;
   int _daysClean = 0;
 
-  /* –– cajas Hive –– */
   late Future<Box<DiaryEntry>> _diaryBoxFuture;
 
   @override
@@ -45,7 +44,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadPrefs();
   }
 
-  /* ───────── prefs ───────── */
+  /* ───────── cargar prefs ───────── */
   Future<void> _loadPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     _isDark = prefs.getBool('isDarkMode') ?? false;
@@ -62,7 +61,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (mounted) setState(() {});
   }
 
-  /* ───────── toggles ───────── */
+  /* ───────── toggles (idénticos) ───────── */
   Future<void> _toggleTheme(bool v) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isDarkMode', v);
@@ -76,8 +75,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _notifDaily = v);
 
     if (v) {
-      final json = await DefaultAssetBundle.of(context)
-          .loadString('assets/data/reflections.json');
+      final json =
+          await DefaultAssetBundle.of(context).loadString('assets/data/reflections.json');
       await AchievementService.scheduleDailyReflections(json);
     } else {
       await AchievementService.cancelDailyReflections();
@@ -122,6 +121,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _autoBackup = v);
   }
 
+  /* ───────── resto de helpers (sin cambios) ───────── */
   Future<bool> _confirmDriveConsent() async {
     return await showDialog<bool>(
           context: context,
@@ -134,14 +134,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               textAlign: TextAlign.justify,
             ),
             actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancelar'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Permitir'),
-              ),
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+              ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Permitir')),
             ],
           ),
         ) ??
@@ -150,8 +144,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _restoreFromDrive() async {
     if (!await _confirmDriveConsent()) {
-      _showSnack('Restauración cancelada.');
-      return;
+      _showSnack('Restauración cancelada.'); return;
     }
 
     final wait = _showSnack('Descargando copia…', persistent: true);
@@ -159,17 +152,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     wait.close();
 
     if (!result.ok || result.data == null) {
-      _showSnack(result.message ?? 'No se encontró copia válida.');
-      return;
+      _showSnack(result.message ?? 'No se encontró copia válida.'); return;
     }
 
     final cipher = await EncryptionService.getCipher();
     final udm = await Hive.openBox('udm_secure', encryptionCipher: cipher);
-    final diary =
-        await Hive.openBox<DiaryEntry>('diary_secure', encryptionCipher: cipher);
-
-    final imported =
-        await DriveBackupService.importHive(result.data!, udm, diary);
+    final diary = await Hive.openBox<DiaryEntry>('diary_secure', encryptionCipher: cipher);
+    final imported = await DriveBackupService.importHive(result.data!, udm, diary);
 
     _showSnack(imported ? 'Datos restaurados.' : 'La copia estaba vacía o dañada.');
 
@@ -200,14 +189,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _showSnack('¡Contador reiniciado!');
   }
 
-  ScaffoldFeatureController<SnackBar, SnackBarClosedReason> _showSnack(
-      String msg,
+  ScaffoldFeatureController<SnackBar, SnackBarClosedReason> _showSnack(String msg,
       {bool persistent = false}) {
-    final sb = SnackBar(
+    return ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
       duration: persistent ? const Duration(days: 1) : const Duration(seconds: 4),
-    );
-    return ScaffoldMessenger.of(context).showSnackBar(sb);
+    ));
   }
 
   /* ───────── UI ───────── */
@@ -217,53 +204,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
       appBar: AppBar(title: const Text('Perfil')),
-      body: SafeArea(
-        top: true,
-        bottom: false,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            ListTile(
-              leading: const Icon(Icons.brightness_6),
-              title: const Text('Modo oscuro'),
-              trailing: Switch(value: _isDark, onChanged: _toggleTheme),
+      body: Container(
+        decoration: BoxDecoration(color: Colors.black.withOpacity(.35)),
+        child: SafeArea(
+          child: Theme(
+            // Texto e iconos en blanco dentro del contenedor oscurecido
+            data: Theme.of(context).copyWith(
+              listTileTheme:
+                  const ListTileThemeData(textColor: Colors.white, iconColor: Colors.white),
             ),
-            ListTile(
-              leading: const Icon(Icons.notifications_active_outlined),
-              title: const Text('Notificación diaria de reflexión'),
-              trailing: Switch(value: _notifDaily, onChanged: _toggleDailyNotif),
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.brightness_6),
+                  title: const Text('Modo oscuro'),
+                  trailing: Switch(value: _isDark, onChanged: _toggleTheme),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.notifications_active_outlined),
+                  title: const Text('Notificación diaria de reflexión'),
+                  trailing: Switch(value: _notifDaily, onChanged: _toggleDailyNotif),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.flag),
+                  title: const Text('Notificaciones de logros'),
+                  trailing: Switch(value: _notifMilestones, onChanged: _toggleMilestoneNotif),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.cloud_sync),
+                  title: const Text('Copias automáticas en Drive'),
+                  trailing: Switch(value: _autoBackup, onChanged: _toggleAutoBackup),
+                ),
+                const Divider(color: Colors.white54),
+                ListTile(
+                  leading: const Icon(Icons.cloud_download),
+                  title: const Text('Restaurar desde Drive'),
+                  onTap: _restoreFromDrive,
+                ),
+                const Divider(color: Colors.white54),
+                ListTile(
+                  leading: const Icon(Icons.refresh),
+                  title: const Text('Reiniciar contador'),
+                  subtitle: const Text('Establece hoy y ahora como inicio'),
+                  onTap: _resetSoberDate,
+                ),
+                const Divider(color: Colors.white54),
+                if (_startDate != null) ..._buildProgressSection(),
+                const Divider(color: Colors.white54),
+                _buildMoodSection(),
+                const SizedBox(height: 16),
+                _buildDisclaimer(),
+              ],
             ),
-            ListTile(
-              leading: const Icon(Icons.flag),
-              title: const Text('Notificaciones de logros'),
-              trailing:
-                  Switch(value: _notifMilestones, onChanged: _toggleMilestoneNotif),
-            ),
-            ListTile(
-              leading: const Icon(Icons.cloud_sync),
-              title: const Text('Copias automáticas en Drive'),
-              trailing: Switch(value: _autoBackup, onChanged: _toggleAutoBackup),
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.cloud_download),
-              title: const Text('Restaurar desde Drive'),
-              onTap: _restoreFromDrive,
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.refresh),
-              title: const Text('Reiniciar contador'),
-              subtitle: const Text('Establece hoy y ahora como inicio'),
-              onTap: _resetSoberDate,
-            ),
-            const Divider(),
-            if (_startDate != null) ..._buildProgressSection(),
-            const Divider(),
-            _buildMoodSection(),
-            const SizedBox(height: 16),
-            _buildDisclaimer(),
-          ],
+          ),
         ),
       ),
     );
@@ -299,11 +293,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           valueListenable: box.listenable(),
           builder: (_, __, ___) {
             final entries = box.values.toList();
-
             return Card(
+              color: Theme.of(context).colorScheme.surface.withOpacity(.85),
               elevation: 1,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               child: Padding(
                 padding: const EdgeInsets.all(12.0),
                 child: Column(
@@ -330,10 +323,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildDisclaimer() {
     return Text(
       _kDisclaimer,
-      style: Theme.of(context)
-          .textTheme
-          .bodySmall
-          ?.copyWith(color: Colors.grey[600]),
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.white70),
       textAlign: TextAlign.justify,
     );
   }
