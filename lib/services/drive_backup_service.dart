@@ -23,7 +23,7 @@ class DriveBackupService {
 
   static final _googleSignIn = GoogleSignIn(scopes: [
     drive.DriveApi.driveFileScope,
-    drive.DriveApi.driveAppdataScope, // acceso explícito a appDataFolder
+    drive.DriveApi.driveAppdataScope,
   ]);
 
   /* ── autenticación ── */
@@ -41,7 +41,35 @@ class DriveBackupService {
     }
   }
 
-  /* ── SUBIR / ACTUALIZAR ── */
+  /* ──────────── PÚBLICO ──────────── */
+
+  static Future<bool> isSignedIn() async =>
+      _googleSignIn.currentUser != null ||
+      await _googleSignIn.isSignedIn();
+
+  static Future<void> disconnect() async {
+    try {
+      await _googleSignIn.disconnect();
+    } catch (_) {
+      await _googleSignIn.signOut();
+    }
+  }
+
+  static Future<void> deleteBackup() async {
+    final api = await _driveApi();
+    if (api == null) return;
+
+    final res = await api.files.list(
+      spaces: 'appDataFolder',
+      q: "name='$_fileName' and trashed=false",
+      $fields: 'files(id)',
+    );
+    for (final f in res.files ?? <drive.File>[]) {
+      await api.files.delete(f.id!);
+    }
+  }
+
+  /* ── SUBIR / ACTUALIZAR ─ */
   static Future<BackupResult<void>> uploadBackup(
       Map<String, dynamic> json) async {
     try {
@@ -58,7 +86,6 @@ class DriveBackupService {
           contentType: 'application/json');
       final metaCreate = drive.File()..name = _fileName;
 
-      // ¿ya existe?
       final prev = await api.files.list(
         spaces: 'appDataFolder',
         q: "name='$_fileName' and trashed=false",
@@ -66,11 +93,9 @@ class DriveBackupService {
       );
 
       if (prev.files?.isNotEmpty == true) {
-        // solo actualizamos el contenido -> NO tocar parents
         await api.files.update(metaCreate, prev.files!.first.id!,
             uploadMedia: media);
       } else {
-        // nuevo fichero dentro de appDataFolder
         metaCreate.parents = ['appDataFolder'];
         await api.files.create(metaCreate, uploadMedia: media);
       }
@@ -80,7 +105,7 @@ class DriveBackupService {
     }
   }
 
-  /* ── DESCARGAR ── */
+  /* ── DESCARGAR ─ */
   static Future<BackupResult<Map<String, dynamic>>> downloadBackup() async {
     try {
       final api = await _driveApi();
@@ -119,7 +144,7 @@ class DriveBackupService {
     }
   }
 
-  /* ── EXPORT / IMPORT ── */
+  /* ── EXPORT / IMPORT (sin cambios) ─ */
   static Map<String, dynamic> exportHive(Box udm, Box<DiaryEntry> diary) => {
         'udm': udm.toMap(),
         'diary': diary.values
@@ -155,7 +180,7 @@ class DriveBackupService {
       );
 }
 
-/* ── cliente autenticado ── */
+/* ── cliente autenticado ─ */
 class _AuthenticatedClient extends http.BaseClient {
   final http.Client _inner;
   final Map<String, String> _headers;
