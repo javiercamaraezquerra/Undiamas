@@ -174,6 +174,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                   'Si también quieres ver un principio espiritual por día de “Sólo por hoy”, '
                   'haz clic aquí para verla gratuitamente.',
                   textAlign: TextAlign.start,
+                  style: TextStyle(color: Colors.white)
                 ),
               ),
             ],
