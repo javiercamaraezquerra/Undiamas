@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 
+import '../routes/fade_transparent_route.dart';        // ← nuevo
 import '../widgets/bottom_nav_bar.dart';
 import '../widgets/mountain_background.dart';
 import '../services/achievement_service.dart';
@@ -46,7 +47,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (!mounted) return;
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => const BottomNavBar()),
+      FadeTransparentRoute(builder: (_) => const BottomNavBar()), // ← cambio
     );
 
     AchievementService.scheduleMilestones(_startDateTime!);
