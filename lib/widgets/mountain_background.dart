@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 
 /// Fondo ilustrado con montañas y sol animado.
-/// * Scrim superior para contraste (negro → transparente).  
-/// * El **sol** se desplaza suavemente entre páginas (`pageIndex`).  
-/// * Se ha eliminado la figura/frente: solo fondo + sol.
+/// · `precacheImage` + `gaplessPlayback`  → sin flashes.  
+/// · `Hero(tag:'sun')`                    → movimiento continuo entre pantallas.
 class MountainBackground extends StatelessWidget {
-  final int pageIndex;                       // mueve únicamente el sol
+  final int pageIndex;                 // determina la posición del sol
   final Duration duration;
 
   const MountainBackground({
@@ -14,8 +13,8 @@ class MountainBackground extends StatelessWidget {
     this.duration = const Duration(milliseconds: 800),
   });
 
-  /* ───── Posiciones del sol (por página) ───── */
-  Alignment get _sunAlignment => const [
+  /* posiciones del sol para hasta 5 páginas */
+  Alignment get _sunPos => const [
         Alignment( 1.10, -0.75),
         Alignment( 0.90, -0.85),
         Alignment( 0.70, -0.95),
@@ -23,57 +22,62 @@ class MountainBackground extends StatelessWidget {
         Alignment( 0.30, -1.15),
       ][pageIndex % 5];
 
-  /* ───── BUILD ───── */
   @override
   Widget build(BuildContext context) {
+    /* precarga imágenes (solo la 1.ª vez) */
+    precacheImage(const AssetImage('assets/images/sun.png'), context);
+    precacheImage(const AssetImage('assets/images/bg_mountains.png'), context);
+
     return LayoutBuilder(builder: (_, cs) {
-      final width  = cs.biggest.width;
-      final sunDia = width * .35;
+      final d = cs.maxWidth * .35; // diámetro del sol
 
-      return Stack(
-        children: [
-          /* 1 ▸ Montañas */
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/bg_mountains.png',
-              alignment: Alignment.topCenter,
-              fit: BoxFit.cover,
-            ),
+      return Stack(children: [
+        /* montañas */
+        Positioned.fill(
+          child: Image.asset(
+            'assets/images/bg_mountains.png',
+            alignment: Alignment.topCenter,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
           ),
+        ),
 
-          /* 2 ▸ Scrim superior */
-          const Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 120,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.black45, Colors.transparent],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
+        /* scrim para contraste */
+        const Positioned(
+          top: 0, left: 0, right: 0, height: 120,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.black45, Colors.transparent],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
               ),
             ),
           ),
+        ),
 
-          /* 3 ▸ Sol (animado) */
-          AnimatedAlign(
-            alignment: _sunAlignment,
-            duration: duration,
-            curve: Curves.easeInOut,
-            child: ClipOval(
-              child: Image.asset(
-                'assets/images/sun.png',
-                width: sunDia,
-                height: sunDia,
-                fit: BoxFit.contain,
-              ),
-            ),
+        /* sol animado */
+        AnimatedAlign(
+          alignment: _sunPos,
+          duration: duration,
+          curve: Curves.easeInOut,
+          child: Hero(
+            tag: 'sun',
+            flightShuttleBuilder: (_, __, ___, ____, _____) => _sun(d),
+            child: _sun(d),
           ),
-        ],
-      );
+        ),
+      ]);
     });
   }
+
+  Widget _sun(double dia) => ClipOval(
+        child: Image.asset(
+          'assets/images/sun.png',
+          width: dia,
+          height: dia,
+          fit: BoxFit.contain,
+          gaplessPlayback: true,
+        ),
+      );
 }
