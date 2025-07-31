@@ -10,7 +10,6 @@ import '../models/diary_entry.dart';
 import '../services/achievement_service.dart';
 import '../services/drive_backup_service.dart';
 import '../services/encryption_service.dart';
-import '../utils/mood_trend.dart';
 import '../widgets/mood_trend_chart.dart';
 
 const _kDisclaimer =
@@ -136,13 +135,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancelar'),
-              ),
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancelar')),
               ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Permitir'),
-              ),
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Permitir')),
             ],
           ),
         ) ??
@@ -188,6 +185,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   /* ───────── reiniciar contador ───────── */
   Future<void> _resetSoberDate() async {
+    final bool confirm = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Reiniciar contador'),
+            content: const Text(
+              'Se establecerá la fecha y hora actuales como nuevo inicio '
+              'de tu periodo de sobriedad y se volverán a programar los hitos. '
+              '¿Deseas continuar?',
+              textAlign: TextAlign.justify,
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancelar')),
+              ElevatedButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Reiniciar')),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirm) return;
+
     final now = DateTime.now();
     final cipher = await EncryptionService.getCipher();
     final box = await Hive.openBox('udm_secure', encryptionCipher: cipher);
@@ -268,9 +288,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               'Tus datos han sido eliminados. La aplicación se reiniciará.'),
           actions: [
             ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Aceptar'),
-            ),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Aceptar')),
           ],
         ),
       );
@@ -307,9 +326,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         top: true,
         bottom: false,
         child: ListView(
-          padding:
-              EdgeInsets.fromLTRB(16, 16, 16, bottomExtra), // margen inferior extra
+          padding: EdgeInsets.fromLTRB(16, 16, 16, bottomExtra),
           children: [
+            /* Ajustes generales */
             ListTile(
               leading: const Icon(Icons.brightness_6),
               title: const Text('Modo oscuro'),
@@ -318,8 +337,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ListTile(
               leading: const Icon(Icons.notifications_active_outlined),
               title: const Text('Notificación diaria de reflexión'),
-              trailing: Switch(
-                  value: _notifDaily, onChanged: _toggleDailyNotif),
+              trailing:
+                  Switch(value: _notifDaily, onChanged: _toggleDailyNotif),
             ),
             ListTile(
               leading: const Icon(Icons.flag),
@@ -330,16 +349,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ListTile(
               leading: const Icon(Icons.cloud_sync),
               title: const Text('Copias automáticas en Drive'),
-              trailing: Switch(
-                  value: _autoBackup, onChanged: _toggleAutoBackup),
+              trailing:
+                  Switch(value: _autoBackup, onChanged: _toggleAutoBackup),
             ),
             const Divider(),
+            /* Drive */
             ListTile(
               leading: const Icon(Icons.cloud_download),
               title: const Text('Restaurar desde Drive'),
               onTap: _restoreFromDrive,
             ),
             const Divider(),
+            /* Reset contador */
             ListTile(
               leading: const Icon(Icons.refresh),
               title: const Text('Reiniciar contador'),
@@ -347,16 +368,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onTap: _resetSoberDate,
             ),
             const Divider(),
+            /* Progreso + gráfico */
+            if (_startDate != null) ..._buildProgressSection(),
+            const Divider(),
+            _buildMoodSection(),
+            const Divider(),
+            /* Eliminar todo */
             ListTile(
               leading: const Icon(Icons.delete_forever, color: Colors.red),
               title: const Text('Eliminar cuenta y datos',
                   style: TextStyle(color: Colors.red)),
               onTap: _deleteAccountAndData,
             ),
-            const Divider(),
-            if (_startDate != null) ..._buildProgressSection(),
-            const Divider(),
-            _buildMoodSection(),
             const SizedBox(height: 16),
             _buildDisclaimer(),
           ],
