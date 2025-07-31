@@ -20,7 +20,6 @@ const _kDisclaimer =
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
-
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
@@ -109,8 +108,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final diary =
           await Hive.openBox<DiaryEntry>('diary_secure', encryptionCipher: cipher);
 
-      final res =
-          await DriveBackupService.uploadBackup(DriveBackupService.exportHive(udm, diary));
+      final res = await DriveBackupService.uploadBackup(
+          DriveBackupService.exportHive(udm, diary));
 
       wait.close();
       if (!res.ok) {
@@ -173,7 +172,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final imported =
         await DriveBackupService.importHive(result.data!, udm, diary);
 
-    _showSnack(imported ? 'Datos restaurados.' : 'La copia estaba vacía o dañada.');
+    _showSnack(imported
+        ? 'Datos restaurados.'
+        : 'La copia estaba vacía o dañada.');
 
     if (imported) {
       setState(() {
@@ -283,7 +284,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       {bool persistent = false}) {
     final sb = SnackBar(
       content: Text(msg),
-      duration: persistent ? const Duration(days: 1) : const Duration(seconds: 4),
+      duration:
+          persistent ? const Duration(days: 1) : const Duration(seconds: 4),
     );
     return ScaffoldMessenger.of(context).showSnackBar(sb);
   }
@@ -291,6 +293,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /* ───────── UI ───────── */
   @override
   Widget build(BuildContext context) {
+    final double bottomExtra = kBottomNavigationBarHeight + 24;
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
@@ -299,57 +303,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          ListTile(
-            leading: const Icon(Icons.brightness_6),
-            title: const Text('Modo oscuro'),
-            trailing: Switch(value: _isDark, onChanged: _toggleTheme),
-          ),
-          ListTile(
-            leading: const Icon(Icons.notifications_active_outlined),
-            title: const Text('Notificación diaria de reflexión'),
-            trailing: Switch(value: _notifDaily, onChanged: _toggleDailyNotif),
-          ),
-          ListTile(
-            leading: const Icon(Icons.flag),
-            title: const Text('Notificaciones de logros'),
-            trailing:
-                Switch(value: _notifMilestones, onChanged: _toggleMilestoneNotif),
-          ),
-          ListTile(
-            leading: const Icon(Icons.cloud_sync),
-            title: const Text('Copias automáticas en Drive'),
-            trailing: Switch(value: _autoBackup, onChanged: _toggleAutoBackup),
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.cloud_download),
-            title: const Text('Restaurar desde Drive'),
-            onTap: _restoreFromDrive,
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.refresh),
-            title: const Text('Reiniciar contador'),
-            subtitle: const Text('Establece hoy y ahora como inicio'),
-            onTap: _resetSoberDate,
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.delete_forever, color: Colors.red),
-            title: const Text('Eliminar cuenta y datos',
-                style: TextStyle(color: Colors.red)),
-            onTap: _deleteAccountAndData,
-          ),
-          const Divider(),
-          if (_startDate != null) ..._buildProgressSection(),
-          const Divider(),
-          _buildMoodSection(),
-          const SizedBox(height: 16),
-          _buildDisclaimer(),
-        ],
+      body: SafeArea(
+        top: true,
+        bottom: false,
+        child: ListView(
+          padding:
+              EdgeInsets.fromLTRB(16, 16, 16, bottomExtra), // margen inferior extra
+          children: [
+            ListTile(
+              leading: const Icon(Icons.brightness_6),
+              title: const Text('Modo oscuro'),
+              trailing: Switch(value: _isDark, onChanged: _toggleTheme),
+            ),
+            ListTile(
+              leading: const Icon(Icons.notifications_active_outlined),
+              title: const Text('Notificación diaria de reflexión'),
+              trailing: Switch(
+                  value: _notifDaily, onChanged: _toggleDailyNotif),
+            ),
+            ListTile(
+              leading: const Icon(Icons.flag),
+              title: const Text('Notificaciones de logros'),
+              trailing: Switch(
+                  value: _notifMilestones, onChanged: _toggleMilestoneNotif),
+            ),
+            ListTile(
+              leading: const Icon(Icons.cloud_sync),
+              title: const Text('Copias automáticas en Drive'),
+              trailing: Switch(
+                  value: _autoBackup, onChanged: _toggleAutoBackup),
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.cloud_download),
+              title: const Text('Restaurar desde Drive'),
+              onTap: _restoreFromDrive,
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.refresh),
+              title: const Text('Reiniciar contador'),
+              subtitle: const Text('Establece hoy y ahora como inicio'),
+              onTap: _resetSoberDate,
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.delete_forever, color: Colors.red),
+              title: const Text('Eliminar cuenta y datos',
+                  style: TextStyle(color: Colors.red)),
+              onTap: _deleteAccountAndData,
+            ),
+            const Divider(),
+            if (_startDate != null) ..._buildProgressSection(),
+            const Divider(),
+            _buildMoodSection(),
+            const SizedBox(height: 16),
+            _buildDisclaimer(),
+          ],
+        ),
       ),
     );
   }
@@ -357,7 +368,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /* ───────── helpers UI ───────── */
   List<Widget> _buildProgressSection() {
     final milestones = AchievementService.milestones.keys.toList()..sort();
-    final next = milestones.firstWhere((d) => _daysClean < d, orElse: () => -1);
+    final next = milestones.firstWhere((d) => _daysClean < d,
+        orElse: () => -1);
 
     return [
       ListTile(
@@ -384,7 +396,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           valueListenable: box.listenable(),
           builder: (_, __, ___) {
             final entries = box.values.toList();
-
             return Card(
               elevation: 1,
               shape: RoundedRectangleBorder(
@@ -415,8 +426,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildDisclaimer() {
     return Text(
       _kDisclaimer,
-      style:
-          Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+      style: Theme.of(context)
+          .textTheme
+          .bodySmall
+          ?.copyWith(color: Colors.grey[600]),
       textAlign: TextAlign.justify,
     );
   }
