@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:hive/hive.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../routes/fade_transparent_route.dart';          // ← nuevo
 import '../services/encryption_service.dart';
 import '../widgets/mountain_background.dart';
 import 'sos_screen.dart';
@@ -239,7 +240,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Stack(
         children: [
-          const MountainBackground(pageIndex: 0), // fondo + sol + figura
+          const MountainBackground(pageIndex: 0), // fondo + sol
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
@@ -300,7 +301,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       onPressed: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const SosScreen()),
+                        FadeTransparentRoute(
+                            builder: (_) => const SosScreen()), // ← cambio
                       ),
                       child: const Text('Necesito ayuda'),
                     ),
