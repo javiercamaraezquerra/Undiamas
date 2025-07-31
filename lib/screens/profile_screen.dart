@@ -250,17 +250,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         false;
     if (!confirm) return;
 
-    /* 1. Cancelar notificaciones */
     await AchievementService.cancelDailyReflections();
     await AchievementService.cancelMilestones();
 
-    /* 2. Revocar Drive + borrar copia */
     if (await DriveBackupService.isSignedIn()) {
       await DriveBackupService.deleteBackup();
       await DriveBackupService.disconnect();
     }
 
-    /* 3. Borrar Hive y preferencias */
     final cipher = await EncryptionService.getCipher();
     final boxes = [
       await Hive.openBox('udm_secure', encryptionCipher: cipher),
@@ -274,11 +271,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
 
-    /* 4. Borrar clave cifrado y SecureStorage residual */
     await EncryptionService.wipeKey();
     await const FlutterSecureStorage().deleteAll();
 
-    /* 5. Reiniciar app */
     if (mounted) {
       await showDialog(
         context: context,
@@ -312,8 +307,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /* ───────── UI ───────── */
   @override
   Widget build(BuildContext context) {
-    final double bottomExtra = kBottomNavigationBarHeight + 24;
-
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
@@ -324,11 +317,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       body: SafeArea(
         top: true,
-        bottom: false,
+        bottom: true,        // ahora también respeta barra de navegación/banners
         child: ListView(
-          padding: EdgeInsets.fromLTRB(16, 16, 16, bottomExtra),
+          padding: const EdgeInsets.all(16),
           children: [
-            /* Ajustes generales */
             ListTile(
               leading: const Icon(Icons.brightness_6),
               title: const Text('Modo oscuro'),
@@ -353,14 +345,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Switch(value: _autoBackup, onChanged: _toggleAutoBackup),
             ),
             const Divider(),
-            /* Drive */
             ListTile(
               leading: const Icon(Icons.cloud_download),
               title: const Text('Restaurar desde Drive'),
               onTap: _restoreFromDrive,
             ),
             const Divider(),
-            /* Reset contador */
             ListTile(
               leading: const Icon(Icons.refresh),
               title: const Text('Reiniciar contador'),
@@ -368,12 +358,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onTap: _resetSoberDate,
             ),
             const Divider(),
-            /* Progreso + gráfico */
             if (_startDate != null) ..._buildProgressSection(),
             const Divider(),
             _buildMoodSection(),
             const Divider(),
-            /* Eliminar todo */
             ListTile(
               leading: const Icon(Icons.delete_forever, color: Colors.red),
               title: const Text('Eliminar cuenta y datos',
