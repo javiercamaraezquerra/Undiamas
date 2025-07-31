@@ -2,7 +2,7 @@ name: Build APK and AAB
 
 on:
   push:
-    branches: [ Final-2 ]
+    branches: [ main ]
 
 concurrency:
   group: build-${{ github.ref }}
