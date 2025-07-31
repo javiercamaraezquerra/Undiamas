@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models/diary_entry.dart';
 import 'models/post.dart';
+import 'routes/fade_transparent_route.dart';          // ← NUEVO
 import 'screens/onboarding_screen.dart';
 import 'screens/reflection_screen.dart';
 import 'services/achievement_service.dart';
@@ -63,7 +64,8 @@ Future<void> main() async {
       final idx = int.tryParse(resp.payload ?? '');
       if (idx != null) {
         _navKey.currentState?.push(
-          MaterialPageRoute(builder: (_) => ReflectionScreen(dayIndex: idx)),
+          FadeTransparentRoute(                       // ← CAMBIO
+              builder: (_) => ReflectionScreen(dayIndex: idx)),
         );
       }
     });
