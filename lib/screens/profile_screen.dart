@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemNavigator;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -307,6 +309,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /* ───────── UI ───────── */
   @override
   Widget build(BuildContext context) {
+    final bool dark = Theme.of(context).brightness == Brightness.dark;
+    final Color panelColor =
+        (dark ? Colors.black : Colors.white).withOpacity(0.82);
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
@@ -317,60 +323,77 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       body: SafeArea(
         top: true,
-        bottom: true,        // ahora también respeta barra de navegación/banners
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            ListTile(
-              leading: const Icon(Icons.brightness_6),
-              title: const Text('Modo oscuro'),
-              trailing: Switch(value: _isDark, onChanged: _toggleTheme),
+        bottom: true,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              child: Container(
+                color: panelColor,
+                child: ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    /* Toggles y acciones */
+                    ListTile(
+                      leading: const Icon(Icons.brightness_6),
+                      title: const Text('Modo oscuro'),
+                      trailing: Switch(
+                          value: _isDark, onChanged: _toggleTheme),
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.notifications_active_outlined),
+                      title: const Text('Notificación diaria de reflexión'),
+                      trailing: Switch(
+                          value: _notifDaily, onChanged: _toggleDailyNotif),
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.flag),
+                      title: const Text('Notificaciones de logros'),
+                      trailing: Switch(
+                          value: _notifMilestones,
+                          onChanged: _toggleMilestoneNotif),
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.cloud_sync),
+                      title: const Text('Copias automáticas en Drive'),
+                      trailing: Switch(
+                          value: _autoBackup, onChanged: _toggleAutoBackup),
+                    ),
+                    const Divider(),
+                    ListTile(
+                      leading: const Icon(Icons.cloud_download),
+                      title: const Text('Restaurar desde Drive'),
+                      onTap: _restoreFromDrive,
+                    ),
+                    const Divider(),
+                    ListTile(
+                      leading: const Icon(Icons.refresh),
+                      title: const Text('Reiniciar contador'),
+                      subtitle:
+                          const Text('Establece hoy y ahora como inicio'),
+                      onTap: _resetSoberDate,
+                    ),
+                    const Divider(),
+                    if (_startDate != null) ..._buildProgressSection(),
+                    const Divider(),
+                    _buildMoodSection(),
+                    const Divider(),
+                    ListTile(
+                      leading:
+                          const Icon(Icons.delete_forever, color: Colors.red),
+                      title: const Text('Eliminar cuenta y datos',
+                          style: TextStyle(color: Colors.red)),
+                      onTap: _deleteAccountAndData,
+                    ),
+                    const SizedBox(height: 16),
+                    _buildDisclaimer(),
+                  ],
+                ),
+              ),
             ),
-            ListTile(
-              leading: const Icon(Icons.notifications_active_outlined),
-              title: const Text('Notificación diaria de reflexión'),
-              trailing:
-                  Switch(value: _notifDaily, onChanged: _toggleDailyNotif),
-            ),
-            ListTile(
-              leading: const Icon(Icons.flag),
-              title: const Text('Notificaciones de logros'),
-              trailing: Switch(
-                  value: _notifMilestones, onChanged: _toggleMilestoneNotif),
-            ),
-            ListTile(
-              leading: const Icon(Icons.cloud_sync),
-              title: const Text('Copias automáticas en Drive'),
-              trailing:
-                  Switch(value: _autoBackup, onChanged: _toggleAutoBackup),
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.cloud_download),
-              title: const Text('Restaurar desde Drive'),
-              onTap: _restoreFromDrive,
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.refresh),
-              title: const Text('Reiniciar contador'),
-              subtitle: const Text('Establece hoy y ahora como inicio'),
-              onTap: _resetSoberDate,
-            ),
-            const Divider(),
-            if (_startDate != null) ..._buildProgressSection(),
-            const Divider(),
-            _buildMoodSection(),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.delete_forever, color: Colors.red),
-              title: const Text('Eliminar cuenta y datos',
-                  style: TextStyle(color: Colors.red)),
-              onTap: _deleteAccountAndData,
-            ),
-            const SizedBox(height: 16),
-            _buildDisclaimer(),
-          ],
+          ),
         ),
       ),
     );
@@ -437,10 +460,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildDisclaimer() {
     return Text(
       _kDisclaimer,
-      style: Theme.of(context)
-          .textTheme
-          .bodySmall
-          ?.copyWith(color: Colors.grey[600]),
+      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            fontSize: 13.5,
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+          ),
       textAlign: TextAlign.justify,
     );
   }
