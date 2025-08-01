@@ -12,7 +12,6 @@ const _bannerId = 'ca-app-pub-4402835110551152/9099084606';
 
 class BottomNavBar extends StatefulWidget {
   const BottomNavBar({super.key});
-
   @override
   State<BottomNavBar> createState() => _BottomNavBarState();
 }
@@ -30,7 +29,7 @@ class _BottomNavBarState extends State<BottomNavBar> {
 
   void _onItemTapped(int index) => setState(() => _selectedIndex = index);
 
-  bool _shouldShowAds(int index) => index == 0 || index== 1 || index == 3 || index == 4;
+  bool _shouldShowAds(int i) => i == 0 || i == 1 || i == 3 || i == 4;
 
   Color _barColor(BuildContext ctx) =>
       Theme.of(ctx).brightness == Brightness.dark
@@ -40,12 +39,25 @@ class _BottomNavBarState extends State<BottomNavBar> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBody: true,                     // ← cuerpo bajo la nav bar + banner
+      extendBody: true,
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           MountainBackground(pageIndex: _selectedIndex),
-          Positioned.fill(child: _pages[_selectedIndex]),
+          // ► cross‑fade entre páginas (elimina destello)
+          Positioned.fill(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              switchInCurve: Curves.easeOut,
+              switchOutCurve: Curves.easeIn,
+              transitionBuilder: (child, anim) =>
+                  FadeTransition(opacity: anim, child: child),
+              child: KeyedSubtree(
+                key: ValueKey<int>(_selectedIndex),
+                child: _pages[_selectedIndex],
+              ),
+            ),
+          ),
         ],
       ),
       bottomNavigationBar: Column(
