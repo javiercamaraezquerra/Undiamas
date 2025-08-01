@@ -6,7 +6,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:hive/hive.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../routes/fade_transparent_route.dart';          // ← nuevo
+import '../routes/fade_transparent_route.dart';
 import '../services/encryption_service.dart';
 import '../widgets/mountain_background.dart';
 import 'sos_screen.dart';
@@ -20,7 +20,6 @@ class _YearMonth {
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
-
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -155,10 +154,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final int baseMonth = start.month + addMonths;
     final int year = start.year + addYears + (baseMonth - 1) ~/ 12;
     final int month = ((baseMonth - 1) % 12) + 1;
-
     final int lastDay = DateTime(year, month + 1, 0).day;
     final int day = start.day <= lastDay ? start.day : lastDay;
-
     return DateTime(year, month, day, start.hour, start.minute, start.second);
   }
 
@@ -170,9 +167,7 @@ class _HomeScreenState extends State<HomeScreen> {
       years--;
       months += 12;
     }
-
     DateTime candidate = _clippedDate(start, years, months);
-
     if (now.isBefore(candidate)) {
       if (months == 0) {
         years--;
@@ -204,7 +199,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final hours = durAfter.inHours % 24;
     final minutes = durAfter.inMinutes % 60;
 
-    /* tamaño adaptativo */
     double mainSize;
     if (years > 0) {
       mainSize = 110;
@@ -214,21 +208,21 @@ class _HomeScreenState extends State<HomeScreen> {
       mainSize = 180;
     }
 
-    /* círculos principales */
     final List<Widget> mainCircles = [];
     if (years > 0) {
-      mainCircles.add(
-          _circle(years.toString(), years == 1 ? 'año' : 'años', mainSize, context));
+      mainCircles.add(_circle(years.toString(), years == 1 ? 'año' : 'años',
+          mainSize, context));
     }
     if (monthsAll > 0 || years > 0) {
       mainCircles.add(_circle(monthsAll.toString(),
           monthsAll == 1 ? 'mes' : 'meses', mainSize, context));
     }
-    mainCircles
-        .add(_circle(days.toString(), days == 1 ? 'día' : 'días', mainSize, context));
+    mainCircles.add(
+        _circle(days.toString(), days == 1 ? 'día' : 'días', mainSize, context));
 
-    final theme = Theme.of(context);
-    final bool dark = theme.brightness == Brightness.dark;
+    final bool dark = Theme.of(context).brightness == Brightness.dark;
+    final Color scrimColor =
+        dark ? Colors.black.withOpacity(.55) : Colors.black.withOpacity(.30);
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -240,11 +234,13 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Stack(
         children: [
-          const MountainBackground(pageIndex: 0), // fondo + sol
+          const MountainBackground(pageIndex: 0),
+          Positioned.fill(child: Container(color: scrimColor)), // ← SCRIM
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -258,11 +254,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _circle(hours.toString().padLeft(2, '0'),
-                            'horas', 90, context),
+                        _circle(hours.toString().padLeft(2, '0'), 'horas', 90,
+                            context),
                         const SizedBox(width: 16),
-                        _circle(minutes.toString().padLeft(2, '0'),
-                            'min', 90, context),
+                        _circle(minutes.toString().padLeft(2, '0'), 'min', 90,
+                            context),
                       ],
                     ),
                     const SizedBox(height: 32),
@@ -291,10 +287,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: dark
-                            ? theme.colorScheme.primaryContainer
-                            : theme.colorScheme.primary,
-                        foregroundColor:
-                            dark ? theme.colorScheme.onPrimaryContainer : Colors.white,
+                            ? Theme.of(context).colorScheme.primaryContainer
+                            : Theme.of(context).colorScheme.primary,
+                        foregroundColor: dark
+                            ? Theme.of(context).colorScheme.onPrimaryContainer
+                            : Colors.white,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 48, vertical: 12),
                         shape: const StadiumBorder(),
@@ -302,7 +299,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       onPressed: () => Navigator.push(
                         context,
                         FadeTransparentRoute(
-                            builder: (_) => const SosScreen()), // ← cambio
+                            builder: (_) => const SosScreen()),
                       ),
                       child: const Text('Necesito ayuda'),
                     ),
