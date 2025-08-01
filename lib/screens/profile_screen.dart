@@ -107,8 +107,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final diary =
           await Hive.openBox<DiaryEntry>('diary_secure', encryptionCipher: cipher);
 
-      final res = await DriveBackupService.uploadBackup(
-          DriveBackupService.exportHive(udm, diary));
+      final res =
+          await DriveBackupService.uploadBackup(DriveBackupService.exportHive(udm, diary));
 
       wait.close();
       if (!res.ok) {
@@ -279,8 +279,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         context: context,
         builder: (_) => AlertDialog(
           title: const Text('Completado'),
-          content: const Text(
-              'Tus datos han sido eliminados. La aplicación se reiniciará.'),
+          content:
+              const Text('Tus datos han sido eliminados. La aplicación se reiniciará.'),
           actions: [
             ElevatedButton(
                 onPressed: () => Navigator.pop(context),
@@ -307,9 +307,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /* ───────── UI ───────── */
   @override
   Widget build(BuildContext context) {
-    final bool dark = Theme.of(context).brightness == Brightness.dark;
+    final bool darkMode = Theme.of(context).brightness == Brightness.dark;
     final Color scrimColor =
-        dark ? Colors.black.withOpacity(0.55) : Colors.black.withOpacity(0.25);
+        darkMode ? Colors.black.withOpacity(.55) : Colors.black.withOpacity(.25);
+
+    /* ── color de texto/íconos sobre el scrim ── */
+    final Color fg = darkMode ? Colors.white : Colors.white;
+
+    ListTile _tile({
+      required IconData icon,
+      required String title,
+      String? subtitle,
+      Widget? trailing,
+      VoidCallback? onTap,
+    }) {
+      return ListTile(
+        leading: Icon(icon, color: fg),
+        title: Text(title, style: TextStyle(color: fg)),
+        subtitle:
+            subtitle == null ? null : Text(subtitle, style: TextStyle(color: fg)),
+        trailing: trailing,
+        iconColor: fg,
+        textColor: fg,
+        onTap: onTap,
+      );
+    }
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -323,53 +345,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           Positioned.fill(child: Container(color: scrimColor)),
           SafeArea(
-            top: true,
-            bottom: true,
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
               children: [
-                ListTile(
-                  leading: const Icon(Icons.brightness_6),
-                  title: const Text('Modo oscuro'),
-                  trailing: Switch(value: _isDark, onChanged: _toggleTheme),
+                _tile(
+                  icon: Icons.brightness_6,
+                  title: 'Modo oscuro',
+                  trailing: Switch(
+                      value: _isDark,
+                      onChanged: _toggleTheme,
+                      activeColor: Theme.of(context).colorScheme.primary),
                 ),
-                ListTile(
-                  leading: const Icon(Icons.notifications_active_outlined),
-                  title: const Text('Notificación diaria de reflexión'),
-                  trailing:
-                      Switch(value: _notifDaily, onChanged: _toggleDailyNotif),
+                _tile(
+                  icon: Icons.notifications_active_outlined,
+                  title: 'Notificación diaria de reflexión',
+                  trailing: Switch(
+                      value: _notifDaily,
+                      onChanged: _toggleDailyNotif,
+                      activeColor: Theme.of(context).colorScheme.primary),
                 ),
-                ListTile(
-                  leading: const Icon(Icons.flag),
-                  title: const Text('Notificaciones de logros'),
+                _tile(
+                  icon: Icons.flag,
+                  title: 'Notificaciones de logros',
                   trailing: Switch(
                       value: _notifMilestones,
-                      onChanged: _toggleMilestoneNotif),
+                      onChanged: _toggleMilestoneNotif,
+                      activeColor: Theme.of(context).colorScheme.primary),
                 ),
-                ListTile(
-                  leading: const Icon(Icons.cloud_sync),
-                  title: const Text('Copias automáticas en Drive'),
-                  trailing:
-                      Switch(value: _autoBackup, onChanged: _toggleAutoBackup),
+                _tile(
+                  icon: Icons.cloud_sync,
+                  title: 'Copias automáticas en Drive',
+                  trailing: Switch(
+                      value: _autoBackup,
+                      onChanged: _toggleAutoBackup,
+                      activeColor: Theme.of(context).colorScheme.primary),
                 ),
                 const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.cloud_download),
-                  title: const Text('Restaurar desde Drive'),
+                _tile(
+                  icon: Icons.cloud_download,
+                  title: 'Restaurar desde Drive',
                   onTap: _restoreFromDrive,
                 ),
                 const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.refresh),
-                  title: const Text('Reiniciar contador'),
-                  subtitle: const Text('Establece hoy y ahora como inicio'),
+                _tile(
+                  icon: Icons.refresh,
+                  title: 'Reiniciar contador',
+                  subtitle: 'Establece hoy y ahora como inicio',
                   onTap: _resetSoberDate,
                 ),
                 const Divider(),
-                if (_startDate != null) ..._buildProgressSection(),
+                if (_startDate != null) ..._buildProgressSection(fg),
                 const Divider(),
                 _buildMoodSection(),
                 const Divider(),
+                // botón rojo mantiene su estilo
                 ListTile(
                   leading: const Icon(Icons.delete_forever, color: Colors.red),
                   title: const Text('Eliminar cuenta y datos',
@@ -377,7 +406,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onTap: _deleteAccountAndData,
                 ),
                 const SizedBox(height: 18),
-                _buildDisclaimer(),
+                Text(
+                  _kDisclaimer,
+                  style: TextStyle(color: fg.withOpacity(.9), fontSize: 14),
+                  textAlign: TextAlign.justify,
+                ),
               ],
             ),
           ),
@@ -387,22 +420,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   /* ───────── helpers UI ───────── */
-  List<Widget> _buildProgressSection() {
+  List<Widget> _buildProgressSection(Color fg) {
     final milestones = AchievementService.milestones.keys.toList()..sort();
-    final next = milestones.firstWhere((d) => _daysClean < d,
-        orElse: () => -1);
+    final next = milestones.firstWhere((d) => _daysClean < d, orElse: () => -1);
 
     return [
       ListTile(
-        leading: const Icon(Icons.celebration),
-        title: Text('Llevas $_daysClean días limpio'),
-        subtitle: Text('Desde ${DateFormat.yMMMd().format(_startDate!)}'),
+        leading: Icon(Icons.celebration, color: fg),
+        title: Text('Llevas $_daysClean días limpio', style: TextStyle(color: fg)),
+        subtitle: Text('Desde ${DateFormat.yMMMd().format(_startDate!)}',
+            style: TextStyle(color: fg)),
+        iconColor: fg,
+        textColor: fg,
       ),
       if (next != -1)
         ListTile(
-          leading: const Icon(Icons.flag_outlined),
-          title: Text('Próximo hito: $next días'),
-          subtitle: Text(AchievementService.milestones[next]!),
+          leading: Icon(Icons.flag_outlined, color: fg),
+          title: Text('Próximo hito: $next días', style: TextStyle(color: fg)),
+          subtitle: Text(AchievementService.milestones[next]!,
+              style: TextStyle(color: fg)),
+          iconColor: fg,
+          textColor: fg,
         ),
     ];
   }
@@ -419,8 +457,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             final entries = box.values.toList();
             return Card(
               elevation: 1,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+              shape:
+                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               child: Padding(
                 padding: const EdgeInsets.all(12.0),
                 child: Column(
@@ -441,17 +479,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           },
         );
       },
-    );
-  }
-
-  Widget _buildDisclaimer() {
-    return Text(
-      _kDisclaimer,
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            fontSize: 14,
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.9),
-          ),
-      textAlign: TextAlign.justify,
     );
   }
 }
