@@ -191,7 +191,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             title: const Text('Reiniciar contador'),
             content: const Text(
               'Se establecerá la fecha y hora actuales como nuevo inicio '
-              'de tu periodo de sobriedad y se volverán a programar los hitos. '
+              'de tu periodo de no consumir y se volverán a programar los hitos. '
               '¿Deseas continuar?',
               textAlign: TextAlign.justify,
             ),
