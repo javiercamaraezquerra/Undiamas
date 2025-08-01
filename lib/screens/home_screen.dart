@@ -8,7 +8,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../routes/fade_transparent_route.dart';
 import '../services/encryption_service.dart';
-import '../widgets/mountain_background.dart';
 import 'sos_screen.dart';
 
 /* ───────── helper simple ───────── */
@@ -37,7 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _quote = '';
   int _lastQuoteDay = -1;
 
-  /* ───────── Ciclo de vida ───────── */
+  /* ───────── Ciclo de vida ───────── */
   @override
   void initState() {
     super.initState();
@@ -95,18 +94,18 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _elapsed = diff);
   }
 
-  Future<void> _loadQuote(int dayIndex) async {
+  Future<void> _loadQuote(int day) async {
     final data = await rootBundle.loadString('assets/data/quotes.json');
     final list = jsonDecode(data) as List<dynamic>;
     if (list.isEmpty) return;
-    setState(() => _quote = list[dayIndex % list.length] as String);
+    setState(() => _quote = list[day % list.length] as String);
   }
 
-  /* ───────── Círculo estilo glass chip ───────── */
+  /* ───────── Círculo estilo glass chip ───────── */
   Widget _circle(String value, String label, double size, BuildContext ctx) {
-    final Color border = Colors.white.withOpacity(.40);
-    final Color c1 = Colors.white.withOpacity(.60);
-    final Color c2 = Colors.white.withOpacity(.25);
+    final border = Colors.white.withOpacity(.40);
+    final c1 = Colors.white.withOpacity(.60);
+    final c2 = Colors.white.withOpacity(.25);
 
     return Container(
       width: size,
@@ -150,34 +149,33 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /* ───────── utilidades tiempo ───────── */
-  DateTime _clippedDate(DateTime start, int addYears, int addMonths) {
-    final int baseMonth = start.month + addMonths;
-    final int year = start.year + addYears + (baseMonth - 1) ~/ 12;
-    final int month = ((baseMonth - 1) % 12) + 1;
-    final int lastDay = DateTime(year, month + 1, 0).day;
-    final int day = start.day <= lastDay ? start.day : lastDay;
-    return DateTime(year, month, day, start.hour, start.minute, start.second);
+  DateTime _clippedDate(DateTime start, int addY, int addM) {
+    final baseMonth = start.month + addM;
+    final y = start.year + addY + (baseMonth - 1) ~/ 12;
+    final m = ((baseMonth - 1) % 12) + 1;
+    final lastDay = DateTime(y, m + 1, 0).day;
+    final d = start.day <= lastDay ? start.day : lastDay;
+    return DateTime(y, m, d, start.hour, start.minute, start.second);
   }
 
   _YearMonth _yearsMonthsFrom(DateTime start, DateTime now) {
-    int years = now.year - start.year;
-    int months = now.month - start.month;
-
-    if (months < 0) {
-      years--;
-      months += 12;
+    int y = now.year - start.year;
+    int m = now.month - start.month;
+    if (m < 0) {
+      y--;
+      m += 12;
     }
-    DateTime candidate = _clippedDate(start, years, months);
+    final candidate = _clippedDate(start, y, m);
     if (now.isBefore(candidate)) {
-      if (months == 0) {
-        years--;
-        months = 11;
+      if (m == 0) {
+        y--;
+        m = 11;
       } else {
-        months--;
+        m--;
       }
     }
-    if (years < 0) years = 0;
-    return _YearMonth(years, months);
+    if (y < 0) y = 0;
+    return _YearMonth(y, m);
   }
 
   /* ───────── Build ───────── */
@@ -189,40 +187,34 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final now = DateTime.now();
     final ym = _yearsMonthsFrom(_startDate!, now);
-    final years = ym.years;
-    final monthsAll = ym.months;
+    final anchor = _clippedDate(_startDate!, ym.years, ym.months);
+    final after = now.difference(anchor);
 
-    final anchor = _clippedDate(_startDate!, years, monthsAll);
-    final durAfter = now.difference(anchor);
-
-    final days = durAfter.inDays;
-    final hours = durAfter.inHours % 24;
-    final minutes = durAfter.inMinutes % 60;
+    final days = after.inDays;
+    final hours = after.inHours % 24;
+    final minutes = after.inMinutes % 60;
 
     double mainSize;
-    if (years > 0) {
+    if (ym.years > 0) {
       mainSize = 110;
-    } else if (monthsAll > 0) {
+    } else if (ym.months > 0) {
       mainSize = 140;
     } else {
       mainSize = 180;
     }
 
-    final List<Widget> mainCircles = [];
-    if (years > 0) {
-      mainCircles.add(_circle(years.toString(), years == 1 ? 'año' : 'años',
-          mainSize, context));
-    }
-    if (monthsAll > 0 || years > 0) {
-      mainCircles.add(_circle(monthsAll.toString(),
-          monthsAll == 1 ? 'mes' : 'meses', mainSize, context));
-    }
-    mainCircles.add(
-        _circle(days.toString(), days == 1 ? 'día' : 'días', mainSize, context));
+    final circles = <Widget>[
+      if (ym.years > 0)
+        _circle(ym.years.toString(), ym.years == 1 ? 'año' : 'años', mainSize,
+            context),
+      if (ym.months > 0 || ym.years > 0)
+        _circle(ym.months.toString(), ym.months == 1 ? 'mes' : 'meses',
+            mainSize, context),
+      _circle(days.toString(), days == 1 ? 'día' : 'días', mainSize, context),
+    ];
 
-    final bool dark = Theme.of(context).brightness == Brightness.dark;
-    final Color scrimColor =
-        dark ? Colors.black.withOpacity(.55) : Colors.black.withOpacity(.30);
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -232,83 +224,74 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      body: Stack(
-        children: [
-          const MountainBackground(pageIndex: 0),
-          Positioned.fill(child: Container(color: scrimColor)), // ← SCRIM
-          SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding:
-                    const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-                child: Column(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 20,
+                  runSpacing: 20,
+                  children: circles,
+                ),
+                const SizedBox(height: 20),
+                Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: 20,
-                      runSpacing: 20,
-                      children: mainCircles,
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _circle(hours.toString().padLeft(2, '0'), 'horas', 90,
-                            context),
-                        const SizedBox(width: 16),
-                        _circle(minutes.toString().padLeft(2, '0'), 'min', 90,
-                            context),
-                      ],
-                    ),
-                    const SizedBox(height: 32),
-                    if (_quote.isNotEmpty) ...[
-                      Card(
-                        color: dark
-                            ? Colors.black.withOpacity(.75)
-                            : Colors.white.withOpacity(.80),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Text(
-                            _quote,
-                            style: TextStyle(
-                                fontSize: 18,
-                                fontStyle: FontStyle.italic,
-                                color:
-                                    dark ? Colors.white : Colors.grey.shade800),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-                    ],
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: dark
-                            ? Theme.of(context).colorScheme.primaryContainer
-                            : Theme.of(context).colorScheme.primary,
-                        foregroundColor: dark
-                            ? Theme.of(context).colorScheme.onPrimaryContainer
-                            : Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 48, vertical: 12),
-                        shape: const StadiumBorder(),
-                      ),
-                      onPressed: () => Navigator.push(
-                        context,
-                        FadeTransparentRoute(
-                            builder: (_) => const SosScreen()),
-                      ),
-                      child: const Text('Necesito ayuda'),
-                    ),
+                    _circle(hours.toString().padLeft(2, '0'), 'horas', 90,
+                        context),
+                    const SizedBox(width: 16),
+                    _circle(minutes.toString().padLeft(2, '0'), 'min', 90,
+                        context),
                   ],
                 ),
-              ),
+                const SizedBox(height: 32),
+                if (_quote.isNotEmpty) ...[
+                  Card(
+                    color: dark
+                        ? Colors.black.withOpacity(.75)
+                        : Colors.white.withOpacity(.80),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        _quote,
+                        style: TextStyle(
+                            fontSize: 18,
+                            fontStyle: FontStyle.italic,
+                            color: dark ? Colors.white : Colors.grey.shade800),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                ],
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: dark
+                        ? theme.colorScheme.primaryContainer
+                        : theme.colorScheme.primary,
+                    foregroundColor: dark
+                        ? theme.colorScheme.onPrimaryContainer
+                        : Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 48, vertical: 12),
+                    shape: const StadiumBorder(),
+                  ),
+                  onPressed: () => Navigator.push(
+                    context,
+                    FadeTransparentRoute(builder: (_) => const SosScreen()),
+                  ),
+                  child: const Text('Necesito ayuda'),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
