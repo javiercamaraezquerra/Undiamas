@@ -1,0 +1,49 @@
+{
+  "project_info": {
+    "project_number": "483105798652",
+    "project_id": "app-un-dia-mas",
+    "storage_bucket": "app-un-dia-mas.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:483105798652:android:44b933293f338cbb369a79",
+        "android_client_info": {
+          "package_name": "com.celsoriaapps.undiamas"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD4PbX5BW7HapGB4mGU1L834H29iRugPtU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:483105798652:android:574e2d9f55dbc52a369a79",
+        "android_client_info": {
+          "package_name": "com.example.undiamas"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD4PbX5BW7HapGB4mGU1L834H29iRugPtU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      },
+      "admob_app_id": "ca-app-pub-4402835110551152~8514445452"
+    }
+  ],
+  "configuration_version": "1"
+}
