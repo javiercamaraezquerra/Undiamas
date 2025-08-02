@@ -15,7 +15,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace  = "com.example.undiamas"
+    namespace  = "com.celsoriaapps.undiamas"
     compileSdk = flutter.compileSdkVersion      // (34 con Flutter 3.22)
     ndkVersion = flutter.ndkVersion
 
