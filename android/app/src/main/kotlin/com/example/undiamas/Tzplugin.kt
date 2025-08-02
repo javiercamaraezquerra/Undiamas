@@ -1,4 +1,4 @@
-package com.example.undiamas   // ← usa el mismo namespace que en build.gradle
+package com.celsoriaapps.undiamas   // ← usa el mismo namespace que en build.gradle
 
 import android.content.Context
 import androidx.annotation.NonNull
