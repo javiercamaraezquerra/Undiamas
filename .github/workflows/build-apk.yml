@@ -13,29 +13,32 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # 1) ─────────────────────────── Código ────────────────────────────────
+    # 1 ▸ Código
     - name: Checkout
       uses: actions/checkout@v3
       with: { fetch-depth: 1 }
 
-    # 2) ───── FFmpeg (solo 1ª vez) + re‑encode de relax60s.mp3 ────────────
+    # 2 ▸ FFmpeg + re‑encode MP3
     - name: Ensure FFmpeg
       run: |
-        command -v ffmpeg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y ffmpeg; }
-    - name: Re‑encode MP3 (128 kbps CBR)
+        command -v ffmpeg >/dev/null || {
+          sudo apt-get update -qq &&
+          sudo apt-get install -y ffmpeg
+        }
+    - name: Re‑encode MP3 (128 kbps)
       run: |
         test -f assets/audio/relax60s.mp3 || { echo "❌ Falta relax60s.mp3"; exit 1; }
         ffmpeg -y -i assets/audio/relax60s.mp3 -codec:a libmp3lame -b:a 128k /tmp/relax.mp3
         mv /tmp/relax.mp3 assets/audio/relax60s.mp3
 
-    # 3) ─────────────── Flutter SDK + Android SDK (con caché) ─────────────
+    # 3 ▸ Flutter SDK
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
-        channel: stable                # 3.22.x
-        cache: true                    # ⬅️ activa caché propia de la acción
+        channel: stable
+        cache: true
 
-    # 4) ───────────── CMake 3.22.1 (se cachea la carpeta completa) ────────
+    # 4 ▸ CMake 3.22.1 (con caché)
     - name: Restore CMake 3.22.1 cache
       id: cmake-cache
       uses: actions/cache@v4
@@ -47,20 +50,19 @@ jobs:
       if: steps.cmake-cache.outputs.cache-hit != 'true'
       run: |
         echo "→ Instalando CMake 3.22.1 en ${ANDROID_SDK_ROOT}"
-        # Añadimos el nuevo sdkmanager al PATH para evitar la ruta obsoleta /tools/bin
         export PATH="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:$PATH"
         yes | sdkmanager "cmake;3.22.1" > /dev/null
 
-    # 5) ─────────────────────────── Cachés Pub / Gradle ───────────────────
-    - name: Restore Pub cache
-      uses: actions/cache@v4
+    # 5 ▸ Cachés Pub / Gradle
+    - uses: actions/cache@v4
+      name: Restore Pub cache
       with:
         path: ~/.pub-cache
         key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
         restore-keys: ${{ runner.os }}-pub-
 
-    - name: Restore Gradle cache
-      uses: actions/cache@v4
+    - uses: actions/cache@v4
+      name: Restore Gradle cache
       with:
         path: |
           ~/.gradle/caches
@@ -68,7 +70,7 @@ jobs:
         key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
         restore-keys: ${{ runner.os }}-gradle-
 
-    # 6) ──────────────── Dependencias + chequeos rápidos de código ─────────
+    # 6 ▸ Dependencias + chequeos rápidos
     - run: flutter pub get
     - run: dart run flutter_launcher_icons
     - run: dart fix --apply
@@ -76,7 +78,7 @@ jobs:
     - run: flutter analyze --no-pub --no-fatal-warnings --no-fatal-infos
     - run: flutter test
 
-    # 7) ───────────────────────────── Keystore ─────────────────────────────
+    # 7 ▸ Keystore de release
     - name: Decode keystore
       run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/undiamas.jks
 
@@ -89,7 +91,32 @@ jobs:
         storeFile=undiamas.jks
         EOF
 
-    # 8) ─────────────────────── Build APK + AAB (sin config‑cache) ─────────
+    # 7.1 ▸ ➜  Calcular SHA‑1 del keystore y publicarlo
+    - name: Compute release keystore SHA-1
+      id: sha1
+      run: |
+        SHA1=$(keytool -list -v \
+          -keystore android/app/undiamas.jks \
+          -alias      "${{ secrets.KEY_ALIAS }}" \
+          -storepass  "${{ secrets.STORE_PASSWORD }}" \
+          -keypass    "${{ secrets.KEY_PASSWORD }}" |
+          grep 'SHA1:' | awk '{print $2}')
+        echo "Release keystore SHA-1: $SHA1"
+        # guardar en archivo para subirlo como artefacto
+        echo $SHA1 > keystore-sha1.txt
+        # añadir al Job Summary
+        {
+          echo "### Release keystore SHA‑1"
+          echo "\`$SHA1\`"
+        } >> $GITHUB_STEP_SUMMARY
+
+    - name: Upload keystore SHA1
+      uses: actions/upload-artifact@v4
+      with:
+        name: keystore-sha1
+        path: keystore-sha1.txt
+
+    # 8 ▸ Build AAB / APK  (sin configuration‑cache)
     - name: Build release AAB
       run: |
         export GRADLE_OPTS="$GRADLE_OPTS -Dorg.gradle.configuration-cache=false"
@@ -100,35 +127,33 @@ jobs:
         export GRADLE_OPTS="$GRADLE_OPTS -Dorg.gradle.configuration-cache=false"
         flutter build apk --release
 
-    # 9) ─────────────── Subir artefactos y mapping.txt a GitHub ────────────
-    - name: Upload R8 mapping
-      uses: actions/upload-artifact@v4
+    # 9 ▸ Artefactos de build
+    - uses: actions/upload-artifact@v4
+      name: Upload R8 mapping
       with:
         name: r8-mapping
         path: build/app/outputs/mapping/release/mapping.txt
 
-    - name: Upload APK artifact
-      uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v4
+      name: Upload APK artifact
       with:
         name: undiamas-apk
         path: build/app/outputs/flutter-apk/app-release.apk
 
-    - name: Upload AAB artifact
-      uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v4
+      name: Upload AAB artifact
       with:
         name: undiamas-aab
         path: build/app/outputs/bundle/release/app-release.aab
 
-    # 10) ───────────────────────── Guardar cachés ⤵️ ───────────────────────
-    - name: Save Pub cache
-      uses: actions/cache/save@v4
+    # 10 ▸ Guardar cachés actualizados
+    - uses: actions/cache/save@v4
       if: always()
       with:
         path: ~/.pub-cache
         key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
 
-    - name: Save Gradle cache
-      uses: actions/cache/save@v4
+    - uses: actions/cache/save@v4
       if: always()
       with:
         path: |
@@ -136,8 +161,7 @@ jobs:
           ~/.gradle/wrapper
         key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
 
-    - name: Save CMake cache
-      uses: actions/cache/save@v4
+    - uses: actions/cache/save@v4
       if: always()
       with:
         path: ${{ env.ANDROID_SDK_ROOT }}/cmake/3.22.1
