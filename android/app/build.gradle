@@ -28,7 +28,7 @@ android {
     kotlinOptions { jvmTarget = "17" }
 
     defaultConfig {
-        applicationId = "com.example.undiamas"
+        applicationId = "com.celsoriaapps.undiamas"
         minSdk       = flutter.minSdkVersion
         targetSdk    = flutter.targetSdkVersion
 
