@@ -58,6 +58,9 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
       return okCat && okText;
     }).toList();
 
+      // espacio para barra de navegación + banner
+      final double bottomExtra = kBottomNavigationBarHeight + 24;
+    
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
@@ -104,7 +107,12 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
             // ── Lista de recursos ──
             Expanded(
               child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: EdgeInsets.fromLTRB(
+                    16,            // left
+                    0,             // top
+                    16,            // right
+                    bottomExtra,   // bottom → evita que el último ítem quede oculto
+                  ),
                 itemCount: filtered.length,
                 itemBuilder: (_, i) {
                   final r = filtered[i];
