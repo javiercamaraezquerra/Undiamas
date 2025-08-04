@@ -11,6 +11,8 @@ class ResourcesScreen extends StatefulWidget {
 class _ResourcesScreenState extends State<ResourcesScreen> {
   /* ───────── datos internos ───────── */
   final List<_Resource> _all = _resources;
+    // altura típica de un banner 320×50 (anchored adaptive suelen ser 50-60 px)
+    static const double _kAdBannerHeight = 50.0;
   final Set<String> _favorites = {};
 
   final List<String> _categories = [
