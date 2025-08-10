@@ -7,92 +7,65 @@ import '../widgets/bottom_nav_bar.dart';
 import '../routes/fade_transparent_route.dart';
 
 class TutorialScreen extends StatefulWidget {
-  const TutorialScreen({super.key});
+  /// Si es true, al terminar se vuelve al Onboarding (pop).
+  /// Si es false (p.ej. desde Perfil), al terminar va a la app (BottomNavBar).
+  final bool returnToOnboarding;
+  const TutorialScreen({super.key, this.returnToOnboarding = false});
 
   @override
   State<TutorialScreen> createState() => _TutorialScreenState();
-}
-
-class _StepData {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final List<String> bullets;
-  const _StepData({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.bullets,
-  });
 }
 
 class _TutorialScreenState extends State<TutorialScreen> {
   final PageController _controller = PageController();
   final ValueNotifier<int> _index = ValueNotifier(0);
 
-  final List<_StepData> _steps = const [
-    _StepData(
+  final List<_PreviewData> _slides = const [
+    _PreviewData(
       title: 'Inicio',
-      subtitle: 'Tu progreso, de un vistazo',
-      icon: Icons.home,
-      bullets: [
-        'Contador limpio en años/meses/días.',
-        'Frase motivacional del día (offline).',
-        'Botón SOS con respiración/relajación.',
-      ],
+      subtitle: 'Tu progreso de un vistazo.',
+      icon: Icons.home_rounded,
+      kind: _PreviewKind.home,
     ),
-    _StepData(
+    _PreviewData(
       title: 'Diario',
-      subtitle: 'Pon en palabras cómo te sientes',
-      icon: Icons.edit,
-      bullets: [
-        'Marca tu estado de ánimo (0‑4).',
-        'Escribe y guarda (cifrado con Hive).',
-        'Consulta el historial cuando quieras.',
-      ],
+      subtitle: 'Pon en palabras cómo te sientes.',
+      icon: Icons.edit_rounded,
+      kind: _PreviewKind.diary,
     ),
-    _StepData(
+    _PreviewData(
       title: 'Reflexión',
-      subtitle: '“Sólo por hoy”',
-      icon: Icons.auto_stories,
-      bullets: [
-        'Reflexión diaria para centrar el día.',
-        'Activa recordatorios diarios si quieres.',
-        'Accesos a recursos útiles al final.',
-      ],
+      subtitle: 'Una idea para hoy, breve y clara.',
+      icon: Icons.auto_stories_rounded,
+      kind: _PreviewKind.reflection,
     ),
-    _StepData(
+    _PreviewData(
       title: 'Recursos',
-      subtitle: 'Herramientas y guías prácticas',
+      subtitle: 'Guías y herramientas. Marca ★ para guardar.',
       icon: Icons.lightbulb_outline,
-      bullets: [
-        'Filtra por categoría o busca por texto.',
-        'Marca ★ para guardar favoritos.',
-        'Los enlaces se abren fuera por seguridad.',
-      ],
+      kind: _PreviewKind.resources,
     ),
-    _StepData(
+    _PreviewData(
       title: 'Perfil',
-      subtitle: 'Ajustes, copias y progreso',
-      icon: Icons.person,
-      bullets: [
-        'Modo oscuro, notificaciones y logros.',
-        'Copias en Google Drive y restauración.',
-        'Tendencia de ánimo y reinicio del contador.',
-      ],
+      subtitle: 'Ajustes, copias y recordatorios.',
+      icon: Icons.person_rounded,
+      kind: _PreviewKind.profile,
     ),
   ];
 
-  Future<void> _finishToApp() async {
-    // Guardamos flag por si lo quieres usar más adelante
+  Future<void> _finish() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('seenTutorial', true);
-
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      FadeTransparentRoute(builder: (_) => const BottomNavBar()),
-      (route) => false,
-    );
+
+    if (widget.returnToOnboarding) {
+      Navigator.of(context).pop(); // volvemos al Onboarding ya abierto debajo
+    } else {
+      Navigator.of(context).pushAndRemoveUntil(
+        FadeTransparentRoute(builder: (_) => const BottomNavBar()),
+        (route) => false,
+      );
+    }
   }
 
   @override
@@ -105,6 +78,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -114,7 +88,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
         elevation: 0,
         actions: [
           TextButton(
-            onPressed: _finishToApp,
+            onPressed: _finish,
             child: const Text('Saltar'),
           ),
         ],
@@ -122,7 +96,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Fondo coherente con la app
+          // Parallax sutil con tu fondo
           ValueListenableBuilder<int>(
             valueListenable: _index,
             builder: (_, i, __) => MountainBackground(pageIndex: i),
@@ -131,12 +105,12 @@ class _TutorialScreenState extends State<TutorialScreen> {
             child: Column(
               children: [
                 const SizedBox(height: 12),
-                // Indicador de progreso
+                // Dots
                 ValueListenableBuilder<int>(
                   valueListenable: _index,
                   builder: (_, i, __) => Row(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(_steps.length, (j) {
+                    children: List.generate(_slides.length, (j) {
                       final active = i == j;
                       return AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
@@ -144,9 +118,10 @@ class _TutorialScreenState extends State<TutorialScreen> {
                         width: active ? 20 : 8,
                         height: 8,
                         decoration: BoxDecoration(
-                          color: active
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.primary.withOpacity(.3),
+                          color: (isDark
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.primary)
+                              .withValues(alpha: active ? 1 : .35),
                           borderRadius: BorderRadius.circular(99),
                         ),
                       );
@@ -157,109 +132,20 @@ class _TutorialScreenState extends State<TutorialScreen> {
                 Expanded(
                   child: PageView.builder(
                     controller: _controller,
-                    itemCount: _steps.length,
+                    itemCount: _slides.length,
                     onPageChanged: (i) => _index.value = i,
+                    physics: const BouncingScrollPhysics(),
                     itemBuilder: (_, i) {
-                      final s = _steps[i];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            const SizedBox(height: 12),
-                            Icon(s.icon, size: 64),
-                            const SizedBox(height: 12),
-                            Text(
-                              s.title,
-                              style: theme.textTheme.headlineMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              s.subtitle,
-                              style: theme.textTheme.titleMedium
-                                  ?.copyWith(color: theme.hintColor),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 16),
-                            Card(
-                              elevation: 1,
-                              margin: EdgeInsets.zero,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    for (final b in s.bullets) ...[
-                                      Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          const SizedBox(
-                                            height: 24,
-                                            width: 24,
-                                            child: Icon(Icons.check_circle_outline),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Text(
-                                              b,
-                                              style: theme.textTheme.bodyLarge,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 12),
-                                    ],
-                                  ],
+                      final s = _slides[i];
+                      return _Slide(
+                        data: s,
+                        index: i,
+                        onNext: i == _slides.length - 1
+                            ? _finish
+                            : () => _controller.nextPage(
+                                  duration: const Duration(milliseconds: 250),
+                                  curve: Curves.easeOut,
                                 ),
-                              ),
-                            ),
-                            const Spacer(),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    onPressed: i == 0
-                                        ? null
-                                        : () => _controller.previousPage(
-                                              duration: const Duration(milliseconds: 250),
-                                              curve: Curves.easeOut,
-                                            ),
-                                    icon: const Icon(Icons.arrow_back),
-                                    label: const Text('Atrás'),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: ElevatedButton.icon(
-                                    onPressed: i == _steps.length - 1
-                                        ? _finishToApp
-                                        : () => _controller.nextPage(
-                                              duration: const Duration(milliseconds: 250),
-                                              curve: Curves.easeOut,
-                                            ),
-                                    icon: Icon(
-                                      i == _steps.length - 1
-                                          ? Icons.check
-                                          : Icons.arrow_forward,
-                                    ),
-                                    label: Text(
-                                      i == _steps.length - 1
-                                          ? 'Empezar ahora'
-                                          : 'Siguiente',
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                          ],
-                        ),
                       );
                     },
                   ),
@@ -271,4 +157,349 @@ class _TutorialScreenState extends State<TutorialScreen> {
       ),
     );
   }
+}
+
+/* ──────────────────── Preview A: datos + tipos ──────────────────── */
+
+enum _PreviewKind { home, diary, reflection, resources, profile }
+
+class _PreviewData {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final _PreviewKind kind;
+  const _PreviewData({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.kind,
+  });
+}
+
+/* ──────────────────── Slide visual ──────────────────── */
+
+class _Slide extends StatelessWidget {
+  final _PreviewData data;
+  final int index;
+  final VoidCallback onNext;
+  const _Slide({
+    required this.data,
+    required this.index,
+    required this.onNext,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const SizedBox(height: 6),
+          Icon(data.icon, size: 64),
+          const SizedBox(height: 12),
+          Text(
+            data.title,
+            style: t.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            data.subtitle,
+            style: t.titleMedium,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 18),
+
+          // Tarjeta de preview (mock UI)
+          _PreviewCard(kind: data.kind),
+
+          const Spacer(),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: index == 0 ? null : () => _pageBack(context),
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text('Atrás'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: onNext,
+                  icon: Icon(
+                      _isLast(context) ? Icons.check_rounded : Icons.arrow_forward),
+                  label: Text(_isLast(context) ? 'Listo' : 'Siguiente'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  bool _isLast(BuildContext context) {
+    final total = context.findAncestorStateOfType<_TutorialScreenState>()?._slides.length ?? 0;
+    return index == total - 1;
+  }
+
+  void _pageBack(BuildContext context) {
+    final ctrl = context.findAncestorStateOfType<_TutorialScreenState>()?._controller;
+    ctrl?.previousPage(duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+  }
+}
+
+/* ──────────────────── PreviewCard con mocks por sección ──────────────────── */
+
+class _PreviewCard extends StatelessWidget {
+  final _PreviewKind kind;
+  const _PreviewCard({required this.kind});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final fg = theme.brightness == Brightness.dark ? Colors.white : Colors.black87;
+    final subtle = Colors.white.withValues(alpha: .14);
+    final strong = Colors.white.withValues(alpha: .24);
+
+    Widget mock;
+    switch (kind) {
+      case _PreviewKind.home:
+        mock = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _pill('Días limpio', fg),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _metricBox('1', 'año', strong, fg),
+                const SizedBox(width: 8),
+                _metricBox('3', 'meses', strong, fg),
+                const SizedBox(width: 8),
+                _metricBox('12', 'días', strong, fg),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _line(fg, widthFactor: .85),
+            const SizedBox(height: 6),
+            _line(fg, widthFactor: .55),
+            const SizedBox(height: 12),
+            _chipRow([Icons.sos, Icons.air, Icons.self_improvement], subtle, fg),
+          ],
+        );
+        break;
+      case _PreviewKind.diary:
+        mock = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _pill('Estado de ánimo', fg),
+            const SizedBox(height: 10),
+            _emojiRow(),
+            const SizedBox(height: 12),
+            _line(fg, widthFactor: .95),
+            const SizedBox(height: 6),
+            _line(fg, widthFactor: .75),
+            const SizedBox(height: 6),
+            _line(fg, widthFactor: .55),
+          ],
+        );
+        break;
+      case _PreviewKind.reflection:
+        mock = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _pill('Sólo por hoy', fg),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Icon(Icons.format_quote, color: fg.withValues(alpha: .8)),
+                const SizedBox(width: 8),
+                Expanded(child: _line(fg, widthFactor: .95, height: 14)),
+              ],
+            ),
+            const SizedBox(height: 6),
+            _line(fg, widthFactor: .88),
+            const SizedBox(height: 6),
+            _line(fg, widthFactor: .66),
+          ],
+        );
+        break;
+      case _PreviewKind.resources:
+        mock = Column(
+          children: [
+            _resourceTile('Respiración 4‑7‑8', fg, strong, starred: true),
+            const SizedBox(height: 8),
+            _resourceTile('Plan para craving', fg, strong),
+            const SizedBox(height: 8),
+            _resourceTile('Líneas de ayuda', fg, strong),
+          ],
+        );
+        break;
+      case _PreviewKind.profile:
+        mock = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _pill('Preferencias', fg),
+            const SizedBox(height: 8),
+            _switchRow(fg, 'Modo oscuro', true),
+            const SizedBox(height: 8),
+            _switchRow(fg, 'Notificación diaria', true),
+            const SizedBox(height: 8),
+            _switchRow(fg, 'Logros', true),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(Icons.cloud_sync, color: fg),
+                const SizedBox(width: 8),
+                Expanded(child: _line(fg, widthFactor: .6)),
+              ],
+            ),
+          ],
+        );
+        break;
+    }
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: .95, end: 1),
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+      builder: (_, scale, child) => AnimatedOpacity(
+        duration: const Duration(milliseconds: 250),
+        opacity: 1,
+        child: Transform.scale(
+          scale: scale,
+          child: child,
+        ),
+      ),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface.withValues(alpha: .90),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .2),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: mock,
+      ),
+    );
+  }
+
+  Widget _pill(String text, Color fg) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: fg.withValues(alpha: .12),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(text, style: TextStyle(color: fg)),
+      );
+
+  Widget _metricBox(String big, String small, Color bg, Color fg) => Expanded(
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            children: [
+              Text(big, style: TextStyle(color: fg, fontSize: 22, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 2),
+              Text(small, style: TextStyle(color: fg.withValues(alpha: .8))),
+            ],
+          ),
+        ),
+      );
+
+  Widget _line(Color fg, {double widthFactor = 1, double height = 12}) => FractionallySizedBox(
+        widthFactor: widthFactor,
+        child: Container(
+          height: height,
+          decoration: BoxDecoration(
+            color: fg.withValues(alpha: .14),
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      );
+
+  Widget _emojiRow() => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: List.generate(5, (i) {
+          final icons = [Icons.sentiment_very_dissatisfied, Icons.sentiment_dissatisfied, Icons.sentiment_neutral, Icons.sentiment_satisfied, Icons.sentiment_very_satisfied];
+          return Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: .22),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icons[i], color: Colors.black.withValues(alpha: .75), size: 26),
+          );
+        }),
+      );
+
+  Widget _chipRow(List<IconData> icons, Color bg, Color fg) => Row(
+        children: icons
+            .map((ic) => Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: bg,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Icon(ic, color: fg),
+                ))
+            .toList(),
+      );
+
+  Widget _resourceTile(String text, Color fg, Color bg, {bool starred = false}) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.link_rounded),
+            const SizedBox(width: 8),
+            Expanded(child: Text(text)),
+            Icon(starred ? Icons.star_rounded : Icons.star_border_rounded),
+          ],
+        ),
+      );
+
+  Widget _switchRow(Color fg, String text, bool on) => Row(
+        children: [
+          Expanded(child: Text(text, style: TextStyle(color: fg))),
+          Container(
+            width: 46,
+            height: 28,
+            alignment: on ? Alignment.centerRight : Alignment.centerLeft,
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: fg.withValues(alpha: .18),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Container(
+              width: 22,
+              height: 22,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+        ],
+      );
 }
