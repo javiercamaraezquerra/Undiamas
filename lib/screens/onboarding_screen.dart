@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../routes/fade_transparent_route.dart';
 import '../widgets/mountain_background.dart';
 import '../services/achievement_service.dart';
 import '../services/encryption_service.dart';
-import 'tutorial_screen.dart'; // ← NUEVO
+import 'tutorial_screen.dart'; // tutorial antes del onboarding (sólo 1ª vez)
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -18,6 +19,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _pageCtrl = PageController();
   DateTime? _startDateTime;
   String? _substance;
+
+  bool _pushedTutorial = false;
 
   /* Sustancias sugeridas */
   final _options = [
@@ -34,6 +37,34 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     'Varias',
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    // Mostrar el tutorial (preview) sólo la primera vez que se entra a Onboarding
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (_pushedTutorial) return;
+      final prefs = await SharedPreferences.getInstance();
+      final alreadyShown = prefs.getBool('tutorialFirstRunShown') ?? false;
+
+      final cipher = await EncryptionService.getCipher();
+      final box = await Hive.openBox('udm_secure', encryptionCipher: cipher);
+      final hasStart = box.containsKey('startDate');
+
+      if (!alreadyShown && !hasStart && mounted) {
+        _pushedTutorial = true;
+        await prefs.setBool('tutorialFirstRunShown', true);
+        // Mostramos tutorial y al cerrar vuelve al Onboarding
+        // (no reemplazamos, para no duplicar Onboarding en la pila)
+        // ignore: use_build_context_synchronously
+        Navigator.of(context).push(
+          FadeTransparentRoute(
+            builder: (_) => const TutorialScreen(returnToOnboarding: true),
+          ),
+        );
+      }
+    });
+  }
+
   /* ───────── Guardar en Hive y entrar ───────── */
   Future<void> _finish() async {
     final cipher = await EncryptionService.getCipher();
@@ -46,11 +77,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
     if (!mounted) return;
 
-    // Ahora: Tutorial primero
-    Navigator.pushReplacement(
-      context,
-      FadeTransparentRoute(builder: (_) => const TutorialScreen()),
-    );
+    // Ahora, tras el onboarding, entramos directamente a la app.
+    Navigator.pushReplacementNamed(context, '/'); // o BottomNavBar si no usas rutas con nombre
+    // Si prefieres Fade:
+    // Navigator.pushReplacement(context, FadeTransparentRoute(builder: (_) => const BottomNavBar()));
 
     // Programar hitos como antes
     AchievementService.scheduleMilestones(_startDateTime!);
@@ -127,10 +157,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           label: Text(
                             e,
                             style:
-                                TextStyle(color: Colors.black.withOpacity(.70)),
+                                TextStyle(color: Colors.black.withValues(alpha: .70)),
                           ),
                           selected: _substance == e,
-                          selectedColor: Colors.white.withOpacity(.25),
+                          selectedColor: Colors.white.withValues(alpha: .25),
                           backgroundColor: Colors.white24,
                           onSelected: (_) => setState(() => _substance = e),
                         ),
