@@ -84,7 +84,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
   ];
 
   Future<void> _finishToApp() async {
-    // Por si más adelante quieres condicionar que no se re‑muestre
+    // Guardamos flag por si lo quieres usar más adelante
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('seenTutorial', true);
 
