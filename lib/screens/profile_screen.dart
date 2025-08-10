@@ -11,6 +11,8 @@ import '../services/achievement_service.dart';
 import '../services/drive_backup_service.dart';
 import '../services/encryption_service.dart';
 import '../widgets/mood_trend_chart.dart';
+import '../routes/fade_transparent_route.dart'; // ← NUEVO
+import 'tutorial_screen.dart';                 // ← NUEVO
 
 const _kDisclaimer =
     'La información y los recordatorios de esta aplicación son de carácter '
@@ -214,7 +216,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await box.put('startDate', now.toIso8601String());
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('start_date');
+    await prefs.remove('start_date'); // conservamos tu limpieza
     if (_notifMilestones) await AchievementService.scheduleMilestones(now);
 
     setState(() {
@@ -372,6 +374,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       onChanged: _toggleMilestoneNotif,
                       activeColor: Theme.of(context).colorScheme.primary),
                 ),
+
+                // ← NUEVO: acceso al tutorial (único sitio tras el onboarding)
+                _tile(
+                  icon: Icons.slideshow,
+                  title: 'Ver tutorial rápido',
+                  onTap: () => Navigator.push(
+                    context,
+                    FadeTransparentRoute(builder: (_) => const TutorialScreen()),
+                  ),
+                ),
+
                 _tile(
                   icon: Icons.cloud_sync,
                   title: 'Copias automáticas en Drive',
