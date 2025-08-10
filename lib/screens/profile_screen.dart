@@ -76,9 +76,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await prefs.setBool('notifyDailyReflection', v);
     setState(() => _notifDaily = v);
 
+    if (!mounted) return; // evitar use_build_context_synchronously
     if (v) {
-      final json = await DefaultAssetBundle.of(context)
-          .loadString('assets/data/reflections.json');
+      final assets = DefaultAssetBundle.of(context);
+      final json = await assets.loadString('assets/data/reflections.json');
       await AchievementService.scheduleDailyReflections(json);
     } else {
       await AchievementService.cancelDailyReflections();
