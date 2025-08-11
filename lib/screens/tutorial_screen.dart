@@ -1,5 +1,6 @@
 // lib/screens/tutorial_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../widgets/mountain_background.dart';
@@ -8,7 +9,7 @@ import '../routes/fade_transparent_route.dart';
 
 class TutorialScreen extends StatefulWidget {
   /// Si es true, al terminar se vuelve al Onboarding (pop).
-  /// Si es false (p.ej. desde Perfil), al terminar va a la app (BottomNavBar).
+  /// Si es false (desde Perfil), al terminar va a la app (BottomNavBar).
   final bool returnToOnboarding;
   const TutorialScreen({super.key, this.returnToOnboarding = false});
 
@@ -19,6 +20,7 @@ class TutorialScreen extends StatefulWidget {
 class _TutorialScreenState extends State<TutorialScreen> {
   final PageController _controller = PageController();
   final ValueNotifier<int> _index = ValueNotifier(0);
+  final ValueNotifier<double> _page = ValueNotifier(0);
 
   final List<_PreviewData> _slides = const [
     _PreviewData(
@@ -26,32 +28,46 @@ class _TutorialScreenState extends State<TutorialScreen> {
       subtitle: 'Tu progreso de un vistazo.',
       icon: Icons.home_rounded,
       kind: _PreviewKind.home,
+      semantics: 'Pantalla de inicio, muestra el contador y accesos rápidos.',
     ),
     _PreviewData(
       title: 'Diario',
       subtitle: 'Pon en palabras cómo te sientes.',
       icon: Icons.edit_rounded,
       kind: _PreviewKind.diary,
+      semantics: 'Diario para registrar estado de ánimo y notas.',
     ),
     _PreviewData(
       title: 'Reflexión',
       subtitle: 'Una idea para hoy, breve y clara.',
       icon: Icons.auto_stories_rounded,
       kind: _PreviewKind.reflection,
+      semantics: 'Reflexión diaria con recordatorio opcional.',
     ),
     _PreviewData(
       title: 'Recursos',
       subtitle: 'Guías y herramientas. Marca ★ para guardar.',
       icon: Icons.lightbulb_outline,
       kind: _PreviewKind.resources,
+      semantics: 'Recursos prácticos con favoritos.',
     ),
     _PreviewData(
       title: 'Perfil',
       subtitle: 'Ajustes, copias y recordatorios.',
       icon: Icons.person_rounded,
       kind: _PreviewKind.profile,
+      semantics: 'Preferencias, copias en Drive y progreso.',
     ),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(() {
+      final p = _controller.page ?? _index.value.toDouble();
+      _page.value = p;
+    });
+  }
 
   Future<void> _finish() async {
     final prefs = await SharedPreferences.getInstance();
@@ -72,6 +88,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
   void dispose() {
     _controller.dispose();
     _index.dispose();
+    _page.dispose();
     super.dispose();
   }
 
@@ -96,11 +113,12 @@ class _TutorialScreenState extends State<TutorialScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Parallax sutil con tu fondo
+          // Parallax: fondo propio + nubecitas
           ValueListenableBuilder<int>(
             valueListenable: _index,
             builder: (_, i, __) => MountainBackground(pageIndex: i),
           ),
+          _ParallaxDecor(page: _page),
           SafeArea(
             child: Column(
               children: [
@@ -118,9 +136,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
                         width: active ? 20 : 8,
                         height: 8,
                         decoration: BoxDecoration(
-                          color: (isDark
-                                  ? theme.colorScheme.primary
-                                  : theme.colorScheme.primary)
+                          color: theme.colorScheme.primary
                               .withValues(alpha: active ? 1 : .35),
                           borderRadius: BorderRadius.circular(99),
                         ),
@@ -137,15 +153,32 @@ class _TutorialScreenState extends State<TutorialScreen> {
                     physics: const BouncingScrollPhysics(),
                     itemBuilder: (_, i) {
                       final s = _slides[i];
-                      return _Slide(
-                        data: s,
-                        index: i,
-                        onNext: i == _slides.length - 1
-                            ? _finish
-                            : () => _controller.nextPage(
-                                  duration: const Duration(milliseconds: 250),
-                                  curve: Curves.easeOut,
-                                ),
+                      return Semantics(
+                        label: s.semantics,
+                        child: _Slide(
+                          data: s,
+                          index: i,
+                          onNext: () {
+                            HapticFeedback.lightImpact();
+                            if (i == _slides.length - 1) {
+                              _finish();
+                            } else {
+                              _controller.nextPage(
+                                duration: const Duration(milliseconds: 250),
+                                curve: Curves.easeOut,
+                              );
+                            }
+                          },
+                          onBack: i == 0
+                              ? null
+                              : () {
+                                  HapticFeedback.selectionClick();
+                                  _controller.previousPage(
+                                    duration: const Duration(milliseconds: 250),
+                                    curve: Curves.easeOut,
+                                  );
+                                },
+                        ),
                       );
                     },
                   ),
@@ -159,7 +192,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
   }
 }
 
-/* ──────────────────── Preview A: datos + tipos ──────────────────── */
+/* ──────────────────── Tipos y datos ──────────────────── */
 
 enum _PreviewKind { home, diary, reflection, resources, profile }
 
@@ -168,11 +201,13 @@ class _PreviewData {
   final String subtitle;
   final IconData icon;
   final _PreviewKind kind;
+  final String semantics;
   const _PreviewData({
     required this.title,
     required this.subtitle,
     required this.icon,
     required this.kind,
+    required this.semantics,
   });
 }
 
@@ -182,10 +217,12 @@ class _Slide extends StatelessWidget {
   final _PreviewData data;
   final int index;
   final VoidCallback onNext;
+  final VoidCallback? onBack;
   const _Slide({
     required this.data,
     required this.index,
     required this.onNext,
+    required this.onBack,
   });
 
   @override
@@ -221,7 +258,7 @@ class _Slide extends StatelessWidget {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: index == 0 ? null : () => _pageBack(context),
+                  onPressed: onBack,
                   icon: const Icon(Icons.arrow_back),
                   label: const Text('Atrás'),
                 ),
@@ -230,8 +267,7 @@ class _Slide extends StatelessWidget {
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: onNext,
-                  icon: Icon(
-                      _isLast(context) ? Icons.check_rounded : Icons.arrow_forward),
+                  icon: Icon(_isLast(context) ? Icons.check_rounded : Icons.arrow_forward),
                   label: Text(_isLast(context) ? 'Listo' : 'Siguiente'),
                 ),
               ),
@@ -244,14 +280,71 @@ class _Slide extends StatelessWidget {
   }
 
   bool _isLast(BuildContext context) {
-    final total = context.findAncestorStateOfType<_TutorialScreenState>()?._slides.length ?? 0;
+    final total =
+        context.findAncestorStateOfType<_TutorialScreenState>()?._slides.length ?? 0;
     return index == total - 1;
   }
+}
 
-  void _pageBack(BuildContext context) {
-    final ctrl = context.findAncestorStateOfType<_TutorialScreenState>()?._controller;
-    ctrl?.previousPage(duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+/* ──────────────────── Parallax de nubecitas ──────────────────── */
+
+class _ParallaxDecor extends StatelessWidget {
+  final ValueListenable<double> page;
+  const _ParallaxDecor({required this.page});
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: page,
+        builder: (_, __) {
+          final p = page.value;
+          return LayoutBuilder(
+            builder: (_, c) {
+              final w = c.maxWidth;
+              final h = c.maxHeight;
+              Offset off(double factorX, double factorY) =>
+                  Offset((p * 12) * factorX, (p * 6) * factorY);
+
+              return Stack(children: [
+                Positioned(
+                  top: h * .18,
+                  left: w * .12 + off(1, .6).dx,
+                  child: _cloud(38),
+                ),
+                Positioned(
+                  top: h * .30 + off(-.6, .4).dy,
+                  right: w * .18,
+                  child: _cloud(52),
+                ),
+                Positioned(
+                  top: h * .55 + off(.4, -.7).dy,
+                  left: w * .28,
+                  child: _cloud(28),
+                ),
+              ]);
+            },
+          );
+        },
+      ),
+    );
   }
+
+  Widget _cloud(double size) => Container(
+        width: size,
+        height: size * .64,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .16),
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .12),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+      );
 }
 
 /* ──────────────────── PreviewCard con mocks por sección ──────────────────── */
@@ -371,10 +464,7 @@ class _PreviewCard extends StatelessWidget {
       builder: (_, scale, child) => AnimatedOpacity(
         duration: const Duration(milliseconds: 250),
         opacity: 1,
-        child: Transform.scale(
-          scale: scale,
-          child: child,
-        ),
+        child: Transform.scale(scale: scale, child: child),
       ),
       child: Container(
         width: double.infinity,
@@ -436,7 +526,13 @@ class _PreviewCard extends StatelessWidget {
   Widget _emojiRow() => Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: List.generate(5, (i) {
-          final icons = [Icons.sentiment_very_dissatisfied, Icons.sentiment_dissatisfied, Icons.sentiment_neutral, Icons.sentiment_satisfied, Icons.sentiment_very_satisfied];
+          final icons = [
+            Icons.sentiment_very_dissatisfied,
+            Icons.sentiment_dissatisfied,
+            Icons.sentiment_neutral,
+            Icons.sentiment_satisfied,
+            Icons.sentiment_very_satisfied
+          ];
           return Container(
             width: 46,
             height: 46,
