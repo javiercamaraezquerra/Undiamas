@@ -1,6 +1,7 @@
 // lib/screens/tutorial_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:flutter/foundation.dart' show ValueListenable; // ← FIX: para ValueListenable
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../widgets/mountain_background.dart';
@@ -95,7 +96,6 @@ class _TutorialScreenState extends State<TutorialScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -289,7 +289,7 @@ class _Slide extends StatelessWidget {
 /* ──────────────────── Parallax de nubecitas ──────────────────── */
 
 class _ParallaxDecor extends StatelessWidget {
-  final ValueListenable<double> page;
+  final ValueListenable<double> page; // ← ahora compila
   const _ParallaxDecor({required this.page});
 
   @override
