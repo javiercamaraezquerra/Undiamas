@@ -11,8 +11,8 @@ import '../services/achievement_service.dart';
 import '../services/drive_backup_service.dart';
 import '../services/encryption_service.dart';
 import '../widgets/mood_trend_chart.dart';
-import '../routes/fade_transparent_route.dart'; // ← NUEVO
-import 'tutorial_screen.dart';                 // ← NUEVO
+import '../routes/fade_transparent_route.dart';
+import 'tutorial_screen.dart';
 
 const _kDisclaimer =
     'La información y los recordatorios de esta aplicación son de carácter '
@@ -311,11 +311,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final bool darkMode = Theme.of(context).brightness == Brightness.dark;
-    final Color scrimColor =
-        darkMode ? Colors.black.withOpacity(.55) : Colors.black.withOpacity(.25);
+    final Color scrimColor = darkMode
+        ? Colors.black.withValues(alpha: .55)
+        : Colors.black.withValues(alpha: .25);
 
     /* ── color de texto/íconos sobre el scrim ── */
-    final Color fg = darkMode ? Colors.white : Colors.white;
+    final Color fg = Colors.white;
 
     ListTile _tile({
       required IconData icon,
@@ -376,15 +377,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       activeColor: Theme.of(context).colorScheme.primary),
                 ),
 
-                // ← NUEVO: acceso al tutorial (único sitio tras el onboarding)
-                _tile(
-                  icon: Icons.slideshow,
-                  title: 'Ver tutorial rápido',
-                  onTap: () => Navigator.push(
-                    context,
-                    FadeTransparentRoute(builder: (_) => const TutorialScreen()),
-                  ),
-                ),
+                // (ANTES estaba aquí "Ver tutorial rápido") — MOVIDO más abajo
 
                 _tile(
                   icon: Icons.cloud_sync,
@@ -400,29 +393,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   title: 'Restaurar desde Drive',
                   onTap: _restoreFromDrive,
                 ),
-                const Divider(),
-                _tile(
+                // const Divider(),  // ← QUITADO: sin línea antes de "Reiniciar contador"
+
+                _tile( // ← se mantiene aquí pero sin divisores arriba/abajo
                   icon: Icons.refresh,
                   title: 'Reiniciar contador',
                   subtitle: 'Establece hoy y ahora como inicio',
                   onTap: _resetSoberDate,
                 ),
-                const Divider(),
+                // const Divider(),  // ← QUITADO
+
                 if (_startDate != null) ..._buildProgressSection(fg),
                 const Divider(),
                 _buildMoodSection(),
-                const Divider(),
-                // botón rojo mantiene su estilo
+
+                const Divider(), // separación del bloque final
+
+                // NUEVA UBICACIÓN: justo encima de "Eliminar", sin Divider entre ambos
+                _tile(
+                  icon: Icons.slideshow,
+                  title: 'Ver tutorial rápido',
+                  onTap: () => Navigator.push(
+                    context,
+                    FadeTransparentRoute(builder: (_) => const TutorialScreen()),
+                  ),
+                ),
+
+                // botón rojo, sin Divider por encima
                 ListTile(
                   leading: const Icon(Icons.delete_forever, color: Colors.red),
                   title: const Text('Eliminar cuenta y datos',
                       style: TextStyle(color: Colors.red)),
                   onTap: _deleteAccountAndData,
                 ),
+
                 const SizedBox(height: 18),
                 Text(
                   _kDisclaimer,
-                  style: TextStyle(color: fg.withOpacity(.9), fontSize: 14),
+                  style: TextStyle(color: fg.withValues(alpha: .9), fontSize: 14),
                   textAlign: TextAlign.justify,
                 ),
               ],
