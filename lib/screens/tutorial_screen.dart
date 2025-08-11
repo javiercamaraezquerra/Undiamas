@@ -1,7 +1,7 @@
 // lib/screens/tutorial_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
-import 'package:flutter/foundation.dart' show ValueListenable; // ← FIX: para ValueListenable
+import 'package:flutter/foundation.dart' show ValueListenable; // para ValueListenable
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../widgets/mountain_background.dart';
@@ -18,10 +18,13 @@ class TutorialScreen extends StatefulWidget {
   State<TutorialScreen> createState() => _TutorialScreenState();
 }
 
-class _TutorialScreenState extends State<TutorialScreen> {
+class _TutorialScreenState extends State<TutorialScreen> with TickerProviderStateMixin {
   final PageController _controller = PageController();
   final ValueNotifier<int> _index = ValueNotifier(0);
   final ValueNotifier<double> _page = ValueNotifier(0);
+
+  // ← NEW: flag para mostrar/ocultar el hint de gesto
+  bool _showSwipeHint = true;
 
   final List<_PreviewData> _slides = const [
     _PreviewData(
@@ -64,9 +67,16 @@ class _TutorialScreenState extends State<TutorialScreen> {
   @override
   void initState() {
     super.initState();
+
+    // Listener de página para parallax y para ocultar el hint al primer gesto.
     _controller.addListener(() {
       final p = _controller.page ?? _index.value.toDouble();
       _page.value = p;
+
+      // Si el usuario empezó a arrastrar (valor fraccional) ocultamos el hint.
+      if (_showSwipeHint && (p - _index.value).abs() > 0.01) {
+        setState(() => _showSwipeHint = false);
+      }
     });
   }
 
@@ -113,12 +123,13 @@ class _TutorialScreenState extends State<TutorialScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Parallax: fondo propio + nubecitas
+          // Fondo con parallax sutil
           ValueListenableBuilder<int>(
             valueListenable: _index,
             builder: (_, i, __) => MountainBackground(pageIndex: i),
           ),
           _ParallaxDecor(page: _page),
+
           SafeArea(
             child: Column(
               children: [
@@ -149,7 +160,12 @@ class _TutorialScreenState extends State<TutorialScreen> {
                   child: PageView.builder(
                     controller: _controller,
                     itemCount: _slides.length,
-                    onPageChanged: (i) => _index.value = i,
+                    onPageChanged: (i) {
+                      _index.value = i;
+                      if (_showSwipeHint && i > 0) {
+                        setState(() => _showSwipeHint = false); // por si pasa de página con botón
+                      }
+                    },
                     physics: const BouncingScrollPhysics(),
                     itemBuilder: (_, i) {
                       final s = _slides[i];
@@ -184,6 +200,29 @@ class _TutorialScreenState extends State<TutorialScreen> {
                   ),
                 ),
               ],
+            ),
+          ),
+
+          // ← NEW: Overlay del hint de gesto (solo slide 0 y hasta que se deslice)
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: true,
+              child: ValueListenableBuilder<int>(
+                valueListenable: _index,
+                builder: (_, i, __) => AnimatedOpacity(
+                  duration: const Duration(milliseconds: 300),
+                  opacity: (i == 0 && _showSwipeHint) ? 1 : 0,
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        bottom: 16 + MediaQuery.of(context).padding.bottom,
+                      ),
+                      child: const _SwipeHint(),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         ],
@@ -289,7 +328,7 @@ class _Slide extends StatelessWidget {
 /* ──────────────────── Parallax de nubecitas ──────────────────── */
 
 class _ParallaxDecor extends StatelessWidget {
-  final ValueListenable<double> page; // ← ahora compila
+  final ValueListenable<double> page;
   const _ParallaxDecor({required this.page});
 
   @override
@@ -439,9 +478,9 @@ class _PreviewCard extends StatelessWidget {
           children: [
             _pill('Preferencias', fg),
             const SizedBox(height: 8),
-            _switchRow(fg, 'Modo oscuro', true),
-            const SizedBox(height: 8),
             _switchRow(fg, 'Notificación diaria', true),
+            const SizedBox(height: 8),
+            _switchRow(fg, 'Modo oscuro', true),
             const SizedBox(height: 8),
             _switchRow(fg, 'Logros', true),
             const SizedBox(height: 12),
@@ -570,32 +609,4 @@ class _PreviewCard extends StatelessWidget {
             const Icon(Icons.link_rounded),
             const SizedBox(width: 8),
             Expanded(child: Text(text)),
-            Icon(starred ? Icons.star_rounded : Icons.star_border_rounded),
-          ],
-        ),
-      );
-
-  Widget _switchRow(Color fg, String text, bool on) => Row(
-        children: [
-          Expanded(child: Text(text, style: TextStyle(color: fg))),
-          Container(
-            width: 46,
-            height: 28,
-            alignment: on ? Alignment.centerRight : Alignment.centerLeft,
-            padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              color: fg.withValues(alpha: .18),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Container(
-              width: 22,
-              height: 22,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-        ],
-      );
-}
+     
