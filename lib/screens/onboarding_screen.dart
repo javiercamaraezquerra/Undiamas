@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../routes/fade_transparent_route.dart';
 import '../widgets/mountain_background.dart';
+import '../widgets/bottom_nav_bar.dart';           // ← usamos BottomNavBar al finalizar
 import '../services/achievement_service.dart';
 import '../services/encryption_service.dart';
 import 'tutorial_screen.dart'; // tutorial antes del onboarding (sólo 1ª vez)
@@ -19,7 +20,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _pageCtrl = PageController();
   DateTime? _startDateTime;
   String? _substance;
-
   bool _pushedTutorial = false;
 
   /* Sustancias sugeridas */
@@ -50,12 +50,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final box = await Hive.openBox('udm_secure', encryptionCipher: cipher);
       final hasStart = box.containsKey('startDate');
 
-      if (!alreadyShown && !hasStart && mounted) {
+      if (!alreadyShown && !hasStart) {
         _pushedTutorial = true;
         await prefs.setBool('tutorialFirstRunShown', true);
-        // Mostramos tutorial y al cerrar vuelve al Onboarding
-        // (no reemplazamos, para no duplicar Onboarding en la pila)
-        // ignore: use_build_context_synchronously
+        if (!mounted) return;
         Navigator.of(context).push(
           FadeTransparentRoute(
             builder: (_) => const TutorialScreen(returnToOnboarding: true),
@@ -77,10 +75,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
     if (!mounted) return;
 
-    // Ahora, tras el onboarding, entramos directamente a la app.
-    Navigator.pushReplacementNamed(context, '/'); // o BottomNavBar si no usas rutas con nombre
-    // Si prefieres Fade:
-    // Navigator.pushReplacement(context, FadeTransparentRoute(builder: (_) => const BottomNavBar()));
+    // Entramos a la app (BottomNavBar). Si prefieres rutas con nombre, ver nota abajo.
+    Navigator.pushAndRemoveUntil(
+      context,
+      FadeTransparentRoute(builder: (_) => const BottomNavBar()),
+      (route) => false,
+    );
 
     // Programar hitos como antes
     AchievementService.scheduleMilestones(_startDateTime!);
@@ -102,11 +102,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
     setState(() {
       _startDateTime = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
+        date.year, date.month, date.day, time.hour, time.minute,
       );
     });
 
