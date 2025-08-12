@@ -1,4 +1,3 @@
-// lib/screens/tutorial_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter/foundation.dart' show ValueListenable;
@@ -9,8 +8,6 @@ import '../widgets/bottom_nav_bar.dart';
 import '../routes/fade_transparent_route.dart';
 
 class TutorialScreen extends StatefulWidget {
-  /// Si es true, al terminar se vuelve al Onboarding (pop).
-  /// Si es false (desde Perfil), al terminar va a la app (BottomNavBar).
   final bool returnToOnboarding;
   const TutorialScreen({super.key, this.returnToOnboarding = false});
 
@@ -22,8 +19,6 @@ class _TutorialScreenState extends State<TutorialScreen> {
   final PageController _controller = PageController();
   final ValueNotifier<int> _index = ValueNotifier(0);
   final ValueNotifier<double> _page = ValueNotifier(0);
-
-  // Muestra el hint “Desliza para ver más” en el primer slide
   bool _showSwipeHint = true;
 
   final List<_PreviewData> _slides = const [
@@ -70,7 +65,6 @@ class _TutorialScreenState extends State<TutorialScreen> {
     _controller.addListener(() {
       final p = _controller.page ?? _index.value.toDouble();
       _page.value = p;
-      // En cuanto hay arrastre (valor fraccional), ocultamos el hint
       if (_showSwipeHint && (p - _index.value).abs() > 0.01) {
         setState(() => _showSwipeHint = false);
       }
@@ -120,18 +114,15 @@ class _TutorialScreenState extends State<TutorialScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Fondo con parallax sutil
           ValueListenableBuilder<int>(
             valueListenable: _index,
             builder: (_, i, __) => MountainBackground(pageIndex: i),
           ),
           _ParallaxDecor(page: _page),
-
           SafeArea(
             child: Column(
               children: [
                 const SizedBox(height: 12),
-                // Dots de progreso
                 ValueListenableBuilder<int>(
                   valueListenable: _index,
                   builder: (_, i, __) => Row(
@@ -199,8 +190,6 @@ class _TutorialScreenState extends State<TutorialScreen> {
               ],
             ),
           ),
-
-          // Hint de gesto (sólo slide 0 y mientras no se haya deslizado)
           Positioned.fill(
             child: IgnorePointer(
               ignoring: true,
@@ -228,8 +217,6 @@ class _TutorialScreenState extends State<TutorialScreen> {
   }
 }
 
-/* ──────────────────── Tipos y datos ──────────────────── */
-
 enum _PreviewKind { home, diary, reflection, resources, profile }
 
 class _PreviewData {
@@ -246,8 +233,6 @@ class _PreviewData {
     required this.semantics,
   });
 }
-
-/* ──────────────────── Slide visual ──────────────────── */
 
 class _Slide extends StatelessWidget {
   final _PreviewData data;
@@ -285,10 +270,7 @@ class _Slide extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 18),
-
-          // Tarjeta de preview (mock UI)
           _PreviewCard(kind: data.kind),
-
           const Spacer(),
           Row(
             children: [
@@ -303,9 +285,9 @@ class _Slide extends StatelessWidget {
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: onNext,
-                  icon: Icon(_isLast(context)
-                      ? Icons.check_rounded
-                      : Icons.arrow_forward),
+                  icon: Icon(
+                    _isLast(context) ? Icons.check_rounded : Icons.arrow_forward,
+                  ),
                   label: Text(_isLast(context) ? 'Listo' : 'Siguiente'),
                 ),
               ),
@@ -326,8 +308,6 @@ class _Slide extends StatelessWidget {
     return index == total - 1;
   }
 }
-
-/* ──────────────────── Parallax de nubecitas ──────────────────── */
 
 class _ParallaxDecor extends StatelessWidget {
   final ValueListenable<double> page;
@@ -390,8 +370,6 @@ class _ParallaxDecor extends StatelessWidget {
       );
 }
 
-/* ──────────────────── PreviewCard con mocks por sección ──────────────────── */
-
 class _PreviewCard extends StatelessWidget {
   final _PreviewKind kind;
   const _PreviewCard({required this.kind});
@@ -426,8 +404,7 @@ class _PreviewCard extends StatelessWidget {
             const SizedBox(height: 6),
             _line(fg, widthFactor: .55),
             const SizedBox(height: 12),
-            _chipRow(
-                [Icons.sos, Icons.air, Icons.self_improvement], subtle, fg),
+            _chipRow([Icons.sos, Icons.air, Icons.self_improvement], subtle, fg),
           ],
         );
         break;
@@ -632,4 +609,107 @@ class _PreviewCard extends StatelessWidget {
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
-          color: bg
+          color: bg,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.link_rounded),
+            const SizedBox(width: 8),
+            Expanded(child: Text(text)),
+            Icon(starred ? Icons.star_rounded : Icons.star_border_rounded),
+          ],
+        ),
+      );
+
+  Widget _switchRow(Color fg, String text, bool on) => Row(
+        children: [
+          Expanded(child: Text(text, style: TextStyle(color: fg))),
+          Container(
+            width: 46,
+            height: 28,
+            alignment: on ? Alignment.centerRight : Alignment.centerLeft,
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: fg.withValues(alpha: .18),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Container(
+              width: 22,
+              height: 22,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+        ],
+      );
+}
+
+class _SwipeHint extends StatefulWidget {
+  const _SwipeHint();
+
+  @override
+  State<_SwipeHint> createState() => _SwipeHintState();
+}
+
+class _SwipeHintState extends State<_SwipeHint>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ac;
+  late final Animation<double> _dx;
+
+  @override
+  void initState() {
+    super.initState();
+    _ac = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _dx = Tween<double>(begin: 0, end: 6).animate(
+      CurvedAnimation(parent: _ac, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ac.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bgColor = theme.colorScheme.surface.withValues(alpha: .90);
+    final fgColor = theme.colorScheme.onSurface;
+
+    return AnimatedBuilder(
+      animation: _dx,
+      builder: (_, __) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .18),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Desliza para ver más', style: TextStyle(color: fgColor)),
+            const SizedBox(width: 8),
+            Transform.translate(
+              offset: Offset(_dx.value, 0),
+              child: Icon(Icons.chevron_right_rounded, color: fgColor),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
