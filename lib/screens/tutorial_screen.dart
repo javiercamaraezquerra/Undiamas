@@ -1,7 +1,7 @@
 // lib/screens/tutorial_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
-import 'package:flutter/foundation.dart' show ValueListenable; // para ValueListenable
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../widgets/mountain_background.dart';
@@ -18,12 +18,12 @@ class TutorialScreen extends StatefulWidget {
   State<TutorialScreen> createState() => _TutorialScreenState();
 }
 
-class _TutorialScreenState extends State<TutorialScreen> with TickerProviderStateMixin {
+class _TutorialScreenState extends State<TutorialScreen> {
   final PageController _controller = PageController();
   final ValueNotifier<int> _index = ValueNotifier(0);
   final ValueNotifier<double> _page = ValueNotifier(0);
 
-  // ← NEW: flag para mostrar/ocultar el hint de gesto
+  // Muestra el hint “Desliza para ver más” en el primer slide
   bool _showSwipeHint = true;
 
   final List<_PreviewData> _slides = const [
@@ -67,13 +67,10 @@ class _TutorialScreenState extends State<TutorialScreen> with TickerProviderStat
   @override
   void initState() {
     super.initState();
-
-    // Listener de página para parallax y para ocultar el hint al primer gesto.
     _controller.addListener(() {
       final p = _controller.page ?? _index.value.toDouble();
       _page.value = p;
-
-      // Si el usuario empezó a arrastrar (valor fraccional) ocultamos el hint.
+      // En cuanto hay arrastre (valor fraccional), ocultamos el hint
       if (_showSwipeHint && (p - _index.value).abs() > 0.01) {
         setState(() => _showSwipeHint = false);
       }
@@ -86,7 +83,7 @@ class _TutorialScreenState extends State<TutorialScreen> with TickerProviderStat
     if (!mounted) return;
 
     if (widget.returnToOnboarding) {
-      Navigator.of(context).pop(); // volvemos al Onboarding ya abierto debajo
+      Navigator.of(context).pop();
     } else {
       Navigator.of(context).pushAndRemoveUntil(
         FadeTransparentRoute(builder: (_) => const BottomNavBar()),
@@ -134,7 +131,7 @@ class _TutorialScreenState extends State<TutorialScreen> with TickerProviderStat
             child: Column(
               children: [
                 const SizedBox(height: 12),
-                // Dots
+                // Dots de progreso
                 ValueListenableBuilder<int>(
                   valueListenable: _index,
                   builder: (_, i, __) => Row(
@@ -163,7 +160,7 @@ class _TutorialScreenState extends State<TutorialScreen> with TickerProviderStat
                     onPageChanged: (i) {
                       _index.value = i;
                       if (_showSwipeHint && i > 0) {
-                        setState(() => _showSwipeHint = false); // por si pasa de página con botón
+                        setState(() => _showSwipeHint = false);
                       }
                     },
                     physics: const BouncingScrollPhysics(),
@@ -203,7 +200,7 @@ class _TutorialScreenState extends State<TutorialScreen> with TickerProviderStat
             ),
           ),
 
-          // ← NEW: Overlay del hint de gesto (solo slide 0 y hasta que se deslice)
+          // Hint de gesto (sólo slide 0 y mientras no se haya deslizado)
           Positioned.fill(
             child: IgnorePointer(
               ignoring: true,
@@ -306,7 +303,9 @@ class _Slide extends StatelessWidget {
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: onNext,
-                  icon: Icon(_isLast(context) ? Icons.check_rounded : Icons.arrow_forward),
+                  icon: Icon(_isLast(context)
+                      ? Icons.check_rounded
+                      : Icons.arrow_forward),
                   label: Text(_isLast(context) ? 'Listo' : 'Siguiente'),
                 ),
               ),
@@ -319,8 +318,11 @@ class _Slide extends StatelessWidget {
   }
 
   bool _isLast(BuildContext context) {
-    final total =
-        context.findAncestorStateOfType<_TutorialScreenState>()?._slides.length ?? 0;
+    final total = context
+            .findAncestorStateOfType<_TutorialScreenState>()
+            ?._slides
+            .length ??
+        0;
     return index == total - 1;
   }
 }
@@ -345,23 +347,25 @@ class _ParallaxDecor extends StatelessWidget {
               Offset off(double factorX, double factorY) =>
                   Offset((p * 12) * factorX, (p * 6) * factorY);
 
-              return Stack(children: [
-                Positioned(
-                  top: h * .18,
-                  left: w * .12 + off(1, .6).dx,
-                  child: _cloud(38),
-                ),
-                Positioned(
-                  top: h * .30 + off(-.6, .4).dy,
-                  right: w * .18,
-                  child: _cloud(52),
-                ),
-                Positioned(
-                  top: h * .55 + off(.4, -.7).dy,
-                  left: w * .28,
-                  child: _cloud(28),
-                ),
-              ]);
+              return Stack(
+                children: [
+                  Positioned(
+                    top: h * .18,
+                    left: w * .12 + off(1, .6).dx,
+                    child: _cloud(38),
+                  ),
+                  Positioned(
+                    top: h * .30 + off(-.6, .4).dy,
+                    right: w * .18,
+                    child: _cloud(52),
+                  ),
+                  Positioned(
+                    top: h * .55 + off(.4, -.7).dy,
+                    left: w * .28,
+                    child: _cloud(28),
+                  ),
+                ],
+              );
             },
           );
         },
@@ -395,11 +399,12 @@ class _PreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final fg = theme.brightness == Brightness.dark ? Colors.white : Colors.black87;
+    final fg =
+        theme.brightness == Brightness.dark ? Colors.white : Colors.black87;
     final subtle = Colors.white.withValues(alpha: .14);
     final strong = Colors.white.withValues(alpha: .24);
 
-    Widget mock;
+    late final Widget mock;
     switch (kind) {
       case _PreviewKind.home:
         mock = Column(
@@ -421,7 +426,8 @@ class _PreviewCard extends StatelessWidget {
             const SizedBox(height: 6),
             _line(fg, widthFactor: .55),
             const SizedBox(height: 12),
-            _chipRow([Icons.sos, Icons.air, Icons.self_improvement], subtle, fg),
+            _chipRow(
+                [Icons.sos, Icons.air, Icons.self_improvement], subtle, fg),
           ],
         );
         break;
@@ -543,7 +549,14 @@ class _PreviewCard extends StatelessWidget {
           ),
           child: Column(
             children: [
-              Text(big, style: TextStyle(color: fg, fontSize: 22, fontWeight: FontWeight.bold)),
+              Text(
+                big,
+                style: TextStyle(
+                  color: fg,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               const SizedBox(height: 2),
               Text(small, style: TextStyle(color: fg.withValues(alpha: .8))),
             ],
@@ -551,7 +564,12 @@ class _PreviewCard extends StatelessWidget {
         ),
       );
 
-  Widget _line(Color fg, {double widthFactor = 1, double height = 12}) => FractionallySizedBox(
+  Widget _line(
+    Color fg, {
+    double widthFactor = 1,
+    double height = 12,
+  }) =>
+      FractionallySizedBox(
         widthFactor: widthFactor,
         child: Container(
           height: height,
@@ -570,7 +588,7 @@ class _PreviewCard extends StatelessWidget {
             Icons.sentiment_dissatisfied,
             Icons.sentiment_neutral,
             Icons.sentiment_satisfied,
-            Icons.sentiment_very_satisfied
+            Icons.sentiment_very_satisfied,
           ];
           return Container(
             width: 46,
@@ -579,34 +597,39 @@ class _PreviewCard extends StatelessWidget {
               color: Colors.white.withValues(alpha: .22),
               shape: BoxShape.circle,
             ),
-            child: Icon(icons[i], color: Colors.black.withValues(alpha: .75), size: 26),
+            child: Icon(
+              icons[i],
+              color: Colors.black.withValues(alpha: .75),
+              size: 26,
+            ),
           );
         }),
       );
 
   Widget _chipRow(List<IconData> icons, Color bg, Color fg) => Row(
         children: icons
-            .map((ic) => Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: bg,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Icon(ic, color: fg),
-                ))
+            .map(
+              (ic) => Container(
+                margin: const EdgeInsets.only(right: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: bg,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Icon(ic, color: fg),
+              ),
+            )
             .toList(),
       );
 
-  Widget _resourceTile(String text, Color fg, Color bg, {bool starred = false}) => Container(
+  Widget _resourceTile(
+    String text,
+    Color fg,
+    Color bg, {
+    bool starred = false,
+  }) =>
+      Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.link_rounded),
-            const SizedBox(width: 8),
-            Expanded(child: Text(text)),
-     
+          color: bg
