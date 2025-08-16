@@ -11,8 +11,10 @@ class ResourcesScreen extends StatefulWidget {
 class _ResourcesScreenState extends State<ResourcesScreen> {
   /* ───────── datos internos ───────── */
   final List<_Resource> _all = _resources;
-    // altura típica de un banner 320×50 (anchored adaptive suelen ser 50-60 px)
-    static const double _kAdBannerHeight = 60.0;
+
+  // Altura típica de un banner (anchored adaptive suele estar entre 50-60 px; en tablet puede ser mayor).
+  static const double _kAdBannerHeight = 60.0;
+
   final Set<String> _favorites = {};
 
   final List<String> _categories = [
@@ -50,6 +52,16 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
     });
   }
 
+  /// Calcula el relleno inferior necesario para que los últimos elementos no
+  /// queden tapados por: bottom bar, banner de anuncios y el safe area.
+  double _bottomContentPadding(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    final double safeBottom = mq.padding.bottom; // Notch/gestures
+    const double navHeight = kBottomNavigationBarHeight; // barra inferior estándar
+    const double extraMargin = 24.0; // respiración adicional
+    return safeBottom + navHeight + _kAdBannerHeight + extraMargin;
+  }
+
   /* ───────── UI ───────── */
   @override
   Widget build(BuildContext context) {
@@ -60,16 +72,16 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
       return okCat && okText;
     }).toList();
 
-      // espacio para barra de navegación + banner
-      final double bottomExtra = kBottomNavigationBarHeight + 24;
-    
+    // espacio combinado para barra inferior + banner + safe area + margen
+    final double bottomExtra = _bottomContentPadding(context);
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
       appBar: AppBar(title: const Text('Recursos')),
-      body: SafeArea(               // ← desplazamos el contenido bajo la barra
+      body: SafeArea(
         top: true,
-        bottom: false,
+        bottom: false, // gestionamos nosotros el relleno inferior
         child: Column(
           children: [
             // ── Buscador ──
@@ -109,12 +121,12 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
             // ── Lista de recursos ──
             Expanded(
               child: ListView.builder(
-                  padding: EdgeInsets.fromLTRB(
-                    16,            // left
-                    0,             // top
-                    16,            // right
-                    bottomExtra,   // bottom → evita que el último ítem quede oculto
-                  ),
+                padding: EdgeInsets.fromLTRB(
+                  16,           // left
+                  0,            // top
+                  16,           // right
+                  bottomExtra,  // bottom → evita que el último ítem quede oculto por el banner
+                ),
                 itemCount: filtered.length,
                 itemBuilder: (_, i) {
                   final r = filtered[i];
@@ -122,10 +134,13 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
                   return Card(
                     margin: const EdgeInsets.symmetric(vertical: 6),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     child: ListTile(
-                      title: Text(r.title,
-                          style: const TextStyle(fontWeight: FontWeight.bold)),
+                      title: Text(
+                        r.title,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
                       subtitle: Text(r.category),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -163,49 +178,56 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (_) => DraggableScrollableSheet(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) => DraggableScrollableSheet(
         expand: false,
-        builder: (_, ctrl) => Padding(
-          padding: const EdgeInsets.all(16),
-          child: ListView(
-            controller: ctrl,
-            children: [
-              Text(r.title,
-                  style: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
-              Text(r.content, style: const TextStyle(fontSize: 16)),
-              if (r.url != null) ...[
-                const SizedBox(height: 20),
-                ElevatedButton.icon(
-                  icon: Icon(r.typeIcon),
-                  label: const Text('Abrir recurso'),
-                  onPressed: () async {
-                    final uri = Uri.parse(r.url!);
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri,
-                          mode: LaunchMode.externalApplication);
-                    } else {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Enlace no disponible 😕')),
-                        );
+        builder: (innerCtx, ctrl) {
+          // Usamos el mismo cálculo para que el contenido del modal
+          // tampoco quede tapado por el banner.
+          final double sheetBottomExtra = _bottomContentPadding(innerCtx);
+
+          return Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + sheetBottomExtra),
+            child: ListView(
+              controller: ctrl,
+              children: [
+                Text(
+                  r.title,
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                Text(r.content, style: const TextStyle(fontSize: 16)),
+                if (r.url != null) ...[
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    icon: Icon(r.typeIcon),
+                    label: const Text('Abrir recurso'),
+                    onPressed: () async {
+                      final uri = Uri.parse(r.url!);
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      } else {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Enlace no disponible 😕')),
+                          );
+                        }
                       }
-                    }
-                  },
+                    },
+                  ),
+                ],
+                const SizedBox(height: 24),
+                Center(
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cerrar'),
+                  ),
                 ),
               ],
-              const SizedBox(height: 24),
-              Center(
-                child: TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cerrar')),
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -428,4 +450,3 @@ final List<_Resource> _resources = [
     type: _ResType.video,
   ),
 ];
-
