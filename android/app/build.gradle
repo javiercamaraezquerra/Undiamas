@@ -16,7 +16,7 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace  = "com.celsoriaapps.undiamas"
-    compileSdk = 35      // (34 con Flutter 3.22)
+    compileSdk = flutter.compileSdkVersion      // (34 con Flutter 3.22)
     ndkVersion = flutter.ndkVersion
 
     /* ── Java 17 + desugaring ────────────────────────────────── */
@@ -29,8 +29,8 @@ android {
 
     defaultConfig {
         applicationId = "com.celsoriaapps.undiamas"
-        minSdk       = 24
-        targetSdk    = 35
+        minSdk       = flutter.minSdkVersion
+        targetSdk    = flutter.targetSdkVersion
 
         // ★ MOD – recuerda subirlos cuando publiques un update
         versionCode  = flutter.versionCode
