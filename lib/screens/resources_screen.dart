@@ -13,7 +13,7 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
   final List<_Resource> _all = _resources;
 
   // Altura típica de un banner (anchored adaptive suele estar entre 50-60 px; en tablet puede ser mayor).
-  static const double _kAdBannerHeight = 60.0;
+  static const double _kAdBannerHeight = 50.0;
 
   final Set<String> _favorites = {};
 
