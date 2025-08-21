@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
@@ -18,34 +19,79 @@ class BackupResult<T> {
   const BackupResult.failure(this.message) : ok = false, data = null;
 }
 
+/// Excepción controlada para errores de autenticación
+class BackupAuthException implements Exception {
+  final String message;
+  BackupAuthException(this.message);
+  @override
+  String toString() => message;
+}
+
 class DriveBackupService {
   static const _fileName = 'udm_backup.json';
 
-  static final _googleSignIn = GoogleSignIn(scopes: [
+  static const List<String> _requiredScopes = [
     drive.DriveApi.driveFileScope,
     drive.DriveApi.driveAppdataScope,
-  ]);
+  ];
 
-  /* ── autenticación ── */
-  static Future<drive.DriveApi?> _driveApi() async {
+  static final _googleSignIn = GoogleSignIn(scopes: _requiredScopes);
+
+  /* ── autenticación (con diagnóstico) ── */
+  static Future<drive.DriveApi> _driveApi() async {
     try {
-      final acc = _googleSignIn.currentUser ??
-          await _googleSignIn.signInSilently() ??
-          await _googleSignIn.signIn();
-      if (acc == null) return null;
+      // 1) Cuenta actual o login (silencioso → interactivo)
+      var acc = _googleSignIn.currentUser
+          ?? await _googleSignIn.signInSilently()
+          ?? await _googleSignIn.signIn();
 
+      if (acc == null) {
+        throw BackupAuthException('Autenticación cancelada por el usuario.');
+      }
+
+      // 2) Asegurar los scopes de Drive (incremental auth)
+      final granted = await _googleSignIn.requestScopes(_requiredScopes);
+      if (!granted) {
+        throw BackupAuthException(
+            'Permisos de Google Drive no concedidos por el usuario.');
+      }
+
+      // 3) Cliente autenticado
       final headers = await acc.authHeaders;
       return drive.DriveApi(_AuthenticatedClient(IOClient(), headers));
-    } catch (_) {
-      return null;
+    } on PlatformException catch (e) {
+      throw BackupAuthException(_explainSignInError(e));
+    } catch (e) {
+      throw BackupAuthException('No se pudo iniciar sesión: $e');
     }
+  }
+
+  static String _explainSignInError(PlatformException e) {
+    final blob =
+        '${e.code}|${e.message}|${e.details}'.toUpperCase().replaceAll(' ', '');
+    // 12501 / SIGN_IN_CANCELLED → usuario cancela
+    if (blob.contains('12501') || blob.contains('CANCEL')) {
+      return 'Autenticación cancelada por el usuario.';
+    }
+    // 10 / DEVELOPER_ERROR → SHA‑1 o package no coinciden en el cliente OAuth Android
+    if (blob.contains('DEVELOPER_ERROR') || blob.contains('10')) {
+      return 'Configuración OAuth inválida: revisa SHA‑1 y package en Google Cloud.';
+    }
+    // 12500 / SIGN_IN_FAILED
+    if (blob.contains('12500') || blob.contains('FAILED')) {
+      return 'Fallo en el inicio de sesión de Google. Reinténtalo más tarde.';
+    }
+    // 7 / NETWORK_ERROR
+    if (blob.contains('7') || blob.contains('NETWORK')) {
+      return 'Sin conexión de red o sin Google Play Services.';
+    }
+    return 'Error de autenticación de Google: ${e.code}';
   }
 
   /* ──────────── PÚBLICO ──────────── */
 
   static Future<bool> isSignedIn() async =>
-      _googleSignIn.currentUser != null ||
-      await _googleSignIn.isSignedIn();
+      _googleSignIn.currentUser != null || await _googleSignIn.isSignedIn();
 
   static Future<void> disconnect() async {
     try {
@@ -56,16 +102,21 @@ class DriveBackupService {
   }
 
   static Future<void> deleteBackup() async {
-    final api = await _driveApi();
-    if (api == null) return;
-
-    final res = await api.files.list(
-      spaces: 'appDataFolder',
-      q: "name='$_fileName' and trashed=false",
-      $fields: 'files(id)',
-    );
-    for (final f in res.files ?? <drive.File>[]) {
-      await api.files.delete(f.id!);
+    try {
+      final api = await _driveApi();
+      final res = await api.files.list(
+        spaces: 'appDataFolder',
+        q: "name='$_fileName' and trashed=false",
+        $fields: 'files(id)',
+      );
+      for (final f in res.files ?? <drive.File>[]) {
+        await api.files.delete(f.id!);
+      }
+    } on BackupAuthException {
+      // sin auth -> ignoramos (best effort)
+      return;
+    } catch (_) {
+      // silencioso
     }
   }
 
@@ -74,9 +125,6 @@ class DriveBackupService {
       Map<String, dynamic> json) async {
     try {
       final api = await _driveApi();
-      if (api == null) {
-        return const BackupResult.failure('Autenticación cancelada.');
-      }
 
       final dir = await getTemporaryDirectory();
       final tmp =
@@ -100,6 +148,8 @@ class DriveBackupService {
         await api.files.create(metaCreate, uploadMedia: media);
       }
       return const BackupResult.success();
+    } on BackupAuthException catch (e) {
+      return BackupResult.failure(e.message);
     } catch (e) {
       return BackupResult.failure('Error al subir: $e');
     }
@@ -109,9 +159,6 @@ class DriveBackupService {
   static Future<BackupResult<Map<String, dynamic>>> downloadBackup() async {
     try {
       final api = await _driveApi();
-      if (api == null) {
-        return const BackupResult.failure('Autenticación cancelada.');
-      }
 
       final res = await api.files.list(
         spaces: 'appDataFolder',
@@ -139,6 +186,8 @@ class DriveBackupService {
       final data =
           jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>? ?? {};
       return BackupResult.success(data);
+    } on BackupAuthException catch (e) {
+      return BackupResult.failure(e.message);
     } catch (e) {
       return BackupResult.failure('Error al descargar: $e');
     }
@@ -156,8 +205,8 @@ class DriveBackupService {
             .toList(),
       };
 
-  static Future<bool> importHive(Map<String, dynamic> data, Box udm,
-      Box<DiaryEntry> diary) async {
+  static Future<bool> importHive(
+      Map<String, dynamic> data, Box udm, Box<DiaryEntry> diary) async {
     try {
       if (data['udm'] is Map) {
         await udm.putAll(Map<String, dynamic>.from(data['udm']));
