@@ -8,3 +8,9 @@
 # ─── Gson ───
 -keep class com.google.gson.** { *; }
 -keep class com.google.gson.stream.** { *; }
+
+# ─── Google Sign-In / Play Services Auth (defensivo) ───
+-keep class com.google.android.gms.auth.api.signin.** { *; }
+-keep class com.google.android.gms.common.api.** { *; }
+-keep class com.google.android.gms.tasks.** { *; }
+-dontwarn com.google.android.gms.**
