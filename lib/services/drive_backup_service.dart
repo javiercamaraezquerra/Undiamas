@@ -19,76 +19,88 @@ class BackupResult<T> {
   const BackupResult.failure(this.message) : ok = false, data = null;
 }
 
-/// Excepción controlada para errores de autenticación
-class BackupAuthException implements Exception {
-  final String message;
-  BackupAuthException(this.message);
-  @override
-  String toString() => message;
-}
-
 class DriveBackupService {
   static const _fileName = 'udm_backup.json';
 
-  static const List<String> _requiredScopes = [
+  static const List<String> _scopes = <String>[
     drive.DriveApi.driveFileScope,
     drive.DriveApi.driveAppdataScope,
   ];
 
-  static final _googleSignIn = GoogleSignIn(scopes: _requiredScopes);
+  static final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: _scopes);
 
-  /* ── autenticación (con diagnóstico) ── */
+  /* ───────────────────── Helpers de errores ───────────────────── */
+
+  static bool _isDeveloperError(PlatformException e) {
+    // GoogleSignIn lanza PlatformException con code 'sign_in_failed'.
+    // El DEVELOPER_ERROR suele dejar "status: 10" en message/details.
+    final msg = (e.message ?? '') + ' ' + (e.details ?? '').toString();
+    return e.code == 'sign_in_failed' && msg.contains('status: 10');
+  }
+
+  static BackupResult<T> _mapAuthError<T>(Object e) {
+    if (e is PlatformException) {
+      if (_isDeveloperError(e)) {
+        return const BackupResult.failure(
+            'Configuración OAuth inválida: revisa SHA‑1 y package en Google Cloud.');
+      }
+      if (e.code == GoogleSignIn.kSignInCanceledError) {
+        return const BackupResult.failure('Autenticación cancelada.');
+      }
+      return BackupResult.failure(
+          'Error de autenticación: ${e.code} ${(e.message ?? '').trim()}');
+    }
+    return BackupResult.failure('Error de autenticación: $e');
+  }
+
+  /* ───────────────────── Autenticación + scopes ───────────────── */
+
   static Future<drive.DriveApi> _driveApi() async {
+    GoogleSignInAccount? acc;
+
+    // 1) Reutiliza sesión si existe
     try {
-      // 1) Cuenta actual o login (silencioso → interactivo)
-      var acc = _googleSignIn.currentUser
-          ?? await _googleSignIn.signInSilently()
-          ?? await _googleSignIn.signIn();
+      acc = _googleSignIn.currentUser ?? await _googleSignIn.signInSilently();
+    } on PlatformException {
+      acc = null; // ignoramos fallos silenciosos
+    }
 
-      if (acc == null) {
-        throw BackupAuthException('Autenticación cancelada por el usuario.');
+    // 2) Pide login si no había sesión
+    if (acc == null) {
+      try {
+        acc = await _googleSignIn.signIn();
+      } on PlatformException catch (e) {
+        // propagamos para que upload/download muestren el motivo exacto
+        throw e;
       }
+    }
 
-      // 2) Asegurar los scopes de Drive (incremental auth)
-      final granted = await _googleSignIn.requestScopes(_requiredScopes);
+    if (acc == null) {
+      // usuario canceló
+      throw const PlatformException(
+        code: GoogleSignIn.kSignInCanceledError,
+        message: 'cancelled',
+      );
+    }
+
+    // 3) Asegura/eleva scopes (caso típico: sesión previa sin Drive)
+    try {
+      final granted = await acc.requestScopes(_scopes);
       if (!granted) {
-        throw BackupAuthException(
-            'Permisos de Google Drive no concedidos por el usuario.');
+        throw const PlatformException(
+          code: 'scopes_denied',
+          message: 'Permisos de Google Drive denegados por el usuario.',
+        );
       }
-
-      // 3) Cliente autenticado
-      final headers = await acc.authHeaders;
-      return drive.DriveApi(_AuthenticatedClient(IOClient(), headers));
     } on PlatformException catch (e) {
-      throw BackupAuthException(_explainSignInError(e));
-    } catch (e) {
-      throw BackupAuthException('No se pudo iniciar sesión: $e');
+      throw e;
     }
+
+    final headers = await acc.authHeaders;
+    return drive.DriveApi(_AuthenticatedClient(IOClient(), headers));
   }
 
-  static String _explainSignInError(PlatformException e) {
-    final blob =
-        '${e.code}|${e.message}|${e.details}'.toUpperCase().replaceAll(' ', '');
-    // 12501 / SIGN_IN_CANCELLED → usuario cancela
-    if (blob.contains('12501') || blob.contains('CANCEL')) {
-      return 'Autenticación cancelada por el usuario.';
-    }
-    // 10 / DEVELOPER_ERROR → SHA‑1 o package no coinciden en el cliente OAuth Android
-    if (blob.contains('DEVELOPER_ERROR') || blob.contains('10')) {
-      return 'Configuración OAuth inválida: revisa SHA‑1 y package en Google Cloud.';
-    }
-    // 12500 / SIGN_IN_FAILED
-    if (blob.contains('12500') || blob.contains('FAILED')) {
-      return 'Fallo en el inicio de sesión de Google. Reinténtalo más tarde.';
-    }
-    // 7 / NETWORK_ERROR
-    if (blob.contains('7') || blob.contains('NETWORK')) {
-      return 'Sin conexión de red o sin Google Play Services.';
-    }
-    return 'Error de autenticación de Google: ${e.code}';
-  }
-
-  /* ──────────── PÚBLICO ──────────── */
+  /* ─────────────────────────── PÚBLICO ────────────────────────── */
 
   static Future<bool> isSignedIn() async =>
       _googleSignIn.currentUser != null || await _googleSignIn.isSignedIn();
@@ -102,25 +114,21 @@ class DriveBackupService {
   }
 
   static Future<void> deleteBackup() async {
-    try {
-      final api = await _driveApi();
-      final res = await api.files.list(
-        spaces: 'appDataFolder',
-        q: "name='$_fileName' and trashed=false",
-        $fields: 'files(id)',
-      );
-      for (final f in res.files ?? <drive.File>[]) {
-        await api.files.delete(f.id!);
-      }
-    } on BackupAuthException {
-      // sin auth -> ignoramos (best effort)
-      return;
-    } catch (_) {
-      // silencioso
+    final api = await _safeDriveApi();
+    if (api == null) return;
+
+    final res = await api.files.list(
+      spaces: 'appDataFolder',
+      q: "name='$_fileName' and trashed=false",
+      $fields: 'files(id)',
+    );
+    for (final f in res.files ?? <drive.File>[]) {
+      await api.files.delete(f.id!);
     }
   }
 
-  /* ── SUBIR / ACTUALIZAR ─ */
+  /* ─────────────────────── SUBIR / ACTUALIZAR ─────────────────── */
+
   static Future<BackupResult<void>> uploadBackup(
       Map<String, dynamic> json) async {
     try {
@@ -132,7 +140,7 @@ class DriveBackupService {
 
       final media = drive.Media(tmp.openRead(), await tmp.length(),
           contentType: 'application/json');
-      final metaCreate = drive.File()..name = _fileName;
+      final meta = drive.File()..name = _fileName;
 
       final prev = await api.files.list(
         spaces: 'appDataFolder',
@@ -141,21 +149,21 @@ class DriveBackupService {
       );
 
       if (prev.files?.isNotEmpty == true) {
-        await api.files.update(metaCreate, prev.files!.first.id!,
-            uploadMedia: media);
+        await api.files.update(meta, prev.files!.first.id!, uploadMedia: media);
       } else {
-        metaCreate.parents = ['appDataFolder'];
-        await api.files.create(metaCreate, uploadMedia: media);
+        meta.parents = ['appDataFolder'];
+        await api.files.create(meta, uploadMedia: media);
       }
       return const BackupResult.success();
-    } on BackupAuthException catch (e) {
-      return BackupResult.failure(e.message);
+    } on PlatformException catch (e) {
+      return _mapAuthError<void>(e);
     } catch (e) {
       return BackupResult.failure('Error al subir: $e');
     }
   }
 
-  /* ── DESCARGAR ─ */
+  /* ─────────────────────────── DESCARGAR ──────────────────────── */
+
   static Future<BackupResult<Map<String, dynamic>>> downloadBackup() async {
     try {
       final api = await _driveApi();
@@ -178,7 +186,6 @@ class DriveBackupService {
 
       final bytes = <int>[];
       await media.stream.forEach(bytes.addAll);
-
       if (bytes.isEmpty) {
         return const BackupResult.failure('La copia está vacía.');
       }
@@ -186,14 +193,15 @@ class DriveBackupService {
       final data =
           jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>? ?? {};
       return BackupResult.success(data);
-    } on BackupAuthException catch (e) {
-      return BackupResult.failure(e.message);
+    } on PlatformException catch (e) {
+      return _mapAuthError<Map<String, dynamic>>(e);
     } catch (e) {
       return BackupResult.failure('Error al descargar: $e');
     }
   }
 
-  /* ── EXPORT / IMPORT (sin cambios) ─ */
+  /* ────────────────────── EXPORT / IMPORT ─────────────────────── */
+
   static Map<String, dynamic> exportHive(Box udm, Box<DiaryEntry> diary) => {
         'udm': udm.toMap(),
         'diary': diary.values
@@ -227,6 +235,17 @@ class DriveBackupService {
         mood: m['mood'] ?? 2,
         createdAt: DateTime.parse(m['createdAt']),
       );
+
+  /* ──────────────────────── Internos ──────────────────────────── */
+
+  // Igual que _driveApi, pero no propaga errores (para deleteBackup).
+  static Future<drive.DriveApi?> _safeDriveApi() async {
+    try {
+      return await _driveApi();
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 /* ── cliente autenticado ─ */
