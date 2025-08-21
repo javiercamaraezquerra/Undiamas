@@ -75,7 +75,7 @@ class _BottomNavBarState extends State<BottomNavBar> {
             onTap: _onItemTapped,
             items: const [
               BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
-              BottomNavigationBarItem(icon: Icon(Icons.edit), label: 'Diario'),
+              BottomNavigationBarItem(icon: Icon(Icons.edit), label: 'Inventario'),
               BottomNavigationBarItem(
                   icon: Icon(Icons.auto_stories), label: 'Reflexión'),
               BottomNavigationBarItem(
