@@ -27,10 +27,10 @@ class _TutorialScreenState extends State<TutorialScreen> {
       subtitle: 'Tu progreso de un vistazo.',
       icon: Icons.home_rounded,
       kind: _PreviewKind.home,
-      semantics: 'Pantalla de inicio, muestra el contador y accesos rápidos.',
+      semantics: 'Pantalla de inicio, muestra el contador de días limpio y accesos rápidos.',
     ),
     _PreviewData(
-      title: 'Diario',
+      title: 'Inventario',
       subtitle: 'Pon en palabras cómo te sientes.',
       icon: Icons.edit_rounded,
       kind: _PreviewKind.diary,
