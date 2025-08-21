@@ -78,7 +78,7 @@ class _JournalScreenState extends State<JournalScreen> {
               extendBodyBehindAppBar: true,
               backgroundColor: Colors.transparent,
               appBar: AppBar(
-                title: const Text('Diario'),
+                title: const Text('Inventario'),
                 backgroundColor: Colors.transparent,
                 elevation: 0,
               ),
