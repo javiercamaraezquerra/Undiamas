@@ -42,12 +42,18 @@ class AppTheme {
       headlineSmall: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
       bodyMedium: TextStyle(fontSize: 16),
     ).apply(bodyColor: Colors.black87, displayColor: Colors.black87),
-    appBarTheme: const AppBarTheme(
+    appBarTheme: AppBarTheme(
       foregroundColor: Colors.white,
       backgroundColor: Colors.transparent,
       elevation: 0,
-      titleTextStyle:
-          TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+      titleTextStyle: const TextStyle(
+        fontSize: 24,
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+      ),
+      toolbarTextStyle: const TextStyle(color: Colors.white),
+      actionsIconTheme: const IconThemeData(color: Colors.white),
+      iconTheme: const IconThemeData(color: Colors.white),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
@@ -71,11 +77,16 @@ class AppTheme {
       headlineMedium: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
       headlineSmall: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
       bodyMedium: TextStyle(fontSize: 16),
-    ).apply(bodyColor: Colors.white, displayColor: Colors.white), // ← texto claro
+    ).apply(
+      bodyColor: Colors.white,
+      displayColor: Colors.white,
+    ), // ← texto claro
     appBarTheme: const AppBarTheme(
       foregroundColor: Colors.white,
       backgroundColor: Colors.transparent,
       elevation: 0,
+      titleTextStyle:
+          TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
