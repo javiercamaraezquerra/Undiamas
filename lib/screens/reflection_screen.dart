@@ -49,12 +49,15 @@ class _ReflectionScreenState extends State<ReflectionScreen>
   Future<void> _loadReflection() async {
     try {
       String raw = await rootBundle.loadString('assets/data/reflections.json');
+
+      // El archivo puede tener comentarios de bloque y de línea; los limpiamos.
       raw = raw.replaceAll(
           RegExp(r'/\*[^*]*\*+(?:[^/*][^*]*\*+)*/', dotAll: true), '');
       raw = raw
           .split('\n')
           .where((l) => !l.trimLeft().startsWith('//'))
           .join('\n');
+
       final data = jsonDecode(raw) as List<dynamic>;
       if (data.length < 365) throw const FormatException('Faltan reflexiones');
 
@@ -181,8 +184,8 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                   'Si también quieres ver un principio espiritual por día de “Sólo por hoy”, '
                   'haz clic aquí para verla gratuitamente.',
                   textAlign: TextAlign.start,
-                  style: TextStyle(
-                      color: dark ? Colors.white : Colors.black87),
+                  style:
+                      TextStyle(color: dark ? Colors.white : Colors.black87),
                 ),
               ),
             ],
