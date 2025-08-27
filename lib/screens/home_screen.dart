@@ -31,7 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription<BoxEvent>? _sub;
   DateTime? _startDate;
   Duration _elapsed = Duration.zero;
-  late Timer _ticker;
+  Timer? _ticker; // ← evitamos LateInitializationError si se desmonta antes
 
   String _quote = '';
   int _lastQuoteDay = -1;
@@ -41,20 +41,23 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _initDates().then((_) {
+      if (!mounted) return;
       _updateElapsed();
       _ticker =
           Timer.periodic(const Duration(minutes: 1), (_) => _updateElapsed());
 
       _sub = _box.watch(key: 'startDate').listen((e) {
-        _startDate = DateTime.parse(e.value as String);
-        _updateElapsed();
+        if (e.value is String) {
+          _startDate = DateTime.tryParse(e.value as String) ?? _startDate;
+          _updateElapsed();
+        }
       });
     });
   }
 
   @override
   void dispose() {
-    _ticker.cancel();
+    _ticker?.cancel();
     _sub?.cancel();
     super.dispose();
   }
@@ -65,16 +68,19 @@ class _HomeScreenState extends State<HomeScreen> {
     _box = await Hive.openBox(_boxName, encryptionCipher: cipher);
 
     if (_box.containsKey('startDate')) {
-      _startDate = DateTime.parse(_box.get('startDate') as String);
-      return;
+      final stored = _box.get('startDate');
+      if (stored is String) {
+        _startDate = DateTime.tryParse(stored);
+        if (_startDate != null) return;
+      }
     }
 
     final prefs = await SharedPreferences.getInstance();
     final legacy = prefs.getString(_prefsKey);
 
     if (legacy != null) {
-      _startDate = DateTime.parse(legacy);
-      await _box.put('startDate', legacy);
+      _startDate = DateTime.tryParse(legacy) ?? DateTime.now();
+      await _box.put('startDate', _startDate!.toIso8601String());
       await prefs.remove(_prefsKey);
     } else {
       _startDate = DateTime.now();
@@ -84,7 +90,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /* ───────── Actualiza duración y frase ───────── */
   void _updateElapsed() {
-    if (_startDate == null) return;
+    if (_startDate == null || !mounted) return;
     final diff = DateTime.now().difference(_startDate!);
 
     if (diff.inDays != _lastQuoteDay) {
@@ -97,7 +103,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadQuote(int day) async {
     final data = await rootBundle.loadString('assets/data/quotes.json');
     final list = jsonDecode(data) as List<dynamic>;
-    if (list.isEmpty) return;
+    if (list.isEmpty || !mounted) return;
     setState(() => _quote = list[day % list.length] as String);
   }
 
