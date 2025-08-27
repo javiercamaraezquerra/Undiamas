@@ -15,8 +15,12 @@ class BackupResult<T> {
   final bool ok;
   final String? message;
   final T? data;
-  const BackupResult.success([this.data]) : ok = true, message = null;
-  const BackupResult.failure(this.message) : ok = false, data = null;
+  const BackupResult.success([this.data])
+      : ok = true,
+        message = null;
+  const BackupResult.failure(this.message)
+      : ok = false,
+        data = null;
 }
 
 class DriveBackupService {
@@ -26,6 +30,9 @@ class DriveBackupService {
     drive.DriveApi.driveFileScope,
     drive.DriveApi.driveAppdataScope,
   ];
+
+  // Código de error estándar que devuelve GoogleSignIn al cancelar
+  static const String _signInCanceledCode = 'sign_in_canceled';
 
   static final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: _scopes);
 
@@ -44,7 +51,7 @@ class DriveBackupService {
         return const BackupResult.failure(
             'Configuración OAuth inválida: revisa SHA‑1 y package en Google Cloud.');
       }
-      if (e.code == GoogleSignIn.kSignInCanceledError) {
+      if (e.code == _signInCanceledCode) {
         return const BackupResult.failure('Autenticación cancelada.');
       }
       return BackupResult.failure(
@@ -78,7 +85,7 @@ class DriveBackupService {
     if (acc == null) {
       // usuario canceló
       throw const PlatformException(
-        code: GoogleSignIn.kSignInCanceledError,
+        code: _signInCanceledCode,
         message: 'cancelled',
       );
     }
@@ -190,8 +197,8 @@ class DriveBackupService {
         return const BackupResult.failure('La copia está vacía.');
       }
 
-      final data =
-          jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>? ?? {};
+      final decoded = utf8.decode(bytes);
+      final data = jsonDecode(decoded) as Map<String, dynamic>? ?? {};
       return BackupResult.success(data);
     } on PlatformException catch (e) {
       return _mapAuthError<Map<String, dynamic>>(e);
