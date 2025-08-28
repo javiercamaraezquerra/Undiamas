@@ -1,3 +1,4 @@
+// lib/services/drive_backup_service.dart
 import 'dart:convert';
 import 'dart:io';
 
@@ -84,7 +85,8 @@ class DriveBackupService {
 
     if (acc == null) {
       // usuario canceló
-      throw const PlatformException(
+      // FIX: PlatformException no tiene constructor const.
+      throw PlatformException(
         code: _signInCanceledCode,
         message: 'cancelled',
       );
@@ -94,7 +96,8 @@ class DriveBackupService {
     try {
       final granted = await acc.requestScopes(_scopes);
       if (!granted) {
-        throw const PlatformException(
+        // FIX: PlatformException no tiene constructor const.
+        throw PlatformException(
           code: 'scopes_denied',
           message: 'Permisos de Google Drive denegados por el usuario.',
         );
