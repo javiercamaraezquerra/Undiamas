@@ -6,7 +6,7 @@ import 'package:flutter/services.dart' show PlatformException;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
-import 'package:http/io_client.dart';
+import 'package:http/io_client.dart' show IOClient;
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -16,9 +16,11 @@ class BackupResult<T> {
   final bool ok;
   final String? message;
   final T? data;
+
   const BackupResult.success([this.data])
       : ok = true,
         message = null;
+
   const BackupResult.failure(this.message)
       : ok = false,
         data = null;
@@ -42,7 +44,7 @@ class DriveBackupService {
   static bool _isDeveloperError(PlatformException e) {
     // GoogleSignIn lanza PlatformException con code 'sign_in_failed'.
     // El DEVELOPER_ERROR suele dejar "status: 10" en message/details.
-    final msg = (e.message ?? '') + ' ' + (e.details ?? '').toString();
+    final msg = ((e.message ?? '') + ' ' + (e.details ?? '').toString()).trim();
     return e.code == 'sign_in_failed' && msg.contains('status: 10');
   }
 
@@ -50,13 +52,16 @@ class DriveBackupService {
     if (e is PlatformException) {
       if (_isDeveloperError(e)) {
         return const BackupResult.failure(
-            'Configuración OAuth inválida: revisa SHA‑1 y package en Google Cloud.');
+          'Configuración OAuth inválida: revisa SHA‑1 y package en Google Cloud.',
+        );
       }
       if (e.code == _signInCanceledCode) {
         return const BackupResult.failure('Autenticación cancelada.');
       }
+      final details = (e.message ?? '').trim();
       return BackupResult.failure(
-          'Error de autenticación: ${e.code} ${(e.message ?? '').trim()}');
+        'Error de autenticación: ${e.code}${details.isNotEmpty ? ' $details' : ''}',
+      );
     }
     return BackupResult.failure('Error de autenticación: $e');
   }
@@ -66,7 +71,7 @@ class DriveBackupService {
   static Future<drive.DriveApi> _driveApi() async {
     GoogleSignInAccount? acc;
 
-    // 1) Reutiliza sesión si existe
+    // 1) Reutiliza sesión si existe o intenta silenciosamente
     try {
       acc = _googleSignIn.currentUser ?? await _googleSignIn.signInSilently();
     } on PlatformException {
@@ -78,14 +83,13 @@ class DriveBackupService {
       try {
         acc = await _googleSignIn.signIn();
       } on PlatformException catch (e) {
-        // propagamos para que upload/download muestren el motivo exacto
+        // Propagamos para que upload/download muestren el motivo exacto
         throw e;
       }
     }
 
     if (acc == null) {
-      // usuario canceló
-      // FIX: PlatformException no tiene constructor const.
+      // Usuario canceló
       throw PlatformException(
         code: _signInCanceledCode,
         message: 'cancelled',
@@ -94,9 +98,10 @@ class DriveBackupService {
 
     // 3) Asegura/eleva scopes (caso típico: sesión previa sin Drive)
     try {
-      final granted = await acc.requestScopes(_scopes);
+      // IMPORTANTE: requestScopes es un método de GoogleSignIn,
+      // no de GoogleSignInAccount.
+      final granted = await _googleSignIn.requestScopes(_scopes);
       if (!granted) {
-        // FIX: PlatformException no tiene constructor const.
         throw PlatformException(
           code: 'scopes_denied',
           message: 'Permisos de Google Drive denegados por el usuario.',
@@ -112,8 +117,13 @@ class DriveBackupService {
 
   /* ─────────────────────────── PÚBLICO ────────────────────────── */
 
-  static Future<bool> isSignedIn() async =>
-      _googleSignIn.currentUser != null || await _googleSignIn.isSignedIn();
+  static Future<bool> isSignedIn() async {
+    try {
+      return _googleSignIn.currentUser != null || await _googleSignIn.isSignedIn();
+    } catch (_) {
+      return false;
+    }
+  }
 
   static Future<void> disconnect() async {
     try {
@@ -140,16 +150,20 @@ class DriveBackupService {
   /* ─────────────────────── SUBIR / ACTUALIZAR ─────────────────── */
 
   static Future<BackupResult<void>> uploadBackup(
-      Map<String, dynamic> json) async {
+    Map<String, dynamic> json,
+  ) async {
     try {
       final api = await _driveApi();
 
       final dir = await getTemporaryDirectory();
-      final tmp =
-          File('${dir.path}/$_fileName')..writeAsStringSync(jsonEncode(json));
+      final tmpPath = '${dir.path}/$_fileName';
+      final tmp = File(tmpPath)..writeAsStringSync(jsonEncode(json));
 
-      final media = drive.Media(tmp.openRead(), await tmp.length(),
-          contentType: 'application/json');
+      final media = drive.Media(
+        tmp.openRead(),
+        await tmp.length(),
+        contentType: 'application/json',
+      );
       final meta = drive.File()..name = _fileName;
 
       final prev = await api.files.list(
@@ -189,20 +203,29 @@ class DriveBackupService {
         return const BackupResult.failure('No hay copia en Drive.');
       }
 
+      final fileId = res.files!.first.id!;
       final media = await api.files.get(
-        res.files!.first.id!,
+        fileId,
         downloadOptions: drive.DownloadOptions.fullMedia,
       ) as drive.Media;
 
       final bytes = <int>[];
       await media.stream.forEach(bytes.addAll);
+
       if (bytes.isEmpty) {
         return const BackupResult.failure('La copia está vacía.');
       }
 
-      final decoded = utf8.decode(bytes);
-      final data = jsonDecode(decoded) as Map<String, dynamic>? ?? {};
-      return BackupResult.success(data);
+      try {
+        final decoded = utf8.decode(bytes);
+        final dynamic parsed = jsonDecode(decoded);
+        if (parsed is! Map<String, dynamic>) {
+          return const BackupResult.failure('Formato de copia inválido (no es un objeto JSON).');
+        }
+        return BackupResult.success(parsed);
+      } on FormatException {
+        return const BackupResult.failure('JSON de la copia inválido o corrupto.');
+      }
     } on PlatformException catch (e) {
       return _mapAuthError<Map<String, dynamic>>(e);
     } catch (e) {
@@ -224,13 +247,17 @@ class DriveBackupService {
       };
 
   static Future<bool> importHive(
-      Map<String, dynamic> data, Box udm, Box<DiaryEntry> diary) async {
+    Map<String, dynamic> data,
+    Box udm,
+    Box<DiaryEntry> diary,
+  ) async {
     try {
       if (data['udm'] is Map) {
-        await udm.putAll(Map<String, dynamic>.from(data['udm']));
+        // JSON garantiza keys String, por lo que el cast es seguro aquí.
+        await udm.putAll(Map<String, dynamic>.from(data['udm'] as Map));
       }
       if (data['diary'] is List) {
-        final list = List<Map<String, dynamic>>.from(data['diary']);
+        final list = List<Map<String, dynamic>>.from(data['diary'] as List);
         await diary.clear();
         await diary.addAll(list.map(_mapToDiaryEntry));
       }
@@ -240,11 +267,20 @@ class DriveBackupService {
     }
   }
 
-  static DiaryEntry _mapToDiaryEntry(Map<String, dynamic> m) => DiaryEntry(
-        text: m['text'] ?? '',
-        mood: m['mood'] ?? 2,
-        createdAt: DateTime.parse(m['createdAt']),
-      );
+  static DiaryEntry _mapToDiaryEntry(Map<String, dynamic> m) {
+    DateTime created;
+    final raw = m['createdAt'];
+    try {
+      created = raw is String ? DateTime.parse(raw) : DateTime.now();
+    } catch (_) {
+      created = DateTime.now();
+    }
+    return DiaryEntry(
+      text: m['text'] ?? '',
+      mood: m['mood'] ?? 2,
+      createdAt: created,
+    );
+  }
 
   /* ──────────────────────── Internos ──────────────────────────── */
 
@@ -258,13 +294,22 @@ class DriveBackupService {
   }
 }
 
-/* ── cliente autenticado ─ */
+/* ── Cliente HTTP autenticado que añade los auth headers de Google ─ */
 class _AuthenticatedClient extends http.BaseClient {
   final http.Client _inner;
   final Map<String, String> _headers;
+
   _AuthenticatedClient(this._inner, this._headers);
 
   @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) =>
-      _inner.send(request..headers.addAll(_headers));
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    request.headers.addAll(_headers);
+    return _inner.send(request);
+  }
+
+  @override
+  void close() {
+    _inner.close();
+    super.close();
+  }
 }
