@@ -43,16 +43,21 @@ class DriveBackupService {
 
   static bool _isDeveloperError(PlatformException e) {
     // GoogleSignIn lanza PlatformException con code 'sign_in_failed'.
-    // El DEVELOPER_ERROR suele dejar "status: 10" en message/details.
-    final msg = ((e.message ?? '') + ' ' + (e.details ?? '').toString()).trim();
-    return e.code == 'sign_in_failed' && msg.contains('status: 10');
+    // El DEVELOPER_ERROR suele dejar "status: 10" o "ApiException: 10" en message/details.
+    final msg = ((e.message ?? '') + ' ' + (e.details ?? '').toString()).toLowerCase();
+    if (e.code != 'sign_in_failed') return false;
+    return msg.contains('status: 10') ||
+           msg.contains('apiexception: 10') ||
+           RegExp(r'\b10:?(\s|$)').hasMatch(msg) ||
+           msg.contains('developer_error');
   }
 
   static BackupResult<T> _mapAuthError<T>(Object e) {
     if (e is PlatformException) {
       if (_isDeveloperError(e)) {
         return const BackupResult.failure(
-          'Configuración OAuth inválida: revisa SHA‑1 y package en Google Cloud.',
+          'Configuración OAuth inválida: revisa SHA‑1 (debug/release/Play) y el package '
+          'en Google Cloud para com.celsoriaapps.undiamas.',
         );
       }
       if (e.code == _signInCanceledCode) {
@@ -63,7 +68,7 @@ class DriveBackupService {
         'Error de autenticación: ${e.code}${details.isNotEmpty ? ' $details' : ''}',
       );
     }
-    return BackupResult.failure('Error de autenticación: $e');
+    return const BackupResult.failure('Error de autenticación desconocido.');
   }
 
   /* ───────────────────── Autenticación + scopes ───────────────── */
@@ -83,7 +88,7 @@ class DriveBackupService {
       try {
         acc = await _googleSignIn.signIn();
       } on PlatformException catch (e) {
-        // Propagamos para que upload/download muestren el motivo exacto
+        // propagamos para que upload/download muestren el motivo exacto
         throw e;
       }
     }
@@ -98,8 +103,7 @@ class DriveBackupService {
 
     // 3) Asegura/eleva scopes (caso típico: sesión previa sin Drive)
     try {
-      // IMPORTANTE: requestScopes es un método de GoogleSignIn,
-      // no de GoogleSignInAccount.
+      // IMPORTANTE: requestScopes es un método de GoogleSignIn, no de GoogleSignInAccount.
       final granted = await _googleSignIn.requestScopes(_scopes);
       if (!granted) {
         throw PlatformException(
@@ -149,21 +153,14 @@ class DriveBackupService {
 
   /* ─────────────────────── SUBIR / ACTUALIZAR ─────────────────── */
 
-  static Future<BackupResult<void>> uploadBackup(
-    Map<String, dynamic> json,
-  ) async {
+  static Future<BackupResult<void>> uploadBackup(Map<String, dynamic> json) async {
     try {
       final api = await _driveApi();
 
       final dir = await getTemporaryDirectory();
-      final tmpPath = '${dir.path}/$_fileName';
-      final tmp = File(tmpPath)..writeAsStringSync(jsonEncode(json));
+      final tmp = File('${dir.path}/$_fileName')..writeAsStringSync(jsonEncode(json));
 
-      final media = drive.Media(
-        tmp.openRead(),
-        await tmp.length(),
-        contentType: 'application/json',
-      );
+      final media = drive.Media(tmp.openRead(), await tmp.length(), contentType: 'application/json');
       final meta = drive.File()..name = _fileName;
 
       final prev = await api.files.list(
@@ -203,29 +200,20 @@ class DriveBackupService {
         return const BackupResult.failure('No hay copia en Drive.');
       }
 
-      final fileId = res.files!.first.id!;
       final media = await api.files.get(
-        fileId,
+        res.files!.first.id!,
         downloadOptions: drive.DownloadOptions.fullMedia,
       ) as drive.Media;
 
       final bytes = <int>[];
       await media.stream.forEach(bytes.addAll);
-
       if (bytes.isEmpty) {
         return const BackupResult.failure('La copia está vacía.');
       }
 
-      try {
-        final decoded = utf8.decode(bytes);
-        final dynamic parsed = jsonDecode(decoded);
-        if (parsed is! Map<String, dynamic>) {
-          return const BackupResult.failure('Formato de copia inválido (no es un objeto JSON).');
-        }
-        return BackupResult.success(parsed);
-      } on FormatException {
-        return const BackupResult.failure('JSON de la copia inválido o corrupto.');
-      }
+      final decoded = utf8.decode(bytes);
+      final data = jsonDecode(decoded) as Map<String, dynamic>? ?? {};
+      return BackupResult.success(data);
     } on PlatformException catch (e) {
       return _mapAuthError<Map<String, dynamic>>(e);
     } catch (e) {
@@ -247,17 +235,13 @@ class DriveBackupService {
       };
 
   static Future<bool> importHive(
-    Map<String, dynamic> data,
-    Box udm,
-    Box<DiaryEntry> diary,
-  ) async {
+      Map<String, dynamic> data, Box udm, Box<DiaryEntry> diary) async {
     try {
       if (data['udm'] is Map) {
-        // JSON garantiza keys String, por lo que el cast es seguro aquí.
-        await udm.putAll(Map<String, dynamic>.from(data['udm'] as Map));
+        await udm.putAll(Map<String, dynamic>.from(data['udm']));
       }
       if (data['diary'] is List) {
-        final list = List<Map<String, dynamic>>.from(data['diary'] as List);
+        final list = List<Map<String, dynamic>>.from(data['diary']);
         await diary.clear();
         await diary.addAll(list.map(_mapToDiaryEntry));
       }
@@ -267,20 +251,11 @@ class DriveBackupService {
     }
   }
 
-  static DiaryEntry _mapToDiaryEntry(Map<String, dynamic> m) {
-    DateTime created;
-    final raw = m['createdAt'];
-    try {
-      created = raw is String ? DateTime.parse(raw) : DateTime.now();
-    } catch (_) {
-      created = DateTime.now();
-    }
-    return DiaryEntry(
-      text: m['text'] ?? '',
-      mood: m['mood'] ?? 2,
-      createdAt: created,
-    );
-  }
+  static DiaryEntry _mapToDiaryEntry(Map<String, dynamic> m) => DiaryEntry(
+        text: m['text'] ?? '',
+        mood: m['mood'] ?? 2,
+        createdAt: DateTime.parse(m['createdAt']),
+      );
 
   /* ──────────────────────── Internos ──────────────────────────── */
 
@@ -294,7 +269,7 @@ class DriveBackupService {
   }
 }
 
-/* ── Cliente HTTP autenticado que añade los auth headers de Google ─ */
+/* ── cliente autenticado ─ */
 class _AuthenticatedClient extends http.BaseClient {
   final http.Client _inner;
   final Map<String, String> _headers;
