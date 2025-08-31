@@ -33,6 +33,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     'Anfetaminas',
     'Opioides',
     'Popper',
+    'Tabaco',
     'Ketamina',
     'Varias',
   ];
