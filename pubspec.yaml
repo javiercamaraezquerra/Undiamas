@@ -2,7 +2,7 @@ name: un_dia_mas
 description: Una app Flutter para apoyo en la recuperación de adicciones.
 publish_to: "none"
 
-version: 1.0.1+14        # recuerda aumentar cuando subas versión
+version: 1.0.1+15        # recuerda aumentar cuando subas versión
 
 environment:
   # Varias dependencias (google_mobile_ads 5.x, flutter_local_notifications 17.x, intl 0.20.x, etc.)
