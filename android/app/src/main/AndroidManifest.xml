@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <!-- ★ MOD – se retira el permiso de alarmas exactas -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
 
     <!-- ───────── APLICACIÓN ───────── -->
     <application
@@ -21,11 +23,6 @@
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-4402835110551152~8514445452"/>
-
-        <!-- Plugin zona horaria (opcional) -->
-        <meta-data
-            android:name="com.example.undiamas.TzPlugin"
-            android:value="flutterEmbedding"/>
 
         <!-- Receivers de flutter_local_notifications -->
         <receiver
@@ -44,12 +41,14 @@
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
         </receiver>
 
         <!-- Actividad principal -->
         <activity
-            android:name=".MainActivity"
+            android:name="com.celsoriaapps.undiamas.MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""

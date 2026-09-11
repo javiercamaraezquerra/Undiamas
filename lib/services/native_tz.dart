@@ -4,6 +4,12 @@ import 'package:flutter/services.dart';
 class NativeTz {
   static const _ch = MethodChannel('undiamas/tz');
 
-  static Future<String> getLocalTz() async =>
-      await _ch.invokeMethod<String>('getLocalTz') ?? 'UTC';
+  static Future<String> getLocalTz() async {
+    final name = await _ch.invokeMethod<String>('getLocalTz');
+    if (name == null || name.trim().isEmpty) {
+      throw StateError(
+          'No se pudo identificar la zona horaria del dispositivo.');
+    }
+    return name.trim();
+  }
 }

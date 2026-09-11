@@ -1,32 +1,109 @@
 <!DOCTYPE html>
 <html lang="es">
-<head><meta charset="UTF-8"><title>Política de Privacidad – Un Día Más</title></head>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Política de privacidad de Un día más, de CelsoriaApps. Datos locales, copias opcionales en Drive, publicidad y cómo eliminar tus datos.">
+  <title>Política de privacidad · Un día más</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #24332f; background: #fff; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-size: 1rem; line-height: 1.65; }
+    main { width: 100%; max-width: 52rem; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+    header { padding-bottom: 1rem; border-bottom: 1px solid #d7e2dd; }
+    .brand { margin: 0 0 .4rem; color: #365e51; font-weight: 650; }
+    h1, h2 { color: #1c5746; line-height: 1.25; text-wrap: balance; }
+    h1 { font-size: clamp(1.75rem, 5vw, 2.4rem); margin: 0 0 .75rem; }
+    h2 { font-size: 1.25rem; margin: 2rem 0 .75rem; }
+    p { margin: .75rem 0; }
+    ul, ol { padding-left: 1.4rem; }
+    li { margin: .55rem 0; }
+    a { color: #075b63; text-underline-offset: .16em; overflow-wrap: anywhere; }
+    a:focus-visible { outline: 3px solid #996c13; outline-offset: 4px; border-radius: 2px; }
+    code { font-size: .92em; overflow-wrap: anywhere; }
+    .summary { padding: .8rem 1rem; margin-top: 1.25rem; background: #eef5f1; border-left: 3px solid #38705b; }
+    .updated { color: #52635c; font-size: .95rem; }
+    footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #d7e2dd; }
+    @media (max-width: 360px) { main { padding: 1.25rem 1rem 2rem; } }
+    @media print { main { max-width: none; padding: 0; } a { color: inherit; } h2 { break-after: avoid; } }
+  </style>
+</head>
 <body>
-<h1>Política de Privacidad</h1>
-<p><strong>Última actualización:</strong> 18 jul 2025</p>
+<main>
+  <header>
+    <p class="brand">Un día más · CelsoriaApps</p>
+    <h1>Política de privacidad</h1>
+    <p class="updated">Última actualización: <time datetime="2026-09-11">11 de septiembre de 2026</time></p>
+    <p>CelsoriaApps, desarrollador de <strong>Un día más</strong>, explica aquí cómo la aplicación Android trata tus datos y qué controles tienes. La app está destinada a personas de 13 años en adelante, conforme a la audiencia declarada en Google Play. Para consultas o solicitudes sobre privacidad, escribe a <a href="mailto:undiamasapp@gmail.com">undiamasapp@gmail.com</a>.</p>
+    <p>Un día más es una herramienta de apoyo personal y no sustituye el tratamiento ni el asesoramiento médico o psicológico.</p>
+    <p class="updated">Las opciones de bloqueo, borrado individual, restauración con revisión y privacidad de anuncios descritas aquí se incorporan en la actualización 1.0.3; su disponibilidad depende de la versión instalada.</p>
+  </header>
 
-<h2>1. Datos que recoge la aplicación</h2>
-<ul>
-  <li><em>Datos de uso local:</em> fecha de inicio de sobriedad, entradas del diario y preferencias. <u>Se guardan cifrados en el dispositivo</u> (AES con Hive AES Cipher).</li>
-  <li><em>Copia de seguridad en Google Drive:</em> si el usuario lo autoriza, los mismos datos se suben cifrados a su carpeta privada de Drive <code>appDataFolder</code>.</li>
-  <li>Identificador de publicidad de Google para mostrar anuncios (Google AdMob).</li>
-</ul>
+  <div class="summary">
+    <p>Tu Inventario se guarda en el móvil. La copia en Google Drive es opcional. La aplicación incluye publicidad de Google AdMob, que trata datos técnicos y publicitarios. Puedes usar el Inventario sin crear una cuenta en Un día más ni conectar Google Drive.</p>
+  </div>
 
-<h2>2. Para qué usamos los datos</h2>
-<p>Sólo para:</p>
-<ul>
-  <li>Calcular logros y notificaciones de reflexión.</li>
-  <li>Mostrar el historial personal dentro de la app.</li>
-  <li>Restaurar los datos en caso de reinstalación o cambio de dispositivo.</li>
-</ul>
+  <section aria-labelledby="local">
+    <h2 id="local">1. Datos que guardas en la aplicación</h2>
+    <p>La app almacena la fecha de inicio y la sustancia o categoría que eliges, así como el texto, el estado de ánimo y la fecha y hora de cada entrada del Inventario. Esta información puede revelar aspectos sensibles de tu salud o recuperación. Se utiliza para mostrar tu historial, calcular el tiempo transcurrido y los logros, representar tu ánimo y preparar los avisos que actives.</p>
+    <p>También guarda preferencias, como el tema visual, los recursos favoritos, los avisos, la copia automática y el bloqueo opcional. La zona horaria del dispositivo se utiliza para calcular fechas y programar notificaciones.</p>
+    <p>El Inventario y los datos de inicio se almacenan en bases locales cifradas mediante AES-256 de Hive. Su clave se guarda mediante el almacenamiento seguro del sistema. <strong>No todas las preferencias tienen este cifrado adicional</strong>: algunas se guardan en las preferencias privadas de la aplicación. Una restauración puede mantener temporalmente una copia local cifrada para recuperar el estado si se interrumpe; se retira cuando finaliza o se resuelve la recuperación.</p>
+    <p>El contenido del Inventario no se envía a un servidor propio de CelsoriaApps. La app no lo utiliza, ni utiliza tu estado de ánimo o sustancia elegida, como parámetros para dirigir anuncios.</p>
+  </section>
 
-<h2>3. Compartición de datos</h2>
-<p>No compartimos ni vendemos tus datos a terceros. El cifrado impide que el desarrollador los lea.</p>
+  <section aria-labelledby="drive">
+    <h2 id="drive">2. Copia opcional en Google Drive</h2>
+    <p>Si activas la copia o solicitas una restauración, Google te permite seleccionar una cuenta existente y autorizar el acceso necesario a Drive. Google Sign-In gestiona esa identificación y proporciona los permisos y credenciales de acceso a la app; puede facilitar datos básicos de la cuenta, como su identificador, nombre o correo. No creas una cuenta nueva en Un día más y la app no recibe tu contraseña de Google.</p>
+    <p>La copia contiene tus entradas completas —texto, ánimo, fecha y hora— y los datos de inicio y ajustes guardados junto a ellos. No incluye los favoritos ni las preferencias generales de notificaciones, tema o bloqueo. Se guarda como <code>udm_backup.json</code> en una <a href="https://developers.google.com/workspace/drive/api/guides/appdata">carpeta de datos de la aplicación</a> dentro de tu Drive, oculta en la lista normal de archivos.</p>
+    <p><strong>La copia es un archivo JSON sin cifrado propio de extremo a extremo.</strong> La conexión con Google utiliza HTTPS/TLS, pero la app no cifra el archivo con una contraseña o clave exclusiva tuya antes de subirlo. Google trata esta información conforme a sus servicios y su <a href="https://policies.google.com/privacy">política de privacidad</a>.</p>
+    <p>Desactivar la copia automática detiene futuras copias automáticas; no elimina una copia ya guardada. Restaurar una copia sustituye los datos locales incluidos en ella, previa confirmación.</p>
+  </section>
 
-<h2>4. Derechos del usuario</h2>
-<p>Puedes eliminar tu copia local desde la app (Ajustes → Reiniciar) y borrar la copia de Drive en <em>Google Drive → Configuración → Apps con acceso</em>.</p>
+  <section aria-labelledby="ads">
+    <h2 id="ads">3. Publicidad y sus opciones de privacidad</h2>
+    <p>Un día más utiliza Google AdMob. Según la <a href="https://developers.google.com/admob/android/privacy/play-data-disclosure">información de Google sobre su SDK publicitario</a>, este recopila y comparte datos para publicidad, medición y prevención del fraude: dirección IP, que puede permitir estimar una ubicación aproximada; interacciones con la app y los anuncios; información de diagnóstico y rendimiento; e identificadores del dispositivo o de cuenta, como el identificador publicitario de Android, cuando están disponibles. Google indica que estos datos se transmiten cifrados mediante TLS.</p>
+    <p>La aplicación no solicita acceso a la ubicación precisa del dispositivo. La ausencia de ese permiso no impide que la dirección IP permita estimar una ubicación general.</p>
+    <p>La app utiliza la <a href="https://developers.google.com/admob/flutter/privacy">plataforma de consentimiento de Google</a> para consultar las opciones aplicables y mostrar sus formularios cuando corresponda. En <strong>Perfil → Privacidad de anuncios</strong> puedes volver a abrir las opciones cuando Google requiera ofrecer ese acceso. El formulario identifica las finalidades y los proveedores publicitarios correspondientes. La solicitud de anuncios depende del estado que comunique esta plataforma.</p>
+    <p>También puedes gestionar el identificador publicitario desde los ajustes de Android. Los tratamientos de Google y de los proveedores indicados en sus formularios se rigen por sus políticas. Cambiar una preferencia no elimina automáticamente datos que ya hayan tratado.</p>
+  </section>
 
-<h2>5. Contacto</h2>
-<p>Cualquier duda: <a href="mailto:soporte@tu‑dominio.com">soporte@tu‑dominio.com</a></p>
+  <section aria-labelledby="device">
+    <h2 id="device">4. Notificaciones y bloqueo opcional</h2>
+    <p>Los recordatorios de reflexión y logros se programan localmente, con tu permiso de notificaciones y según las opciones del Perfil. La app no envía tu Inventario a un servidor de notificaciones. Los avisos pueden aparecer en la pantalla bloqueada y revelar que utilizas la app o un logro de recuperación; puedes controlar su visibilidad en Android o desactivarlos.</p>
+    <p>El bloqueo opcional utiliza la autenticación del dispositivo, como huella, reconocimiento facial o credencial de pantalla —PIN, patrón o contraseña—, según lo que admita Android. La app recibe el resultado de la autenticación; no recibe ni guarda tus huellas, plantillas faciales ni la credencial que introduces en el sistema.</p>
+    <p>Este bloqueo protege el acceso a la app al abrirla o regresar a ella. <strong>No impide las capturas de pantalla ni garantiza ocultar la miniatura de aplicaciones recientes.</strong></p>
+  </section>
+
+  <section aria-labelledby="external">
+    <h2 id="external">5. Enlaces externos y contacto</h2>
+    <p>Los recursos de ayuda pueden abrir sitios, vídeos o aplicaciones de terceros. Al abrirlos, esos servicios pueden tratar datos conforme a sus propias políticas. La app no adjunta el texto de tu Inventario a esos enlaces.</p>
+    <p>Si nos escribes, recibiremos tu dirección de correo y el contenido que decidas enviar para atender la consulta o solicitud. No necesitas enviar entradas del Inventario, contraseñas ni datos de autenticación.</p>
+  </section>
+
+  <section aria-labelledby="delete">
+    <h2 id="delete">6. Cómo consultar y eliminar tus datos</h2>
+    <ol>
+      <li><strong>Una entrada:</strong> abre el Inventario, utiliza el menú de la entrada y confirma «Eliminar entrada». Si hay una copia antigua en Drive, esa entrada puede seguir en ella hasta que se actualice correctamente o se elimine la copia. Restaurar una copia antigua puede volver a incorporarla.</li>
+      <li><strong>Datos de la app:</strong> en Perfil, selecciona «Eliminar cuenta y datos» y confirma. Esta opción elimina el Inventario local, los datos de inicio, los ajustes y los datos locales de recuperación, y cancela los avisos. No elimina tu cuenta de Google. <strong>Reiniciar el contador no borra el Inventario.</strong></li>
+      <li><strong>Copia de Drive:</strong> la opción anterior también intenta eliminar las copias de la app cuando detecta una sesión de Google conectada. En la actualización 1.0.3, si ese borrado remoto falla, la app informa del error y no continúa con el borrado local. Esta protección no se garantiza en versiones anteriores. Si no detecta una sesión conectada, puede borrar los datos locales sin eliminar la copia remota. Puedes gestionar por separado los datos ocultos de Un día más desde los ajustes de aplicaciones de Google Drive. Quitar el acceso a Google no debe confundirse con borrar una copia.</li>
+      <li><strong>Solicitud de ayuda o eliminación:</strong> escribe a <a href="mailto:undiamasapp@gmail.com?subject=Solicitud%20de%20privacidad%20-%20Un%20d%C3%ADa%20m%C3%A1s">undiamasapp@gmail.com</a> con el asunto «Solicitud de privacidad — Un día más». Indica si se refiere a los datos de la app, una copia en Drive o un correo enviado. Te indicaremos los pasos para los datos que sólo están en tu móvil o cuenta; CelsoriaApps no dispone de un panel para borrarlos a distancia.</li>
+    </ol>
+    <p>Puedes consultar tus entradas en el Inventario y tus datos de inicio en la app. Para otras consultas o solicitudes sobre el tratamiento de tus datos, utiliza el mismo contacto. No envíes tu contraseña de Google ni el PIN del teléfono.</p>
+  </section>
+
+  <section aria-labelledby="retention">
+    <h2 id="retention">7. Conservación y límites de seguridad</h2>
+    <p>La app no establece un plazo de caducidad automático para el Inventario: los datos locales se conservan hasta que los eliminas o el sistema elimina el almacenamiento de la app. La copia en Drive se conserva hasta que se sustituye o se borra. Desinstalar la app del teléfono no solicita el borrado de esa copia en Drive.</p>
+    <p>El borrado desde la app no elimina datos que Google o los servicios externos ya hayan tratado, ni copias que hayas conservado por otros medios. Su conservación y sus controles dependen de esos servicios. Si deseas eliminar correspondencia enviada al contacto de soporte, puedes solicitarlo por correo.</p>
+    <p>El cifrado local y las conexiones protegidas reducen riesgos, pero no garantizan una seguridad absoluta ni sustituyen la protección de tu teléfono y tu cuenta de Google. Las preferencias locales y la copia JSON de Drive no deben considerarse cifradas de extremo a extremo por la app.</p>
+  </section>
+
+  <footer>
+    <h2 id="changes">8. Cambios en esta política</h2>
+    <p>Publicaremos las actualizaciones en esta página e indicaremos la fecha. Si un cambio requiere una elección o autorización, se solicitará mediante el mecanismo correspondiente.</p>
+    <p><strong>CelsoriaApps · Un día más</strong><br><a href="mailto:undiamasapp@gmail.com">undiamasapp@gmail.com</a></p>
+  </footer>
+</main>
 </body>
 </html>

@@ -1,0 +1,4 @@
+Ahora puedes proteger el acceso a la app con el bloqueo de tu teléfono.
+Restauración de copias más segura y opción de eliminar entradas del Inventario.
+Gráfica del Perfil más clara, con detalle de cada registro.
+Mejoras en los recordatorios y en las opciones de privacidad de los anuncios.

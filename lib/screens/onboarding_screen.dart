@@ -4,9 +4,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../routes/fade_transparent_route.dart';
 import '../widgets/mountain_background.dart';
-import '../widgets/bottom_nav_bar.dart';           // ← usamos BottomNavBar al finalizar
+import '../widgets/bottom_nav_bar.dart'; // ← usamos BottomNavBar al finalizar
 import '../services/achievement_service.dart';
 import '../services/encryption_service.dart';
+import '../services/hive_restore_service.dart';
 import 'tutorial_screen.dart'; // tutorial antes del onboarding (sólo 1ª vez)
 
 class OnboardingScreen extends StatefulWidget {
@@ -83,8 +84,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       (route) => false,
     );
 
-    // Programar hitos como antes
-    AchievementService.scheduleMilestones(_startDateTime!);
+    // Honor the existing preference and contain platform/permission failures.
+    // Saving the start date must not be undone by an unavailable reminder.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool('notifyMilestones') ?? true) {
+        await HiveRestoreService.instance.runExclusive(
+            () => AchievementService.scheduleMilestones(_startDateTime!));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Tu fecha está guardada. No se pudieron programar '
+              'los avisos de logros; puedes reintentarlo desde Perfil.'),
+        ));
+      }
+    }
   }
 
   /* ───────── Selector fecha + hora ───────── */
@@ -103,7 +118,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
     setState(() {
       _startDateTime = DateTime(
-        date.year, date.month, date.day, time.hour, time.minute,
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
       );
     });
 
@@ -153,8 +172,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         (e) => ChoiceChip(
                           label: Text(
                             e,
-                            style:
-                                TextStyle(color: Colors.black.withValues(alpha: .70)),
+                            style: TextStyle(
+                                color: Colors.black.withValues(alpha: .70)),
                           ),
                           selected: _substance == e,
                           selectedColor: Colors.white.withValues(alpha: .25),
@@ -178,7 +197,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               // ── PASO 3 ────────────────────────────────────────────────
               _StepContainer(
                 headline: '¡Todo listo!',
-                subhead: 'Recibirás frases motivacionales cada mañana.',
+                subhead:
+                    'Puedes recibir una reflexión diaria si activas las notificaciones.',
                 center: const Icon(Icons.celebration_rounded,
                     size: 96, color: Colors.white),
                 bottom: ElevatedButton(

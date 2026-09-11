@@ -5,19 +5,25 @@ plugins {
 }
 
 import java.util.Properties
-import java.io.FileInputStream
 
 /* ── Firma segura ─────────────────────────────────────────────── */
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('key.properties')
 if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
 }
+def hasReleaseSigning = ['storeFile', 'storePassword', 'keyAlias', 'keyPassword'].every {
+    keystoreProperties.getProperty(it)?.trim()
+}
+// Reuse the installed preview certificate even when the build has an isolated home.
+// An explicit existing file is required; never generate a replacement preview key.
+def previewKeystorePath = System.getenv('UDM_PREVIEW_KEYSTORE')?.trim()
+def previewKeystoreFile = previewKeystorePath ? file(previewKeystorePath) : null
 
 android {
     namespace  = "com.celsoriaapps.undiamas"
-    compileSdk = flutter.compileSdkVersion      // (34 con Flutter 3.22)
-    ndkVersion = flutter.ndkVersion
+    compileSdk = 36
+    ndkVersion = "28.1.13356709"
 
     /* ── Java 17 + desugaring ────────────────────────────────── */
     compileOptions {
@@ -29,8 +35,11 @@ android {
 
     defaultConfig {
         applicationId = "com.celsoriaapps.undiamas"
-        minSdk       = flutter.minSdkVersion
-        targetSdk    = flutter.targetSdkVersion
+        minSdk       = 24
+        targetSdk    = 36
+
+        // Only ABIs for which this Flutter version includes a matching engine.
+        ndk { abiFilters "armeabi-v7a", "arm64-v8a", "x86_64" }
 
         // ★ MOD – recuerda subirlos cuando publiques un update
         versionCode  = flutter.versionCode
@@ -38,17 +47,38 @@ android {
     }
 
     signingConfigs {
-        release {
-            storeFile     file(keystoreProperties['storeFile'])
-            storePassword keystoreProperties['storePassword']
-            keyAlias      keystoreProperties['keyAlias']
-            keyPassword   keystoreProperties['keyPassword']
+        if (previewKeystoreFile != null) {
+            debug {
+                storeFile previewKeystoreFile
+            }
+        }
+        if (hasReleaseSigning) {
+            release {
+                storeFile     file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias      keystoreProperties['keyAlias']
+                keyPassword   keystoreProperties['keyPassword']
+            }
+        }
+    }
+
+    flavorDimensions += "distribution"
+    productFlavors {
+        production {
+            dimension "distribution"
+            if (hasReleaseSigning) signingConfig signingConfigs.release
+        }
+        preview {
+            dimension "distribution"
+            applicationIdSuffix ".privacidad"
+            // This isolated application is only for local review, never Play.
+            signingConfig signingConfigs.debug
         }
     }
 
     buildTypes {
         release {
-            signingConfig   signingConfigs.release
+            // Signing is selected by flavor. Production never falls back to debug.
 
             /* ── OPTIMIZACIÓN FINAL ──   (activadas para publicar) */
             // ★ MOD – volvemos a habilitar ofuscación y shrink
@@ -59,6 +89,59 @@ android {
                             'proguard-rules.pro'
         }
         debug { /* keystore debug por defecto */ }
+    }
+}
+
+// A debug certificate must never be used with the production applicationId.
+androidComponents {
+    beforeVariants(selector().all()) { variant ->
+        if (variant.productFlavors.any { it.second == "production" } &&
+                variant.buildType != "release") {
+            variant.enable = false
+        }
+    }
+}
+
+gradle.taskGraph.whenReady { graph ->
+    // Keep the Dart advertising mode consistent with the Android package.
+    // A production bundle must never silently contain the preview ad unit.
+    def dartDefines = (project.findProperty('dart-defines') ?: '').toString()
+        .split(',').findAll { it }.collect { encoded ->
+            try {
+                new String(java.util.Base64.decoder.decode(encoded), java.nio.charset.StandardCharsets.UTF_8)
+            } catch (IllegalArgumentException error) {
+                throw new GradleException('Invalid encoded Dart build definition.', error)
+            }
+        }
+    def previewModes = dartDefines.findAll { it.startsWith('UDM_PREVIEW=') }
+        .collect { it.substring('UDM_PREVIEW='.length()) }
+    // Flutter 3.32 can attach compileFlutterBuildPreviewRelease and
+    // prePreviewReleaseBuild to a production graph. Identify the actual AGP
+    // artifact/signing tasks, not the names of shared Flutter intermediates.
+    def requestsArtifact = { String variantPattern ->
+        def artifactPattern = java.util.regex.Pattern.compile(
+            '^(assemble|bundle|package|validateSigning|sign)(' + variantPattern +
+                ')(Bundle|UniversalApk)?$', java.util.regex.Pattern.CASE_INSENSITIVE)
+        graph.allTasks.any {
+            it.project == project && artifactPattern.matcher(it.name).matches()
+        }
+    }
+    def previewRequested = requestsArtifact('Preview(Debug|Profile|Release)')
+    if (previewRequested && (previewKeystoreFile == null || !previewKeystoreFile.isFile())) {
+        throw new GradleException('Preview builds require UDM_PREVIEW_KEYSTORE pointing to the existing ' +
+                'preview keystore. A new certificate must not replace the installed preview application.')
+    }
+    if (previewRequested && (previewModes.size() != 1 || previewModes[0] != 'true')) {
+        throw new GradleException('Preview builds require exactly one UDM_PREVIEW=true definition.')
+    }
+    def productionReleaseRequested = requestsArtifact('ProductionRelease')
+    if (productionReleaseRequested && previewModes.any { it != 'false' }) {
+        throw new GradleException('Production must not use the preview advertising configuration.')
+    }
+    if (productionReleaseRequested && (!hasReleaseSigning ||
+            !file(keystoreProperties.getProperty('storeFile')).isFile())) {
+        throw new GradleException("Production release requires android/key.properties with a valid release keystore. " +
+                "No debug-signing fallback is allowed. For the isolated local test use --flavor preview.")
     }
 }
 

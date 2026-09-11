@@ -1,6 +1,5 @@
 // lib/services/drive_backup_service.dart
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:google_sign_in/google_sign_in.dart';
@@ -8,9 +7,9 @@ import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart' show IOClient;
 import 'package:hive/hive.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../models/diary_entry.dart';
+import 'hive_restore_service.dart';
 
 class BackupResult<T> {
   final bool ok;
@@ -44,12 +43,13 @@ class DriveBackupService {
   static bool _isDeveloperError(PlatformException e) {
     // GoogleSignIn lanza PlatformException con code 'sign_in_failed'.
     // El DEVELOPER_ERROR suele dejar "status: 10" o "ApiException: 10" en message/details.
-    final msg = ((e.message ?? '') + ' ' + (e.details ?? '').toString()).toLowerCase();
+    final msg =
+        ((e.message ?? '') + ' ' + (e.details ?? '').toString()).toLowerCase();
     if (e.code != 'sign_in_failed') return false;
     return msg.contains('status: 10') ||
-           msg.contains('apiexception: 10') ||
-           RegExp(r'\b10:?(\s|$)').hasMatch(msg) ||
-           msg.contains('developer_error');
+        msg.contains('apiexception: 10') ||
+        RegExp(r'\b10:?(\s|$)').hasMatch(msg) ||
+        msg.contains('developer_error');
   }
 
   static BackupResult<T> _mapAuthError<T>(Object e) {
@@ -123,7 +123,8 @@ class DriveBackupService {
 
   static Future<bool> isSignedIn() async {
     try {
-      return _googleSignIn.currentUser != null || await _googleSignIn.isSignedIn();
+      return _googleSignIn.currentUser != null ||
+          await _googleSignIn.isSignedIn();
     } catch (_) {
       return false;
     }
@@ -138,8 +139,9 @@ class DriveBackupService {
   }
 
   static Future<void> deleteBackup() async {
-    final api = await _safeDriveApi();
-    if (api == null) return;
+    // Authentication failure/cancellation must reach the caller before it
+    // deletes local data or reports that the cloud copy was removed.
+    final api = await _driveApi();
 
     final res = await api.files.list(
       spaces: 'appDataFolder',
@@ -153,14 +155,16 @@ class DriveBackupService {
 
   /* ─────────────────────── SUBIR / ACTUALIZAR ─────────────────── */
 
-  static Future<BackupResult<void>> uploadBackup(Map<String, dynamic> json) async {
+  static Future<BackupResult<void>> uploadBackup(
+      Map<String, dynamic> json) async {
     try {
       final api = await _driveApi();
 
-      final dir = await getTemporaryDirectory();
-      final tmp = File('${dir.path}/$_fileName')..writeAsStringSync(jsonEncode(json));
-
-      final media = drive.Media(tmp.openRead(), await tmp.length(), contentType: 'application/json');
+      // Preserve the legacy UTF-8 JSON format without leaving a plaintext
+      // Inventory copy in the application's temporary directory.
+      final bytes = utf8.encode(jsonEncode(json));
+      final media = drive.Media(Stream<List<int>>.value(bytes), bytes.length,
+          contentType: 'application/json');
       final meta = drive.File()..name = _fileName;
 
       final prev = await api.files.list(
@@ -235,37 +239,22 @@ class DriveBackupService {
       };
 
   static Future<bool> importHive(
+          Map<String, dynamic> data, Box udm, Box<DiaryEntry> diary) async =>
+      (await importHiveSafely(data, udm, diary)).ok;
+
+  /// Callers should present this structured result instead of assuming that
+  /// every failed import means the copy was empty or that nothing was changed.
+  static Future<HiveRestoreResult> importHiveSafely(
       Map<String, dynamic> data, Box udm, Box<DiaryEntry> diary) async {
+    final PreparedHiveBackup prepared;
     try {
-      if (data['udm'] is Map) {
-        await udm.putAll(Map<String, dynamic>.from(data['udm']));
-      }
-      if (data['diary'] is List) {
-        final list = List<Map<String, dynamic>>.from(data['diary']);
-        await diary.clear();
-        await diary.addAll(list.map(_mapToDiaryEntry));
-      }
-      return true;
-    } catch (_) {
-      return false;
+      prepared = HiveRestoreService.prepare(data);
+    } on FormatException catch (error) {
+      return HiveRestoreResult(
+          ok: false,
+          message: '${error.message} No se han modificado tus datos.');
     }
-  }
-
-  static DiaryEntry _mapToDiaryEntry(Map<String, dynamic> m) => DiaryEntry(
-        text: m['text'] ?? '',
-        mood: m['mood'] ?? 2,
-        createdAt: DateTime.parse(m['createdAt']),
-      );
-
-  /* ──────────────────────── Internos ──────────────────────────── */
-
-  // Igual que _driveApi, pero no propaga errores (para deleteBackup).
-  static Future<drive.DriveApi?> _safeDriveApi() async {
-    try {
-      return await _driveApi();
-    } catch (_) {
-      return null;
-    }
+    return HiveRestoreService.instance.restore(prepared, udm, diary);
   }
 }
 

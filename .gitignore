@@ -30,6 +30,7 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+/dist/
 
 # Symbolication related
 app.*.symbols
@@ -47,3 +48,12 @@ key.propertiesandroid - copia/
 key.properties
 /android/key.properties
 /android/undiamas.jks
+
+# Signing material and machine-local build state must never be uploaded.
+*.jks
+*.keystore
+*.p12
+*.pfx
+local.properties
+**/.gradle/
+**/.cxx/

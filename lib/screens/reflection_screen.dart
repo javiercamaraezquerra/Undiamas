@@ -5,8 +5,9 @@ import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import '../services/notification_plan.dart';
 
 class ReflectionScreen extends StatefulWidget {
   final int? dayIndex;
@@ -19,7 +20,7 @@ class ReflectionScreen extends StatefulWidget {
 class _ReflectionScreenState extends State<ReflectionScreen>
     with WidgetsBindingObserver {
   String? _header, _body, _loadError;
-  late int _currentDoY;
+  int? _currentReflectionIndex;
   Timer? _midnightTimer;
 
   static const _soloPorHoyUrl = 'https://fzla.org/principio-diario/';
@@ -41,7 +42,9 @@ class _ReflectionScreenState extends State<ReflectionScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && widget.dayIndex == null) {
-      if (_dayOfYear(DateTime.now()) != _currentDoY) _loadReflection();
+      if (reflectionIndexForDate(DateTime.now()) != _currentReflectionIndex) {
+        _loadReflection();
+      }
     }
   }
 
@@ -61,10 +64,9 @@ class _ReflectionScreenState extends State<ReflectionScreen>
       final data = jsonDecode(raw) as List<dynamic>;
       if (data.length < 365) throw const FormatException('Faltan reflexiones');
 
-      _currentDoY = widget.dayIndex != null
-          ? widget.dayIndex! + 1
-          : _dayOfYear(DateTime.now());
-      final idx = (_currentDoY - 1).clamp(0, 364);
+      final index = widget.dayIndex ?? reflectionIndexForDate(DateTime.now());
+      _currentReflectionIndex = index;
+      final idx = index.clamp(0, 364);
 
       final md = data[idx] as String;
       final lines = LineSplitter.split(md).toList();
@@ -77,22 +79,20 @@ class _ReflectionScreenState extends State<ReflectionScreen>
       dev.log('Reflections load error', error: e, stackTrace: st);
       _loadError = 'No se pudo cargar la reflexión solicitada.';
     }
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
     if (widget.dayIndex == null) _scheduleMidnightReload();
   }
 
   void _scheduleMidnightReload() {
     _midnightTimer?.cancel();
     final now = DateTime.now();
-    final nextMidnight =
-        DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+    final nextMidnight = DateTime(now.year, now.month, now.day + 1);
     final ms = nextMidnight.difference(now).inMilliseconds;
     _midnightTimer = Timer(Duration(milliseconds: ms + 1000), () {
       if (mounted) _loadReflection();
     });
   }
-
-  int _dayOfYear(DateTime dt) => int.parse(DateFormat('D').format(dt));
 
   /* ───────── UI ───────── */
   @override
@@ -171,8 +171,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                 onPressed: () async {
                   final uri = Uri.parse(_soloPorHoyUrl);
                   if (await canLaunchUrl(uri)) {
-                    await launchUrl(uri,
-                        mode: LaunchMode.externalApplication);
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
                   } else {
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -184,8 +183,7 @@ class _ReflectionScreenState extends State<ReflectionScreen>
                   'Si también quieres ver un principio espiritual por día de “Sólo por hoy”, '
                   'haz clic aquí para verla gratuitamente.',
                   textAlign: TextAlign.start,
-                  style:
-                      TextStyle(color: dark ? Colors.white : Colors.black87),
+                  style: TextStyle(color: dark ? Colors.white : Colors.black87),
                 ),
               ),
             ],
