@@ -1,9 +1,12 @@
-# Preparación de producción — 1.0.6+26
+# Producción 1.0.6+26 — enviada a revisión
 
-Revisión: 15 de septiembre de 2026. **Estado: en preparación.** El propietario
-ha autorizado la publicación y aprobado las notas; este informe todavía no
-acredita una compilación firmada de producción, envío a revisión o despliegue
-de la versión 26.
+Revisión: **15 de septiembre de 2026, 00:22 (Madrid)**. **Estado: Cambios en
+revisión en Google Play.** El propietario autorizó la publicación y aprobó las
+notas. El AAB firmado y verificado está subido y se han enviado la versión 26
+y la declaración de seguridad de los datos. **La versión aún no está
+disponible públicamente**; quedan las comprobaciones y la aprobación de Google.
+La publicación gestionada está desactivada: el lanzamiento completo se
+publicará automáticamente al aprobarse.
 
 ## Procedencia y notas aprobadas
 
@@ -23,9 +26,11 @@ las copias con fotografías y las mejoras de importación y mensajes. API 36,
 contador, reflexiones, bloqueo y las funciones previas de la gráfica se
 conservan. Esta fase no incorpora sugerencias diarias ni edición de entradas.
 
-La preparación modifica la configuración de distribución y su documentación;
-la aplicación parte de la fuente aprobada. El commit definitivo y los hashes
-de los artefactos se registrarán con la ejecución que los genere.
+La preparación modificó la configuración de distribución, su documentación
+y un helper de prueba; la aplicación parte de la fuente aprobada. Los artefactos
+de producción corresponden al commit
+`678a178c6050ea71657a4c1e15f2aaf2a3b1db5b` y a la ejecución de CI
+`34902056060`, intento 1. Sus hashes se registran más abajo.
 
 ## Identidad y certificado de carga
 
@@ -80,12 +85,12 @@ El flujo:
 Este workflow **no publica en Google Play**. La compilación firmada, la subida,
 el envío a revisión y la disponibilidad en producción son estados distintos.
 
-El verificador de producción comprueba identidad, firma y contenido, pero no
-incluye por sí mismo la comprobación completa de alineación de 16 KiB. Hay que
-realizarla sobre el **AAB de producción exacto**, además de las comprobaciones
-que ya pasó el APK preview.
+El verificador de producción comprueba identidad, firma y contenido. La
+comprobación adicional de alineación de 16 KiB se completó de forma independiente
+sobre el **AAB y el APK de producción exactos**; se detalla más abajo. La
+evidencia del APK preview no se utilizó como sustituto de esa comprobación.
 
-## Comprobaciones ya realizadas sobre la fuente aprobada
+## Comprobaciones previas sobre la fuente aprobada
 
 - **442 casos Flutter distintos aprobados**: suite inicial con 440 correctos y
   2 omitidos por enlaces simbólicos no disponibles en Windows, más dos
@@ -113,8 +118,8 @@ y limpieza de JPEG; no ejecuta el decodificador Bitmap de Android. Registro:
 
 Los informes históricos [PRUEBA-DRIVE-26.md](PRUEBA-DRIVE-26.md) y
 [PRUEBA-FOTOS-25.md](PRUEBA-FOTOS-25.md) conservan resultados, comandos y límites
-de cada fase. La primera ejecución remota se describe a continuación; todavía
-no acredita una compilación firmada de producción.
+de cada fase. Los resultados finales de producción se registran después del
+historial de la primera ejecución remota.
 
 ## Primera ejecución de CI y corrección del test
 
@@ -143,22 +148,73 @@ fuera del objetivo. Registros locales:
 `build/validation/ci-layout-reproduce-v26.txt` (fallo reproducido),
 `ci-layout-fixed-ahem-1-v26.txt`, `ci-layout-fixed-ahem-2-v26.txt` y
 `ci-layout-fixed-ahem-full-v26.txt`, estos últimos en la misma carpeta.
-Queda ejecutar CI de nuevo con este ajuste del test.
+Este fallo quedó **resuelto**: la ejecución posterior `34902056060` aprobó
+las 444 pruebas Flutter y completó la compilación firmada y sus verificaciones.
 
-## Pendiente de registrar durante la publicación autorizada
+## CI y artefactos de producción verificados
 
-1. Commit definitivo, ejecución de CI y resultados sobre la fuente exacta.
-2. AAB y APK de producción firmados, mapa R8, hashes y
-   `build/validation/production-release.json`.
-3. Alineación de 16 KiB del AAB de producción y comprobaciones de Play sobre
-   API, dispositivos admitidos y versión.
-4. Política de privacidad pública y declaraciones de datos revisadas para las
-   fotografías y copias v2. La política local de la fase de pruebas era un
-   borrador; no acredita por sí sola su publicación.
-5. Subida del AAB correcto con las notas aprobadas, resultado de la revisión y
-   estado de disponibilidad de producción, sin confundirlos.
-6. Actualización distribuida por Play sobre la versión 23, conservando el
-   Inventario y sus preferencias sin desinstalar ni borrar datos.
+La [ejecución 34902056060](https://github.com/javiercamaraezquerra/Undiamas/actions/runs/34902056060),
+trabajo `104170058078`, intento 1, completó **444 pruebas Flutter, 14 Python
+y 8 grupos de pruebas nativas**. El análisis terminó correctamente con los
+34 diagnósticos anteriores, sin nuevos. Generó APK y AAB de producción firmados,
+mapa R8 e informe de procedencia desde el commit
+`678a178c6050ea71657a4c1e15f2aaf2a3b1db5b`.
+
+La verificación independiente terminó con **PASS** a las 00:18:32 del 15 de
+septiembre de 2026 (Madrid). Informe local:
+`build/validation/production-artifacts-20260914T221832182140Z/verification.json`.
+No accedió a claves privadas. Contrastó las firmas de APK y AAB, el certificado
+de carga esperado, la identidad de producción, sus anuncios, permisos,
+recursos y correspondencia de los binarios nativos.
+
+| Artefacto | Bytes | SHA-256 |
+| --- | ---: | --- |
+| AAB de producción | 65.576.217 | `6b931abe35f1e97216cb41d48da9e20145ccc2fad10efcad5a78f4cb2002d070` |
+| APK de producción | 79.343.476 | `ff3c04cf3ea0fd3b2753e5720ca3e06d45f421d6cb7995600e823cc63f3a0cc5` |
+
+Se confirmó alineación ZIP de 16 KiB del APK, alineación de los segmentos ELF
+de 64 bits y configuración `PAGE_ALIGNMENT_16K` del AAB, con bibliotecas nativas
+coincidentes. Son comprobaciones estáticas de los artefactos; no acreditan
+ejecución en un dispositivo físico con páginas de 16 KiB.
+
+Los archivos de entrega, el mapa R8, las notas aprobadas y los informes se
+conservan en [UnDiaMas-entrega-produccion-v26](../../UnDiaMas-entrega-produccion-v26/README.md).
+El APK de carga queda como artefacto de verificación; la actualización de una
+instalación de Google Play debe recibirse mediante Play con su firma de entrega.
+
+## Envío confirmado a Google Play
+
+El [AAB 26](https://play.google.com/console/u/0/developers/6296470623652792293/app/4974718495219440709/app-bundle-explorer?artifactId=4860230348346012371)
+quedó asociado a la [versión 4 del canal de producción](https://play.google.com/console/u/0/developers/6296470623652792293/app/4974718495219440709/tracks/4697472927551660008/releases/4/details).
+Play confirmó versión 1.0.6 (26), API mínima 24, destino 36, tres arquitecturas
+y una característica requerida. El mapa de desofuscación y los símbolos
+quedaron asociados automáticamente.
+
+La revisión previa al envío mostró **0 dispositivos excluidos** respecto a
+producción 23: 12.476 modelos de teléfono, 6.690 de tablet, 7 de TV, 25 de coche,
+72 de ChromeOS y 1 de XR. El lanzamiento previsto es del **100 %**, con los
+mismos 17 países configurados, 15 activos. Play estimó una descarga de 24,4 MB
+y una actualización de 5,18 MB.
+
+La [política de privacidad pública](https://sites.google.com/view/undiamas-privacy)
+está publicada y comprobada, con versión 1.0.6 y fecha 14 de septiembre de 2026.
+La [declaración de datos](DECLARACION-DATOS-26.md) incluye fotografías y copias v2.
+Tras confirmar «Enviar 2 cambios», el [resumen de publicación](https://play.google.com/console/u/0/developers/6296470623652792293/app/4974718495219440709/publishing)
+muestra **Cambios en revisión** para producción 1.0.6 (26), «Iniciar lanzamiento
+completo», y seguridad de los datos.
+
+En la última comprobación seguían en curso las comprobaciones rápidas
+automáticas. La estimación inicial de hasta 14 minutos se refiere a esas
+comprobaciones, no al plazo de revisión o de disponibilidad pública. La
+publicación gestionada está desactivada, por lo que se publicará al aprobarse.
+
+## Pendiente
+
+1. Resultado de las comprobaciones y revisión de Google y confirmación de
+   disponibilidad pública de la versión 26 y la declaración de datos.
+2. Actualización distribuida por Play sobre la versión 23, conservando el
+   Inventario y sus preferencias sin desinstalar ni borrar datos. La prueba
+   física ya confirmada corresponde a preview, no a esta entrega de Play.
 
 Las copias de producción son `udm_backup_v2.zip` y, para lectura compatible,
 `udm_backup.json`. Preview utiliza nombres propios. Los datos de ambas

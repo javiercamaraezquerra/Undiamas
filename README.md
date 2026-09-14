@@ -1,10 +1,14 @@
-# Un día más — preparación de producción 1.0.6+26
+# Un día más — producción 1.0.6+26 en revisión
 
-Esta copia prepara la publicación autorizada de la versión probada **1.0.6+26**.
+Esta copia corresponde a la publicación autorizada de la versión probada **1.0.6+26**.
 Parte del commit `5109bfd8e8b871f607299151515c3eb8027ff669` de la prueba local;
 la versión de producción comprobada en Play al iniciar esta fase es **1.0.3 (23)**.
-Rama: `codex/undiamas-production-v26`. Estado: **en preparación**; este documento
-no acredita todavía un AAB de producción firmado ni una publicación de v26.
+Rama: `codex/undiamas-production-v26`. A las **00:22 del 15 de septiembre de
+2026 (Madrid)**, Play Console confirma **Cambios en revisión**: la versión 26
+y la declaración de seguridad de los datos se enviaron a Google. El AAB de
+producción está firmado, verificado y subido; **la versión aún no está
+disponible públicamente**. La publicación gestionada está desactivada, por lo
+que Google publicará el lanzamiento completo cuando lo apruebe.
 
 El propietario confirmó en el móvil las copias y restauraciones de Drive y la
 conservación de mensajes y fotografías. También aprobó la publicación y el
@@ -56,17 +60,25 @@ no se debe subir como actualización de producción.
 
 ## Evidencia y estado
 
-La fuente aprobada de v26 dispone de **442 casos Flutter distintos aprobados**,
-además de **2 omitidos** por enlaces simbólicos no disponibles en Windows, y
-**14 pruebas Python** correctas. El análisis no añade diagnósticos: conserva
-3 advertencias y 31 informaciones anteriores. El APK preview fue compilado y
-verificado, incluidas firma, API, contenido y alineación de 16 KiB.
+La [ejecución de CI 34902056060](https://github.com/javiercamaraezquerra/Undiamas/actions/runs/34902056060)
+del commit `678a178c6050ea71657a4c1e15f2aaf2a3b1db5b` completó **444 pruebas
+Flutter, 14 Python y 8 grupos de pruebas nativas** correctamente. Los dos
+casos de enlaces simbólicos omitidos en Windows se ejecutaron en Linux.
+El análisis conserva 3 advertencias y 31 informaciones anteriores, sin
+diagnósticos nuevos.
 
-El AAB de producción debe verificarse por separado, incluida su alineación de
-16 KiB, y después comprobarse el resultado de la revisión y publicación en
-Play. La política de fotografías y las declaraciones de datos se revisan en
-esta preparación. El [informe de producción 26](docs/PRODUCCION-26.md) registra
-procedencia, certificado, comprobaciones y pasos pendientes.
+El APK y el AAB de producción firmados superaron la verificación independiente
+de identidad, certificado, contenido y alineación de 16 KiB. Play confirmó
+API 36, mínimo 24, tres arquitecturas y ningún dispositivo excluido respecto
+a producción 23. La política de privacidad está publicada y la declaración
+de datos está enviada a revisión junto con la versión.
+
+La entrega estable local está en la carpeta hermana `UnDiaMas-entrega-produccion-v26`,
+fuera de `build`; los artefactos remotos corresponden a la ejecución de CI enlazada.
+El [informe de producción 26](docs/PRODUCCION-26.md) registra procedencia,
+hashes y límites de la verificación. Quedan pendientes las comprobaciones y
+la revisión de Google, la disponibilidad pública y la prueba de actualización
+desde Play conservando el Inventario y las preferencias.
 
 La evidencia de desarrollo permanece en [PRUEBA-DRIVE-26.md](docs/PRUEBA-DRIVE-26.md)
 y [PRUEBA-FOTOS-25.md](docs/PRUEBA-FOTOS-25.md); describe sus respectivas pruebas

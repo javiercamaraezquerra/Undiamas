@@ -1,6 +1,9 @@
 # Declaración de datos para 1.0.6+26
 
 Revisada el 14 de septiembre de 2026 para la publicación autorizada.
+Estado actualizado el **15 de septiembre de 2026, 00:22 (Madrid)**:
+declaración enviada junto con producción 1.0.6 (26), **en revisión en Google
+Play**. La aceptación y disponibilidad pública de estos cambios siguen pendientes.
 
 ## Política pública
 
@@ -15,10 +18,15 @@ compatibilidad JSON anterior y eliminación de adjuntos. No declara cifrado
 propio de extremo a extremo para Drive. Se conservan audiencia, publicidad,
 contacto y URL.
 
-## Cambios guardados en Play Console
+## Cambios enviados a revisión en Play Console
 
-La consola confirmó «Cambio guardado»; el envío a revisión se realizará junto
-con la nueva versión. Guardar esta declaración no equivale a publicarla.
+Después de guardar la declaración y subir la nueva versión, se confirmó
+«Enviar 2 cambios». El resumen de publicación muestra **Cambios en revisión**
+para seguridad de los datos y producción 1.0.6 (26). Las comprobaciones rápidas
+automáticas seguían en curso en la última consulta. La publicación gestionada
+está desactivada y los cambios se publicarán al aprobarse. La política pública
+ya está publicada; el envío de esta declaración no acredita su aceptación ni
+su disponibilidad pública. Véase el [registro de producción](PRODUCCION-26.md).
 
 | Tipo | Recogida | Compartido | Opcional | Temporal | Finalidad |
 | --- | --- | --- | --- | --- | --- |
