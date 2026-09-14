@@ -2,7 +2,7 @@ name: un_dia_mas
 description: Una app Flutter para apoyo en la recuperación de adicciones.
 publish_to: "none"
 
-version: 1.0.5+25        # Corrección de importación y avisos de fotografías
+version: 1.0.6+26        # Corrección de importación y avisos de fotografías
 
 environment:
   # Varias dependencias (google_mobile_ads 5.x, flutter_local_notifications 17.x, intl 0.20.x, etc.)

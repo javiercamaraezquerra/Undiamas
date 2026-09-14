@@ -1,7 +1,7 @@
 param(
     [ValidateSet('Pub', 'Test', 'Analyze', 'Build', 'Dependencies')][string]$Mode = 'Test',
     [string[]]$TestTargets = @(),
-    [string]$TestLog = 'tests-v25.txt'
+    [string]$TestLog = 'tests-v26.txt'
 )
 
 # Local, isolated preview only. Uses the existing preview signing certificate.
@@ -54,11 +54,11 @@ try {
     Set-Location -LiteralPath $taskApp
     $taskFlutterCommand = Join-Path $taskFlutter 'bin\flutter.bat'
     if ($Mode -eq 'Pub') {
-        Invoke-PhotoCommand $taskFlutterCommand @('config', '--no-enable-windows-desktop', '--no-enable-linux-desktop') 'config-v25.txt'
-        Invoke-PhotoCommand $taskFlutterCommand @('pub', 'get', '--offline', '--enforce-lockfile') 'pub-v25.txt'
+        Invoke-PhotoCommand $taskFlutterCommand @('config', '--no-enable-windows-desktop', '--no-enable-linux-desktop') 'config-v26.txt'
+        Invoke-PhotoCommand $taskFlutterCommand @('pub', 'get', '--offline', '--enforce-lockfile') 'pub-v26.txt'
     }
     if ($Mode -eq 'Analyze') {
-        Invoke-PhotoCommand $taskFlutterCommand @('analyze', '--no-pub', '--no-fatal-infos', '--no-fatal-warnings') 'analyze-v25.txt'
+        Invoke-PhotoCommand $taskFlutterCommand @('analyze', '--no-pub', '--no-fatal-infos', '--no-fatal-warnings') 'analyze-v26.txt'
     }
     if ($Mode -eq 'Test') {
         Invoke-PhotoCommand $taskFlutterCommand (@('test', '--no-pub', '--concurrency=2', '--reporter', 'expanded') + $TestTargets) $TestLog
@@ -82,7 +82,7 @@ try {
             $taskHashes = @($taskInputs | Sort-Object FullName | ForEach-Object {
                 [ordered]@{ Path=$_.FullName.Substring($taskApp.Length + 1); SHA256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }
             })
-            $taskHashes | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $taskLog 'source-before-build-v25.json') -Encoding UTF8
+            $taskHashes | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $taskLog 'source-before-build-v26.json') -Encoding UTF8
         }
         Set-Location -LiteralPath (Join-Path $taskApp 'android')
         $taskDefine = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('UDM_PREVIEW=true'))
@@ -98,7 +98,7 @@ try {
         if ($Mode -eq 'Dependencies') {
             $taskBuildArguments += @(':app:dependencies', '--configuration', 'previewReleaseRuntimeClasspath')
         } else { $taskBuildArguments += 'assemblePreviewRelease' }
-        Invoke-PhotoCommand (Join-Path $taskRuntime 'gradle-8.11.1\bin\gradle.bat') $taskBuildArguments "$Mode-v25.txt"
+        Invoke-PhotoCommand (Join-Path $taskRuntime 'gradle-8.11.1\bin\gradle.bat') $taskBuildArguments "$Mode-v26.txt"
     }
 } finally {
     Set-Location -LiteralPath $taskLocation

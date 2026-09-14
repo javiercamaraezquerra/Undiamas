@@ -105,10 +105,6 @@ class _JournalScreenState extends State<JournalScreen> {
           child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Padding(
-              padding: EdgeInsets.fromLTRB(24, 0, 24, 8),
-              child: Text(
-                  'Si usas las copias en Drive, también incluirán tus fotos.')),
           ListTile(
               leading: const Icon(Icons.photo_camera_outlined),
               title: const Text('Hacer foto'),

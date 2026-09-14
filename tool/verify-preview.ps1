@@ -3,15 +3,15 @@
 $ErrorActionPreference = 'Stop'
 $taskApp = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $taskApk = Join-Path $taskApp 'build\app\outputs\apk\preview\release\app-preview-release.apk'
-$taskPreviousApk = 'C:\Users\Javi\Documents\Quinielalab\dist\UnDiaMas-fotos-v24\dist\UnDiaMas-1.0.4-24-fotos-fase1.apk'
+$taskPreviousApk = 'C:\Users\Javi\Documents\Quinielalab\dist\UnDiaMas-fotos-v25\dist\UnDiaMas-1.0.5-25-fotos-corregidas.apk'
 $taskTools = 'C:\Users\Javi\AppData\Local\Android\Sdk\build-tools\36.0.0'
 $taskJava = 'C:\Users\Javi\Documents\MADE_WRONG\.local_tools\jdk-17\bin\java.exe'
 $taskLogs = Join-Path $taskApp 'build\validation'
 $taskDelivery = Join-Path $taskApp 'dist'
-if (-not (Test-Path -LiteralPath $taskApk -PathType Leaf)) { throw 'No v25 APK has been built.' }
-if (-not (Test-Path -LiteralPath $taskPreviousApk -PathType Leaf)) { throw 'The v24 reference APK is required to verify update compatibility.' }
+if (-not (Test-Path -LiteralPath $taskApk -PathType Leaf)) { throw 'No v26 APK has been built.' }
+if (-not (Test-Path -LiteralPath $taskPreviousApk -PathType Leaf)) { throw 'The v25 reference APK is required to verify update compatibility.' }
 [IO.Directory]::CreateDirectory($taskLogs) | Out-Null
-$taskSnapshotPath = Join-Path $taskLogs 'source-before-build-v25.json'
+$taskSnapshotPath = Join-Path $taskLogs 'source-before-build-v26.json'
 if (-not (Test-Path -LiteralPath $taskSnapshotPath -PathType Leaf)) { throw 'Missing pre-build source snapshot.' }
 $taskBeforeBuild = @(Get-Content -LiteralPath $taskSnapshotPath -Raw | ConvertFrom-Json)
 $taskCurrentInputs = @(Get-ChildItem -LiteralPath (Join-Path $taskApp 'lib'),(Join-Path $taskApp 'assets'),(Join-Path $taskApp 'android/app/src') -Recurse -File) +
@@ -26,10 +26,10 @@ foreach ($taskInput in $taskBeforeBuild) {
 
 $taskBadging = & (Join-Path $taskTools 'aapt.exe') dump badging $taskApk
 if ($LASTEXITCODE -ne 0) { throw 'aapt verification failed.' }
-$taskBadging | Set-Content -LiteralPath (Join-Path $taskLogs 'apk-badging-v25.txt') -Encoding UTF8
+$taskBadging | Set-Content -LiteralPath (Join-Path $taskLogs 'apk-badging-v26.txt') -Encoding UTF8
 $taskManifestText = $taskBadging -join "`n"
 foreach ($taskRequired in @(
-    "package: name='com.celsoriaapps.undiamas.privacidad' versionCode='25' versionName='1.0.5'",
+    "package: name='com.celsoriaapps.undiamas.privacidad' versionCode='26' versionName='1.0.6'",
     "sdkVersion:'24'", "targetSdkVersion:'36'",
     "application-label:'Un Día Más'",
     "application-label-en:'One More Day'",
@@ -55,7 +55,7 @@ if (-not $taskApplicationLabels.Count -or ($taskApplicationLabels -join "`n") -m
 }
 $taskXmlTree = & (Join-Path $taskTools 'aapt.exe') dump xmltree $taskApk AndroidManifest.xml
 if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect the packaged manifest.' }
-$taskXmlTree | Set-Content -LiteralPath (Join-Path $taskLogs 'apk-manifest-v25.txt') -Encoding UTF8
+$taskXmlTree | Set-Content -LiteralPath (Join-Path $taskLogs 'apk-manifest-v26.txt') -Encoding UTF8
 foreach ($taskReceiver in @('ScheduledNotificationReceiver',
     'ScheduledNotificationBootReceiver', 'android.intent.action.BOOT_COMPLETED',
     'android.intent.action.MY_PACKAGE_REPLACED')) {
@@ -68,19 +68,19 @@ $taskCertificateHashes = @()
 foreach ($taskSignedApk in @($taskPreviousApk, $taskApk)) {
     $taskSignature = & $taskJava -jar (Join-Path $taskTools 'lib\apksigner.jar') verify --verbose --print-certs $taskSignedApk
     if ($LASTEXITCODE -ne 0) { throw "Signature verification failed: $taskSignedApk" }
-    $taskLogVersion = if ($taskSignedApk -eq $taskApk) { 'v25' } else { 'v24' }
+    $taskLogVersion = if ($taskSignedApk -eq $taskApk) { 'v26' } else { 'v25' }
     $taskSignature | Set-Content -LiteralPath (Join-Path $taskLogs "apk-signature-$taskLogVersion.txt") -Encoding UTF8
     $taskMatch = [regex]::Match(($taskSignature -join "`n"), 'Signer #1 certificate SHA-256 digest: ([0-9a-fA-F]{64})')
     if (-not $taskMatch.Success) { throw 'Certificate digest missing.' }
     $taskCertificateHashes += $taskMatch.Groups[1].Value.ToUpperInvariant()
 }
-if ($taskCertificateHashes[0] -ne $taskCertificateHashes[1]) { throw 'The new APK does not use the v24 certificate.' }
+if ($taskCertificateHashes[0] -ne $taskCertificateHashes[1]) { throw 'The new APK does not use the v25 certificate.' }
 
-& (Join-Path $taskTools 'zipalign.exe') -c -P 16 -v 4 $taskApk | Set-Content -LiteralPath (Join-Path $taskLogs 'apk-alignment-v25.txt') -Encoding UTF8
+& (Join-Path $taskTools 'zipalign.exe') -c -P 16 -v 4 $taskApk | Set-Content -LiteralPath (Join-Path $taskLogs 'apk-alignment-v26.txt') -Encoding UTF8
 if ($LASTEXITCODE -ne 0) { throw 'APK alignment verification failed.' }
 # ZIP alignment and ELF segment alignment are separate Android 16 KiB checks.
 $taskReadElf = 'C:\Users\Javi\AppData\Local\Android\Sdk\ndk\28.1.13356709\toolchains\llvm\prebuilt\windows-x86_64\bin\llvm-readelf.exe'
-$taskElfDirectory = Join-Path $taskLogs 'native-libraries-v25'
+$taskElfDirectory = Join-Path $taskLogs 'native-libraries-v26'
 $taskElfReport = [Collections.Generic.List[object]]::new()
 $taskPreviewAdReport = [Collections.Generic.List[object]]::new()
 $taskTestBannerId = 'ca-app-pub-3940256099942544/6300978111'
@@ -138,25 +138,25 @@ try {
 if (-not $taskNativePhotoChannel) { throw 'Native photo preparation channel missing from the APK.' }
 if ($taskElfReport.Count -lt 4) { throw 'Expected the 64-bit Flutter engine and app libraries for both ABIs.' }
 if ($taskPreviewAdReport.Count -ne 3) { throw 'Expected the test banner in all three app ABIs.' }
-$taskElfReport | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $taskLogs 'apk-elf-alignment-v25.json') -Encoding UTF8
-$taskPreviewAdReport | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $taskLogs 'apk-preview-ads-v25.json') -Encoding UTF8
+$taskElfReport | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $taskLogs 'apk-elf-alignment-v26.json') -Encoding UTF8
+$taskPreviewAdReport | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $taskLogs 'apk-preview-ads-v26.json') -Encoding UTF8
 $taskHash = (Get-FileHash -LiteralPath $taskApk -Algorithm SHA256).Hash
 [IO.Directory]::CreateDirectory($taskDelivery) | Out-Null
-$taskDeliveredApk = Join-Path $taskDelivery 'UnDiaMas-1.0.5-25-fotos-corregidas.apk'
+$taskDeliveredApk = Join-Path $taskDelivery 'UnDiaMas-1.0.6-26-drive.apk'
 Copy-Item -LiteralPath $taskApk -Destination $taskDeliveredApk
 if ((Get-FileHash -LiteralPath $taskDeliveredApk -Algorithm SHA256).Hash -ne $taskHash) { throw 'Delivery copy hash mismatch.' }
-"$taskHash  UnDiaMas-1.0.5-25-fotos-corregidas.apk" | Set-Content -LiteralPath (Join-Path $taskDelivery 'SHA256.txt') -Encoding ASCII
+"$taskHash  UnDiaMas-1.0.6-26-drive.apk" | Set-Content -LiteralPath (Join-Path $taskDelivery 'SHA256.txt') -Encoding ASCII
 $taskReport = [ordered]@{
     VerifiedAt = (Get-Date).ToString('o')
     Package = 'com.celsoriaapps.undiamas.privacidad'
-    Version = '1.0.5+25'
+    Version = '1.0.6+26'
     VisibleName = 'Un Día Más'
     EnglishVisibleName = 'One More Day'
     MinSdk = 24
     TargetSdk = 36
     ABIs = @('arm64-v8a', 'armeabi-v7a', 'x86_64')
     CertificateSha256 = $taskCertificateHashes[1]
-    SameCertificateAsV24 = $true
+    SameCertificateAsV25 = $true
     SignatureVerified = $true
     ZipAlignment16KiB = $true
     Elf64BitLoadAlignment16KiB = $true

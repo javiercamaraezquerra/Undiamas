@@ -235,7 +235,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('journal-add-photo')));
     await settle(tester);
     expect(find.text('Hacer foto'), findsOneWidget);
-    expect(find.textContaining('también incluirán tus fotos'), findsOneWidget);
+    expect(find.textContaining('también incluirán tus fotos'), findsNothing);
     await tester.tap(find.text('Elegir de la galería'));
     await settle(tester);
     expect(fixture.gateway.pickCalls, 1);

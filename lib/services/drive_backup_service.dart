@@ -1,5 +1,7 @@
 // lib/services/drive_backup_service.dart
+import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as dev;
 import 'dart:io';
 
 import 'package:flutter/services.dart' show PlatformException;
@@ -13,16 +15,31 @@ import '../models/diary_entry.dart';
 import 'hive_restore_service.dart';
 import 'inventory_backup_archive.dart';
 
+/// Diagnostic categories contain no account, token, path, or provider message.
+enum BackupFailureKind {
+  configuration,
+  cancelled,
+  permissions,
+  network,
+  authentication,
+  serviceUnavailable,
+  invalidBackup,
+  storage,
+  unknown,
+}
+
 class BackupResult<T> {
   final bool ok;
   final String? message;
   final T? data;
+  final BackupFailureKind? failureKind;
 
   const BackupResult.success([this.data])
       : ok = true,
-        message = null;
+        message = null,
+        failureKind = null;
 
-  const BackupResult.failure(this.message)
+  const BackupResult.failure(this.message, {this.failureKind})
       : ok = false,
         data = null;
 }
@@ -51,33 +68,80 @@ class DriveBackupService {
   /* ───────────────────── Helpers de errores ───────────────────── */
 
   static bool _isDeveloperError(PlatformException e) {
-    // GoogleSignIn lanza PlatformException con code 'sign_in_failed'.
-    // El DEVELOPER_ERROR suele dejar "status: 10" o "ApiException: 10" en message/details.
-    final msg = '${e.message ?? ''} ${e.details ?? ''}'.toLowerCase();
+    if (e.code == 'developer_error') return true;
     if (e.code != 'sign_in_failed') return false;
-    return msg.contains('status: 10') ||
-        msg.contains('apiexception: 10') ||
-        RegExp(r'\b10:?(\s|$)').hasMatch(msg) ||
+    // Inspect only to classify. Provider text must never reach UI or logs.
+    final msg = '${e.message ?? ''} ${e.details ?? ''}'.toLowerCase();
+    return RegExp(r'\b(?:status(?:code)?|apiexception)\s*:\s*10\b')
+            .hasMatch(msg) ||
         msg.contains('developer_error');
   }
 
-  static BackupResult<T> _mapAuthError<T>(Object e) {
+  static BackupFailureKind _classifyFailure(Object e,
+      {required bool authenticating}) {
     if (e is PlatformException) {
-      if (_isDeveloperError(e)) {
-        return const BackupResult.failure(
-          'Configuración OAuth inválida: revisa SHA‑1 (debug/release/Play) y el package '
-          'en Google Cloud para com.celsoriaapps.undiamas.',
-        );
+      if (_isDeveloperError(e)) return BackupFailureKind.configuration;
+      if (e.code == _signInCanceledCode || e.code == 'sign_in_cancelled') {
+        return BackupFailureKind.cancelled;
       }
-      if (e.code == _signInCanceledCode) {
-        return const BackupResult.failure('Autenticación cancelada.');
+      if (e.code == 'scopes_denied' || e.code == 'access_denied') {
+        return BackupFailureKind.permissions;
       }
-      final details = (e.message ?? '').trim();
-      return BackupResult.failure(
-        'Error de autenticación: ${e.code}${details.isNotEmpty ? ' $details' : ''}',
-      );
+      if (e.code == 'network_error') return BackupFailureKind.network;
+      if (authenticating) return BackupFailureKind.authentication;
     }
-    return const BackupResult.failure('Error de autenticación desconocido.');
+    if (e is SocketException ||
+        e is http.ClientException ||
+        e is TimeoutException ||
+        e is HandshakeException) {
+      return BackupFailureKind.network;
+    }
+    if (e is drive.DetailedApiRequestError) {
+      if (e.status == 401) return BackupFailureKind.authentication;
+      if (e.status == 403) return BackupFailureKind.permissions;
+      if (e.status == 429 || (e.status != null && e.status! >= 500)) {
+        return BackupFailureKind.serviceUnavailable;
+      }
+    }
+    if (authenticating) return BackupFailureKind.authentication;
+    if (e is FileSystemException) return BackupFailureKind.storage;
+    if (e is FormatException) return BackupFailureKind.invalidBackup;
+    return BackupFailureKind.unknown;
+  }
+
+  static BackupFailureKind _recordFailure(Object error,
+      {required String operation, required bool authenticating}) {
+    final kind = _classifyFailure(error, authenticating: authenticating);
+    // Only these app-authored labels are recorded, never the exception itself.
+    dev.log('Drive backup failed ($operation/${kind.name}).', name: 'UnDiaMas');
+    return kind;
+  }
+
+  static BackupResult<T> _failure<T>(Object error,
+      {required String operation, required bool authenticating}) {
+    final kind = _recordFailure(error,
+        operation: operation, authenticating: authenticating);
+    final message = switch (kind) {
+      BackupFailureKind.configuration =>
+        'No se puede conectar con Google Drive en esta versión. Puedes seguir usando la app.',
+      BackupFailureKind.cancelled => 'Conexión con Google cancelada.',
+      BackupFailureKind.permissions =>
+        'Drive no ha permitido el acceso. Para usar las copias, permite el acceso cuando Google lo solicite.',
+      BackupFailureKind.network =>
+        'No se pudo conectar con Google Drive. Comprueba tu conexión y vuelve a intentarlo.',
+      BackupFailureKind.authentication =>
+        'No se pudo conectar tu cuenta de Google. Vuelve a intentarlo.',
+      BackupFailureKind.serviceUnavailable =>
+        'Google Drive no está disponible ahora. Inténtalo más tarde.',
+      BackupFailureKind.invalidBackup =>
+        'La copia está incompleta o no es compatible.',
+      BackupFailureKind.storage =>
+        'No se pudo preparar la copia. Comprueba el espacio disponible en el móvil e inténtalo de nuevo.',
+      BackupFailureKind.unknown => operation == 'upload'
+          ? 'No se pudo guardar la copia en Drive. Vuelve a intentarlo.'
+          : 'No se pudo descargar la copia de Drive. Vuelve a intentarlo.',
+    };
+    return BackupResult.failure(message, failureKind: kind);
   }
 
   /* ───────────────────── Autenticación + scopes ───────────────── */
@@ -92,15 +156,8 @@ class DriveBackupService {
       acc = null; // ignoramos fallos silenciosos
     }
 
-    // 2) Pide login si no había sesión
-    if (acc == null) {
-      try {
-        acc = await _googleSignIn.signIn();
-      } on PlatformException {
-        // propagamos para que upload/download muestren el motivo exacto
-        rethrow;
-      }
-    }
+    // 2) Pide login si no había sesión. Cancellation remains a failed operation.
+    acc ??= await _googleSignIn.signIn();
 
     if (acc == null) {
       // Usuario canceló
@@ -124,7 +181,16 @@ class DriveBackupService {
       rethrow;
     }
 
-    final headers = await acc.authHeaders;
+    final token = (await acc.authentication).accessToken;
+    // google_sign_in's authHeaders otherwise turns an absent token into
+    // "Bearer null". A failed authentication must never start Drive requests.
+    if (token == null || token.trim().isEmpty) {
+      throw PlatformException(code: 'missing_access_token');
+    }
+    final headers = <String, String>{
+      'Authorization': 'Bearer $token',
+      'X-Goog-AuthUser': '0',
+    };
     return _DriveSession(_AuthenticatedClient(IOClient(), headers));
   }
 
@@ -150,8 +216,9 @@ class DriveBackupService {
   static Future<void> deleteBackup() async {
     // Authentication failure/cancellation must reach the caller before it
     // deletes local data or reports that the cloud copy was removed.
-    final session = await _driveApi();
+    _DriveSession? session;
     try {
+      session = await _driveApi();
       final api = session.api;
       final res = await api.files.list(
         spaces: 'appDataFolder',
@@ -161,8 +228,12 @@ class DriveBackupService {
       for (final f in res.files ?? <drive.File>[]) {
         await api.files.delete(f.id!);
       }
+    } catch (error) {
+      _recordFailure(error,
+          operation: 'delete', authenticating: session == null);
+      rethrow;
     } finally {
-      session.close();
+      session?.close();
     }
   }
 
@@ -198,10 +269,8 @@ class DriveBackupService {
         }
         return const BackupResult<void>.success();
       });
-    } on PlatformException catch (e) {
-      return _mapAuthError<void>(e);
     } catch (e) {
-      return BackupResult.failure('Error al subir: $e');
+      return _failure(e, operation: 'upload', authenticating: session == null);
     } finally {
       session?.close();
     }
@@ -282,10 +351,9 @@ class DriveBackupService {
         HiveRestoreService.prepare(decoded);
         return BackupResult.success(decoded);
       });
-    } on PlatformException catch (e) {
-      return _mapAuthError<Map<String, dynamic>>(e);
     } catch (e) {
-      return BackupResult.failure('Error al descargar: $e');
+      return _failure(e,
+          operation: 'download', authenticating: session == null);
     } finally {
       session?.close();
     }

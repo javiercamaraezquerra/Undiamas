@@ -40,17 +40,25 @@ void main() {
   late List<MethodCall> authCalls;
   late List<MethodCall> pathCalls;
   Object? interactiveError;
+  Object? silentError;
+  Object? scopesError;
   Object? tokenError;
+  String? accessToken;
   bool cancelWithNull = false;
   bool scopesGranted = true;
   late _MemoryHttpClient transport;
   late Directory temporaryDirectory;
+  int networkClientCreations = 0;
 
   setUp(() async {
     authCalls = [];
     pathCalls = [];
     interactiveError = null;
+    silentError = null;
+    scopesError = null;
     tokenError = null;
+    accessToken = 'fixture-token-not-real';
+    networkClientCreations = 0;
     cancelWithNull = false;
     scopesGranted = true;
     transport = _MemoryHttpClient();
@@ -63,16 +71,19 @@ void main() {
         case 'init':
         case 'disconnect':
         case 'signOut':
+          return null;
         case 'signInSilently':
+          if (silentError != null) throw silentError!;
           return null;
         case 'signIn':
           if (interactiveError != null) throw interactiveError!;
           return cancelWithNull ? null : _account;
         case 'requestScopes':
+          if (scopesError != null) throw scopesError!;
           return scopesGranted;
         case 'getTokens':
           if (tokenError != null) throw tokenError!;
-          return {'accessToken': 'fixture-token-not-real'};
+          return {'accessToken': accessToken};
         case 'isSignedIn':
           return false;
         default:
@@ -109,7 +120,152 @@ void main() {
   });
 
   Future<T> withFakeNetwork<T>(Future<T> Function() action) =>
-      HttpOverrides.runZoned(action, createHttpClient: (_) => transport);
+      HttpOverrides.runZoned(action, createHttpClient: (_) {
+        networkClientCreations++;
+        return transport;
+      });
+
+  final authFailures =
+      <({String name, BackupFailureKind kind, void Function() arrange})>[
+    (
+      name: 'OAuth configuration',
+      kind: BackupFailureKind.configuration,
+      arrange: () => interactiveError = PlatformException(
+          code: 'sign_in_failed',
+          message: 'com.google.android.gms.common.api.ApiException: 10:',
+          details: 'private-account@example.invalid secret-token local/path'),
+    ),
+    (
+      name: 'cancelled account selection',
+      kind: BackupFailureKind.cancelled,
+      arrange: () => cancelWithNull = true,
+    ),
+    (
+      name: 'Drive scopes denied',
+      kind: BackupFailureKind.permissions,
+      arrange: () => scopesGranted = false,
+    ),
+    (
+      name: 'Drive scope request cancelled',
+      kind: BackupFailureKind.cancelled,
+      arrange: () => scopesError =
+          PlatformException(code: 'sign_in_canceled', message: 'secret-token'),
+    ),
+    (
+      name: 'offline authentication',
+      kind: BackupFailureKind.network,
+      arrange: () => interactiveError =
+          PlatformException(code: 'network_error', message: 'secret-token'),
+    ),
+    (
+      name: 'expired token recovery',
+      kind: BackupFailureKind.authentication,
+      arrange: () => tokenError = PlatformException(
+          code: 'failed_to_recover_auth',
+          message: 'private-account@example.invalid'),
+    ),
+    (
+      name: 'missing access token',
+      kind: BackupFailureKind.authentication,
+      arrange: () => accessToken = null,
+    ),
+    (
+      name: 'empty access token',
+      kind: BackupFailureKind.authentication,
+      arrange: () => accessToken = '  ',
+    ),
+    (
+      name: 'unknown provider error',
+      kind: BackupFailureKind.authentication,
+      arrange: () => interactiveError = PlatformException(
+          code: 'private-account@example.invalid',
+          message: 'secret-token local/path'),
+    ),
+  ];
+  for (final fixture in authFailures) {
+    for (final operation in ['upload', 'download', 'delete']) {
+      test('$operation does no HTTP or temporary IO after ${fixture.name}',
+          () async {
+        fixture.arrange();
+        // An existing cloud copy must never be replaced or deleted on failure.
+        transport.existingIds = ['fixture-existing'];
+        if (operation == 'delete') {
+          await expectLater(withFakeNetwork(DriveBackupService.deleteBackup),
+              throwsA(isA<PlatformException>()));
+        } else {
+          final BackupResult<dynamic> result = operation == 'upload'
+              ? await withFakeNetwork(
+                  () => DriveBackupService.uploadBackup(_legacyJson()))
+              : await withFakeNetwork(DriveBackupService.downloadBackup);
+          expect(result.ok, isFalse);
+          expect(result.data, isNull);
+          expect(result.failureKind, fixture.kind);
+          expect(result.message, isNotEmpty);
+          for (final privateOrTechnical in [
+            'OAuth',
+            'SHA',
+            'com.celsoriaapps',
+            'ApiException',
+            'private-account',
+            'secret-token',
+            'local/path',
+            'PlatformException'
+          ]) {
+            expect(result.message, isNot(contains(privateOrTechnical)));
+          }
+        }
+        expect(transport.requests, isEmpty);
+        expect(networkClientCreations, 0);
+        expect(pathCalls, isEmpty);
+        expect(transport.existingIds, ['fixture-existing']);
+      });
+    }
+  }
+
+  test('silent session failure still allows the existing interactive login',
+      () async {
+    silentError = PlatformException(code: 'sign_in_required');
+    final result = await withFakeNetwork(
+        () => DriveBackupService.uploadBackup(_legacyJson()));
+    expect(result.ok, isTrue, reason: result.message);
+    expect(
+        authCalls.map((call) => call.method),
+        containsAllInOrder(
+            ['signInSilently', 'signIn', 'requestScopes', 'getTokens']));
+    expect(transport.closeCount, 1);
+  });
+
+  test('an unrelated number 10 does not become an OAuth configuration error',
+      () async {
+    interactiveError = PlatformException(
+        code: 'sign_in_failed',
+        message: 'Unexpected failure after 10 attempts');
+    final result = await withFakeNetwork(DriveBackupService.downloadBackup);
+    expect(result.failureKind, BackupFailureKind.authentication);
+    expect(networkClientCreations, 0);
+  });
+
+  for (final fixture in [
+    (status: 401, kind: BackupFailureKind.authentication),
+    (status: 403, kind: BackupFailureKind.permissions),
+    (status: 429, kind: BackupFailureKind.serviceUnavailable),
+    (status: 503, kind: BackupFailureKind.serviceUnavailable),
+  ]) {
+    test('HTTP ${fixture.status} is classified safely before a remote write',
+        () async {
+      transport.listStatus = fixture.status;
+      transport.existingIds = ['fixture-existing'];
+      final result = await withFakeNetwork(
+          () => DriveBackupService.uploadBackup(_legacyJson()));
+      expect(result.ok, isFalse);
+      expect(result.failureKind, fixture.kind);
+      expect(result.message, isNot(contains('secret-token')));
+      expect(result.message, isNot(contains('private-account')));
+      expect(transport.requests.map((request) => request.method), ['GET']);
+      expect(transport.closeCount, 1);
+      expect(await temporaryDirectory.list().toList(), isEmpty);
+    });
+  }
 
   for (final cancellation in ['null', 'platform error']) {
     test('delete propagates sign-in cancellation ($cancellation) before HTTP',
@@ -167,6 +323,8 @@ void main() {
     await withFakeNetwork(DriveBackupService.deleteBackup);
     expect(transport.requests.map((request) => request.method),
         ['GET', 'DELETE', 'DELETE']);
+    expect(transport.requests.first.uri.queryParameters['q'],
+        "(name='${DriveBackupService.archiveFileName()}' or name='${DriveBackupService.legacyFileName()}') and trashed=false");
     expect(transport.requests.skip(1).map((request) => request.uri.path),
         ['/drive/v3/files/fixture-a', '/drive/v3/files/fixture-b']);
     transport.requests.clear();
@@ -198,7 +356,7 @@ void main() {
       final listing = transport.requests.first;
       expect(listing.uri.queryParameters['spaces'], 'appDataFolder');
       expect(listing.uri.queryParameters['q'],
-          "name='udm_backup_v2.zip' and trashed=false");
+          "name='${DriveBackupService.archiveFileName()}' and trashed=false");
       final upload = transport.requests.last;
       expect(upload.method, update ? 'PATCH' : 'POST');
       expect(upload.headers.value('authorization'),
@@ -214,7 +372,7 @@ void main() {
       final metadataPart = parts.firstWhere((part) => part.contains('"name"'));
       final metadata =
           jsonDecode(metadataPart.split('\r\n\r\n').last.trim()) as Map;
-      expect(metadata['name'], 'udm_backup_v2.zip');
+      expect(metadata['name'], DriveBackupService.archiveFileName());
       expect(metadata['parents'], update ? isNull : ['appDataFolder']);
       final mediaPart = parts.firstWhere(
           (part) => part.contains('Content-Transfer-Encoding: base64'));
@@ -254,7 +412,8 @@ void main() {
     final result = await withFakeNetwork(
         () => DriveBackupService.uploadBackup(_legacyJson()));
     expect(result.ok, isFalse);
-    expect(result.message, contains('Error al subir'));
+    expect(result.failureKind, BackupFailureKind.serviceUnavailable);
+    expect(result.message, contains('Inténtalo más tarde'));
     expect(await temporaryDirectory.list().toList(), isEmpty);
     expect(transport.requests, hasLength(2));
   });
@@ -266,7 +425,7 @@ void main() {
     final result = await withFakeNetwork(
         () => DriveBackupService.uploadBackup(_legacyJson()));
     expect(result.ok, isFalse);
-    expect(result.message, 'Autenticación cancelada.');
+    expect(result.message, 'Conexión con Google cancelada.');
     expect(transport.requests, isEmpty);
     expect(pathCalls, isEmpty);
   });
@@ -304,7 +463,7 @@ void main() {
     expect(result.data, data);
     expect(transport.requests, hasLength(2));
     expect(transport.requests.first.uri.queryParameters['q'],
-        "name='udm_backup_v2.zip' and trashed=false");
+        "name='${DriveBackupService.archiveFileName()}' and trashed=false");
     expect(transport.requests.last.uri.path, '/drive/v3/files/fixture-v2');
     expect(await temporaryDirectory.list().toList(), isEmpty);
   });
@@ -319,7 +478,7 @@ void main() {
     expect(result.data, _legacyJson());
     expect(transport.requests, hasLength(3));
     expect(transport.requests[1].uri.queryParameters['q'],
-        "name='udm_backup.json' and trashed=false");
+        "name='${DriveBackupService.legacyFileName()}' and trashed=false");
     expect(await temporaryDirectory.list().toList(), isEmpty);
   });
 
@@ -370,6 +529,8 @@ class _MemoryHttpClient implements HttpClient {
   int? declaredSize;
   bool failDelete = false;
   bool failUpload = false;
+  int listStatus = 200;
+  int closeCount = 0;
 
   @override
   Future<HttpClientRequest> openUrl(String method, Uri url) async {
@@ -377,6 +538,16 @@ class _MemoryHttpClient implements HttpClient {
       if (method == 'GET') {
         if (url.path != '/drive/v3/files') {
           return _MemoryResponse.binary(downloadBytes ?? Uint8List(0));
+        }
+        if (listStatus != 200) {
+          return _MemoryResponse(
+              listStatus,
+              jsonEncode({
+                'error': {
+                  'code': listStatus,
+                  'message': 'secret-token private-account@example.invalid',
+                }
+              }));
         }
         final query = url.queryParameters['q'] ?? '';
         final ids = query.contains('v2.zip')
@@ -412,7 +583,7 @@ class _MemoryHttpClient implements HttpClient {
   }
 
   @override
-  void close({bool force = false}) {}
+  void close({bool force = false}) => closeCount++;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
