@@ -1,6 +1,6 @@
 # Preparación de producción — 1.0.6+26
 
-Revisión: 14 de septiembre de 2026. **Estado: en preparación.** El propietario
+Revisión: 15 de septiembre de 2026. **Estado: en preparación.** El propietario
 ha autorizado la publicación y aprobado las notas; este informe todavía no
 acredita una compilación firmada de producción, envío a revisión o despliegue
 de la versión 26.
@@ -113,8 +113,37 @@ y limpieza de JPEG; no ejecuta el decodificador Bitmap de Android. Registro:
 
 Los informes históricos [PRUEBA-DRIVE-26.md](PRUEBA-DRIVE-26.md) y
 [PRUEBA-FOTOS-25.md](PRUEBA-FOTOS-25.md) conservan resultados, comandos y límites
-de cada fase. El workflow todavía no se ha ejecutado remotamente desde esta
-rama; la validación local no acredita una compilación firmada de producción.
+de cada fase. La primera ejecución remota se describe a continuación; todavía
+no acredita una compilación firmada de producción.
+
+## Primera ejecución de CI y corrección del test
+
+La ejecución [34901140858](https://github.com/javiercamaraezquerra/Undiamas/actions/runs/34901140858),
+commit `c1a99a5e860b46e69f6a9d4989fe69d4890f160a`, terminó el 14 de septiembre
+a las 21:54:50 UTC con **443 pruebas correctas y una fallida**. Los dos casos de
+enlaces simbólicos omitidos en Windows sí se ejecutaron en Linux. El análisis
+pasó con los diagnósticos heredados. El flujo se detuvo antes de acceder al
+keystore, compilar los artefactos o subirlos.
+
+Falló el test de interfaz de 320 px, teclado visible y texto al 200 %:
+`failPhotoSelection` cambiaba el scroll y pulsaba «Cambiar» antes de renderizar
+la nueva posición. Con la fuente de pruebas usada en CI, el toque seguía
+apuntando bajo el teclado y no abría el selector. El fallo se reprodujo
+localmente con el mismo punto de toque al desactivar las fuentes opcionales.
+
+La corrección afecta sólo al test: centra el control en su `Scrollable`,
+espera los frames necesarios y comprueba `hitTestable` antes de pulsarlo.
+También fija Android en el tema del fixture y exige que las acciones del aviso
+sean alcanzables. No suprime avisos ni modifica `lib` o `android`.
+
+La prueba fallida pasó **tres veces** con las fuentes por defecto que reprodujeron
+el fallo: dos ejecuciones individuales y una dentro del archivo completo.
+Los **12 tests de `journal_photo_layout_test.dart`** pasaron sin avisos de toque
+fuera del objetivo. Registros locales:
+`build/validation/ci-layout-reproduce-v26.txt` (fallo reproducido),
+`ci-layout-fixed-ahem-1-v26.txt`, `ci-layout-fixed-ahem-2-v26.txt` y
+`ci-layout-fixed-ahem-full-v26.txt`, estos últimos en la misma carpeta.
+Queda ejecutar CI de nuevo con este ajuste del test.
 
 ## Pendiente de registrar durante la publicación autorizada
 

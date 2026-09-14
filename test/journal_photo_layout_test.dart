@@ -126,6 +126,7 @@ void main() {
     final appTheme = dark ? AppTheme.darkTheme : AppTheme.lightTheme;
     await tester.pumpWidget(MaterialApp(
       theme: appTheme.copyWith(
+          platform: TargetPlatform.android,
           appBarTheme: appTheme.appBarTheme.copyWith(
               titleTextStyle: appTheme.appBarTheme.titleTextStyle
                   ?.copyWith(fontFamily: 'Roboto'),
@@ -155,13 +156,24 @@ void main() {
     return (gateway: gateway, capture: capture);
   }
 
+  Future<void> revealForTap(WidgetTester tester, Finder target) async {
+    // Jumping the scroll offset does not lay out a new frame. Centre the
+    // control clear of the app bar/keyboard, then wait before hit testing it.
+    // CI's fallback font can place it below the viewport before this scroll.
+    await Scrollable.ensureVisible(tester.element(target), alignment: .5);
+    await settle(tester);
+    expect(target.hitTestable(), findsOneWidget,
+        reason: 'The scrolled control must receive a real tap.');
+  }
+
   Future<void> failPhotoSelection(
       WidgetTester tester, MemoryJournalAttachments gateway) async {
     gateway.pickOverride =
         (_) async => throw PlatformException(code: 'photo_access_denied');
-    await tester.ensureVisible(find.text('Cambiar'));
+    await revealForTap(tester, find.text('Cambiar'));
     await tester.tap(find.text('Cambiar'));
     await settle(tester);
+    await revealForTap(tester, find.text('Elegir de la galería'));
     await tester.tap(find.text('Elegir de la galería'));
     await settle(tester);
   }
@@ -353,11 +365,9 @@ void main() {
     await failPhotoSelection(tester, fixture.gateway);
     final retry = find.byKey(const ValueKey('journal-retry-photo'));
     final other = find.byKey(const ValueKey('journal-choose-other-photo'));
-    await tester.ensureVisible(retry);
-    await tester.pump(const Duration(milliseconds: 100));
+    await revealForTap(tester, retry);
     expect(tester.takeException(), isNull);
-    await tester.ensureVisible(other);
-    await tester.pump(const Duration(milliseconds: 100));
+    await revealForTap(tester, other);
     expect(tester.takeException(), isNull);
     await tester
         .ensureVisible(find.byKey(const ValueKey('journal-photo-issue')));
@@ -380,8 +390,8 @@ void main() {
     final previous = fixture.gateway.draft!.photoId;
     await failPhotoSelection(tester, fixture.gateway);
     final afterFailure = fixture.gateway.pickCalls;
-    await tester
-        .ensureVisible(find.byKey(const ValueKey('journal-retry-photo')));
+    await revealForTap(
+        tester, find.byKey(const ValueKey('journal-retry-photo')));
     await tester.tap(find.byKey(const ValueKey('journal-retry-photo')));
     await settle(tester);
     expect(fixture.gateway.pickCalls, afterFailure + 1);
@@ -390,14 +400,14 @@ void main() {
       requestedSource = source;
       throw StateError('Simulated unavailable photo');
     };
-    await tester.ensureVisible(
-        find.byKey(const ValueKey('journal-choose-other-photo')));
+    await revealForTap(
+        tester, find.byKey(const ValueKey('journal-choose-other-photo')));
     await tester.tap(find.byKey(const ValueKey('journal-choose-other-photo')));
     await settle(tester);
     expect(requestedSource, ImageSource.gallery);
     expect(fixture.gateway.draft!.photoId, previous);
     expect(fixture.gateway.draft!.text, 'Hoy salí a caminar un rato.');
-    await tester.ensureVisible(find.byTooltip('Cerrar aviso'));
+    await revealForTap(tester, find.byTooltip('Cerrar aviso'));
     await tester.tap(find.byTooltip('Cerrar aviso'));
     await settle(tester);
     expect(find.byKey(const ValueKey('journal-photo-issue')), findsNothing);
