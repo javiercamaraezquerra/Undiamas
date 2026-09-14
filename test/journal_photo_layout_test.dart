@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -17,6 +18,7 @@ import 'package:un_dia_mas/services/journal_draft_store.dart';
 import 'package:un_dia_mas/theme/app_theme.dart';
 import 'package:un_dia_mas/widgets/mountain_background.dart';
 import 'package:un_dia_mas/widgets/inventory_photo_attachment.dart';
+import 'package:un_dia_mas/widgets/journal_feedback_card.dart';
 
 import 'support/memory_journal_attachments.dart';
 
@@ -53,7 +55,10 @@ void main() {
       {bool dark = false,
       double width = 400,
       double scale = 1,
-      double keyboard = 0}) async {
+      double keyboard = 0,
+      int? initialMood = 3,
+      String initialText = 'Hoy salí a caminar un rato.',
+      bool withPhoto = true}) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = Size(width, 900);
     tester.view.viewInsets = FakeViewPadding(bottom: keyboard);
@@ -91,9 +96,9 @@ void main() {
     final photoId =
         await gateway.importPhoto(Uint8List.fromList(img.encodePng(picture)));
     gateway.draft = JournalDraft(
-        text: 'Hoy salí a caminar un rato.',
-        mood: 3,
-        photoId: photoId,
+        text: initialText,
+        mood: initialMood,
+        photoId: withPhoto ? photoId : null,
         entryKey: 'photo-draft-1234567890abcdef');
     await tester.runAsync(() async {
       Hive.init(directory.path);
@@ -148,6 +153,32 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     }
     return (gateway: gateway, capture: capture);
+  }
+
+  Future<void> failPhotoSelection(
+      WidgetTester tester, MemoryJournalAttachments gateway) async {
+    gateway.pickOverride =
+        (_) async => throw PlatformException(code: 'photo_access_denied');
+    await tester.ensureVisible(find.text('Cambiar'));
+    await tester.tap(find.text('Cambiar'));
+    await settle(tester);
+    await tester.tap(find.text('Elegir de la galería'));
+    await settle(tester);
+  }
+
+  Future<void> captureFeedback(
+      WidgetTester tester, GlobalKey key, String name) async {
+    final boundary =
+        key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+    await tester.runAsync(() async {
+      final raster = await boundary.toImage(pixelRatio: 1);
+      final bytes = await raster.toByteData(format: ui.ImageByteFormat.png);
+      raster.dispose();
+      final output = Directory('build/validation');
+      await output.create(recursive: true);
+      await File('${output.path}/$name.png')
+          .writeAsBytes(bytes!.buffer.asUint8List());
+    });
   }
 
   for (final dark in [false, true]) {
@@ -277,6 +308,159 @@ void main() {
     expect(box.length, 2);
     // The older entry still references the same photo, so keep its bytes.
     expect(fixture.gateway.photos.containsKey(photoId), isTrue);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
+  for (final dark in [false, true]) {
+    testWidgets(
+        'photo failure stays readable with prior attachment in ${dark ? 'dark' : 'light'} mode',
+        (tester) async {
+      final fixture = await mount(tester, dark: dark, initialMood: null);
+      final previousPhoto = fixture.gateway.draft!.photoId;
+      await failPhotoSelection(tester, fixture.gateway);
+      expect(find.byKey(const ValueKey('journal-photo-issue')), findsOneWidget);
+      expect(find.text('Reintentar'), findsOneWidget);
+      expect(find.text('Elegir otra'), findsOneWidget);
+      expect(find.byTooltip('Cerrar aviso'), findsOneWidget);
+      expect(find.text('Elige cómo te sientes para guardar tu día.'),
+          findsOneWidget);
+      expect(fixture.gateway.draft!.photoId, previousPhoto);
+      expect(fixture.gateway.draft!.text, 'Hoy salí a caminar un rato.');
+      final panel = tester.widget<JournalFeedbackCard>(
+          find.byKey(const ValueKey('journal-photo-issue')));
+      expect(panel.message, isNotEmpty);
+      expect(panel.isError, isTrue);
+      Scrollable.of(
+              tester.element(find.byKey(const ValueKey('journal-photo-issue'))))
+          .position
+          .jumpTo(0);
+      await tester.pump(const Duration(milliseconds: 100));
+      await captureFeedback(tester, fixture.capture,
+          'journal-photo-error-${dark ? 'dark' : 'light'}-v25');
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+  }
+
+  testWidgets(
+      'error actions and missing mood remain reachable at 320 px with 200 percent text',
+      (tester) async {
+    final fixture = await mount(tester,
+        width: 320, scale: 2, keyboard: 280, initialMood: null);
+    await failPhotoSelection(tester, fixture.gateway);
+    final retry = find.byKey(const ValueKey('journal-retry-photo'));
+    final other = find.byKey(const ValueKey('journal-choose-other-photo'));
+    await tester.ensureVisible(retry);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.takeException(), isNull);
+    await tester.ensureVisible(other);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.takeException(), isNull);
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('journal-photo-issue')));
+    await tester.pump(const Duration(milliseconds: 100));
+    await captureFeedback(
+        tester, fixture.capture, 'journal-photo-error-large-text-v25');
+    await tester.ensureVisible(find.byKey(const ValueKey('journal-mood-hint')));
+    await tester.pump(const Duration(milliseconds: 100));
+    await captureFeedback(
+        tester, fixture.capture, 'journal-photo-mood-hint-large-text-v25');
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
+  testWidgets(
+      'retry, choose another and dismiss preserve the prior photo and text',
+      (tester) async {
+    final fixture = await mount(tester);
+    final previous = fixture.gateway.draft!.photoId;
+    await failPhotoSelection(tester, fixture.gateway);
+    final afterFailure = fixture.gateway.pickCalls;
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('journal-retry-photo')));
+    await tester.tap(find.byKey(const ValueKey('journal-retry-photo')));
+    await settle(tester);
+    expect(fixture.gateway.pickCalls, afterFailure + 1);
+    ImageSource? requestedSource;
+    fixture.gateway.pickOverride = (source) async {
+      requestedSource = source;
+      throw StateError('Simulated unavailable photo');
+    };
+    await tester.ensureVisible(
+        find.byKey(const ValueKey('journal-choose-other-photo')));
+    await tester.tap(find.byKey(const ValueKey('journal-choose-other-photo')));
+    await settle(tester);
+    expect(requestedSource, ImageSource.gallery);
+    expect(fixture.gateway.draft!.photoId, previous);
+    expect(fixture.gateway.draft!.text, 'Hoy salí a caminar un rato.');
+    await tester.ensureVisible(find.byTooltip('Cerrar aviso'));
+    await tester.tap(find.byTooltip('Cerrar aviso'));
+    await settle(tester);
+    expect(find.byKey(const ValueKey('journal-photo-issue')), findsNothing);
+    expect(fixture.gateway.draft!.photoId, previous);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
+  testWidgets(
+      'missing mood explains disabled save and disappears after choosing mood',
+      (tester) async {
+    await mount(tester, initialMood: null, withPhoto: false);
+    final save = find.widgetWithText(ElevatedButton, 'Guardar mi día');
+    expect(tester.widget<ElevatedButton>(save).onPressed, isNull);
+    expect(find.text('Elige cómo te sientes para guardar tu día.'),
+        findsOneWidget);
+    await tester.tap(find.text('🙂').first);
+    await settle(tester);
+    expect(find.byKey(const ValueKey('journal-mood-hint')), findsNothing);
+    expect(tester.widget<ElevatedButton>(save).onPressed, isNotNull);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
+  testWidgets(
+      'pending photo keeps a readable progress message and the previous attachment',
+      (tester) async {
+    final fixture = await mount(tester);
+    final bytes = fixture.gateway.photos.values.first;
+    final pending = Completer<Uint8List>();
+    fixture.gateway.selected = XFile.fromData(bytes);
+    fixture.gateway.prepareOverride = (_) => pending.future;
+    await tester.tap(find.text('Cambiar'));
+    await settle(tester);
+    await tester.tap(find.text('Elegir de la galería'));
+    await settle(tester);
+    final feedback = find.byKey(const ValueKey('journal-progress'));
+    expect(feedback, findsOneWidget);
+    expect(find.text('Preparando foto…'), findsOneWidget);
+    expect(tester.widget<JournalFeedbackCard>(feedback).isBusy, isTrue);
+    expect(find.byType(InventoryPhotoAttachment), findsWidgets);
+    pending.complete(bytes);
+    await settle(tester);
+    expect(feedback, findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
+  testWidgets('draft errors use the readable panel without photo actions',
+      (tester) async {
+    final fixture = await mount(tester);
+    fixture.gateway.failDraftWrite = true;
+    await tester.enterText(
+        find.byType(TextField), 'Este texto no debe perderse.');
+    await settle(tester);
+    final feedback = find.byKey(const ValueKey('journal-editor-issue'));
+    expect(feedback, findsOneWidget);
+    expect(tester.widget<JournalFeedbackCard>(feedback).actions, isEmpty);
+    expect(find.byKey(const ValueKey('journal-photo-issue')), findsNothing);
+    expect(find.text('Este texto no debe perderse.'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();

@@ -4,7 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:un_dia_mas/services/journal_composer_controller.dart';
 import 'package:un_dia_mas/services/journal_draft_store.dart';
 
-class MemoryJournalAttachments implements JournalAttachmentGateway {
+class MemoryJournalAttachments extends JournalAttachmentGateway {
   JournalDraft? draft;
   final photos = <String, Uint8List>{};
   final deleted = <String>[];
@@ -18,6 +18,8 @@ class MemoryJournalAttachments implements JournalAttachmentGateway {
   bool failDraftWrite = false;
   bool failDraftClear = false;
   bool failImport = false;
+  Object? importFailure;
+  Future<Uint8List> Function(XFile)? prepareOverride;
   Future<XFile?> Function(ImageSource)? pickOverride;
   @override
   Future<JournalDraft?> loadDraft() async => draft;
@@ -47,6 +49,7 @@ class MemoryJournalAttachments implements JournalAttachmentGateway {
 
   @override
   Future<String> importPhoto(Uint8List bytes) async {
+    if (importFailure != null) throw importFailure!;
     if (failImport) throw StateError('Invalid image');
     final id = (++_next).toRadixString(16).padLeft(64, '0');
     photos[id] = bytes;
@@ -69,4 +72,8 @@ class MemoryJournalAttachments implements JournalAttachmentGateway {
   Future<void> releasePickedPhoto(XFile file) async => releasedPicks.add(file);
   @override
   Future<void> cleanupPickerCache() async {}
+  @override
+  Future<Uint8List> preparePickedPhoto(XFile file) => prepareOverride == null
+      ? super.preparePickedPhoto(file)
+      : prepareOverride!(file);
 }

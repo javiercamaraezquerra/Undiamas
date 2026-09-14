@@ -23,6 +23,18 @@ class InventoryPhotoSizeException extends InventoryPhotoException {
             'Elige una de hasta 16 MB y 16 megapíxeles.');
 }
 
+class InventoryPhotoUnsupportedException extends InventoryPhotoException {
+  const InventoryPhotoUnsupportedException()
+      : super('Este formato de imagen no es compatible. '
+            'Prueba con otra fotografía o una copia en JPEG, PNG o WebP.');
+}
+
+class InventoryPhotoUnreadableException extends InventoryPhotoException {
+  const InventoryPhotoUnreadableException()
+      : super('No se puede leer esta fotografía completa. '
+            'Prueba con otra imagen; tu mensaje se conserva.');
+}
+
 /// Private, encrypted, content-addressed copies of inventory photographs.
 /// A gallery original is never moved, modified or deleted by this service.
 class InventoryPhotoStore {
@@ -70,8 +82,7 @@ class InventoryPhotoStore {
       throw const InventoryPhotoSizeException();
     }
     if (source.isEmpty) {
-      throw const InventoryPhotoException(
-          'La imagen está vacía o no se puede leer. Elige otra foto.');
+      throw const InventoryPhotoUnreadableException();
     }
     final jpeg = await compute(_normalizeImage, source);
     final id = hashes.sha256.convert(jpeg).toString();
@@ -223,8 +234,7 @@ Uint8List _normalizeImage(Uint8List source) {
   } on InventoryPhotoException {
     rethrow;
   } on Object {
-    throw const InventoryPhotoException(
-        'No se puede preparar esta imagen. Prueba con una foto JPEG, PNG o WebP.');
+    throw const InventoryPhotoUnreadableException();
   }
 }
 
@@ -349,6 +359,189 @@ class _PhotoHeader {
   final int height;
 }
 
+/// T.81 marker syntax: segment payloads are length-delimited; only entropy
+/// bytes use FF00 stuffing and RST0..RST7. In particular, an EXIF thumbnail's
+/// EOI is data, not the end of the main photograph. Source motion-photo video
+/// may follow the main EOI; our own prepared JPEGs must end exactly there.
+_PhotoHeader _walkJpeg(
+  Uint8List bytes, {
+  required bool prepared,
+  void Function(int marker, int start, int lengthOffset, int end)? segment,
+  void Function(int start, int end)? entropy,
+}) {
+  final data = ByteData.sublistView(bytes);
+  var offset = 2;
+  var inScan = false;
+  var sawScan = false;
+  var restartInterval = 0;
+  var expectedRestart = 0;
+  var frameMarker = 0;
+  var markerCount = 0;
+  final components = <int>{};
+  _PhotoHeader? header;
+  while (offset < bytes.length) {
+    if (inScan) {
+      final start = offset;
+      var hasData = false;
+      while (offset < bytes.length) {
+        if (bytes[offset] != 0xff) {
+          hasData = true;
+          offset++;
+          continue;
+        }
+        final markerStart = offset++;
+        while (offset < bytes.length && bytes[offset] == 0xff) {
+          offset++;
+        }
+        if (offset >= bytes.length) {
+          throw const FormatException('Short JPEG escape');
+        }
+        final marker = bytes[offset++];
+        if (marker == 0x00) {
+          if (offset - markerStart != 2) {
+            throw const FormatException('Invalid JPEG stuffing');
+          }
+          hasData = true;
+          continue;
+        }
+        if (marker >= 0xd0 && marker <= 0xd7) {
+          if (restartInterval == 0 ||
+              !hasData ||
+              marker != 0xd0 + expectedRestart) {
+            throw const FormatException('Invalid JPEG restart');
+          }
+          expectedRestart = (expectedRestart + 1) % 8;
+          hasData = false;
+          continue;
+        }
+        if (!hasData) throw const FormatException('Empty JPEG entropy segment');
+        entropy?.call(start, markerStart);
+        offset = markerStart;
+        inScan = false;
+        break;
+      }
+      if (inScan) throw const FormatException('Incomplete JPEG scan');
+    }
+    final markerStart = offset;
+    if (bytes[offset++] != 0xff) {
+      throw const FormatException('Invalid JPEG marker');
+    }
+    while (offset < bytes.length && bytes[offset] == 0xff) {
+      offset++;
+    }
+    if (offset >= bytes.length) {
+      throw const FormatException('Short JPEG marker');
+    }
+    final marker = bytes[offset++];
+    // Bound per-marker bookkeeping on hostile, tiny repeated segments.
+    if (++markerCount > 65536) {
+      throw const FormatException('Excessive JPEG segments');
+    }
+    if (marker == 0xd9) {
+      if (header == null || !sawScan || (prepared && offset != bytes.length)) {
+        throw const FormatException('Incomplete or trailing JPEG data');
+      }
+      segment?.call(marker, markerStart, offset, offset);
+      return header;
+    }
+    if (marker == 0x00 ||
+        marker == 0xd8 ||
+        marker == 0x01 ||
+        (marker >= 0xd0 && marker <= 0xd7)) {
+      throw const FormatException('Unexpected JPEG marker');
+    }
+    if (offset + 2 > bytes.length) {
+      throw const FormatException('Short JPEG segment');
+    }
+    final length = data.getUint16(offset);
+    if (length < 2 || offset + length > bytes.length) {
+      throw const FormatException('Invalid JPEG segment');
+    }
+    if (prepared && ((marker >= 0xe1 && marker <= 0xef) || marker == 0xfe)) {
+      throw const FormatException('Unexpected photo metadata');
+    }
+    if (marker == 0xc0 || marker == 0xc1 || marker == 0xc2) {
+      if (length < 8 || header != null || sawScan) {
+        throw const FormatException('Invalid JPEG frame');
+      }
+      final count = bytes[offset + 7];
+      if (bytes[offset + 2] != 8 ||
+          !const [1, 3, 4].contains(count) ||
+          length != 8 + count * 3) {
+        throw const FormatException('Unsupported JPEG components');
+      }
+      var blocksPerMcu = 0;
+      for (var i = 0; i < count; i++) {
+        if (!components.add(bytes[offset + 8 + i * 3])) {
+          throw const FormatException('Duplicate JPEG component');
+        }
+        final sampling = bytes[offset + 9 + i * 3];
+        final horizontal = sampling >> 4;
+        final vertical = sampling & 15;
+        if (horizontal < 1 || horizontal > 4 || vertical < 1 || vertical > 4) {
+          throw const FormatException('Invalid JPEG sampling');
+        }
+        blocksPerMcu += horizontal * vertical;
+      }
+      if (blocksPerMcu > 10) {
+        throw const FormatException('Excessive JPEG sampling');
+      }
+      header = _PhotoHeader(_PhotoFormat.jpeg, data.getUint16(offset + 5),
+          data.getUint16(offset + 3));
+      _checkDimensions(header, prepared);
+      frameMarker = marker;
+    } else if (marker == 0xdd) {
+      if (length != 4) {
+        throw const FormatException('Invalid JPEG restart interval');
+      }
+      restartInterval = data.getUint16(offset + 2);
+    } else if (marker == 0xda) {
+      if (header == null || length < 6) {
+        throw const FormatException('Invalid JPEG scan');
+      }
+      final count = bytes[offset + 2];
+      if (count < 1 || count > components.length || length != 6 + 2 * count) {
+        throw const FormatException('Invalid JPEG scan components');
+      }
+      final scanComponents = <int>{};
+      for (var i = 0; i < count; i++) {
+        final selector = bytes[offset + 3 + 2 * i];
+        final tables = bytes[offset + 4 + 2 * i];
+        if (!components.contains(selector) ||
+            !scanComponents.add(selector) ||
+            (tables >> 4) > 3 ||
+            (tables & 15) > 3) {
+          throw const FormatException('Invalid JPEG scan selector');
+        }
+      }
+      final spectral = offset + 3 + 2 * count;
+      final first = bytes[spectral];
+      final last = bytes[spectral + 1];
+      final high = bytes[spectral + 2] >> 4;
+      final low = bytes[spectral + 2] & 15;
+      if (frameMarker == 0xc2) {
+        if (first > last ||
+            last > 63 ||
+            (first == 0 && last != 0) ||
+            (first != 0 && count != 1) ||
+            high > 13 ||
+            low > 13 ||
+            (high != 0 && high != low + 1)) {
+          throw const FormatException('Invalid progressive JPEG scan');
+        }
+      } else if (first != 0 || last != 63 || high != 0 || low != 0) {
+        throw const FormatException('Invalid sequential JPEG scan');
+      }
+      sawScan = true;
+      inScan = true;
+      expectedRestart = 0;
+    }
+    segment?.call(marker, markerStart, offset, offset + length);
+    offset += length;
+  }
+  throw const FormatException('Incomplete JPEG');
+}
+
 /// Parse fixed-size dimensions before invoking image decoders. In particular,
 /// image.JpegDecoder.startDecode itself allocates DCT buffers, so it is not a
 /// safe substitute for this small header inspection on untrusted input.
@@ -362,68 +555,7 @@ _PhotoHeader _inspect(Uint8List bytes, {required bool prepared}) {
   final data = ByteData.sublistView(bytes);
   _PhotoHeader? header;
   if (bytes[0] == 0xff && bytes[1] == 0xd8) {
-    var offset = 2;
-    while (offset + 3 < bytes.length) {
-      if (bytes[offset++] != 0xff) {
-        throw const FormatException('Invalid JPEG marker');
-      }
-      while (offset < bytes.length && bytes[offset] == 0xff) {
-        offset++;
-      }
-      if (offset >= bytes.length) break;
-      final marker = bytes[offset++];
-      if (marker == 0xda || marker == 0xd9) break;
-      if (marker == 0x00 ||
-          marker == 0xd8 ||
-          marker == 0x01 ||
-          (marker >= 0xd0 && marker <= 0xd7)) {
-        throw const FormatException('Unexpected JPEG marker');
-      }
-      if (offset + 2 > bytes.length) {
-        throw const FormatException('Short JPEG marker');
-      }
-      final length = data.getUint16(offset);
-      if (length < 2 || offset + length > bytes.length) {
-        throw const FormatException('Invalid JPEG segment');
-      }
-      if (prepared && ((marker >= 0xe1 && marker <= 0xef) || marker == 0xfe)) {
-        throw const FormatException('Unexpected photo metadata');
-      }
-      if (marker == 0xc0 || marker == 0xc1 || marker == 0xc2) {
-        if (length < 8 || header != null) {
-          throw const FormatException('Invalid JPEG frame');
-        }
-        final components = bytes[offset + 7];
-        if (bytes[offset + 2] != 8 ||
-            !const [1, 3, 4].contains(components) ||
-            length != 8 + components * 3) {
-          throw const FormatException('Unsupported JPEG components');
-        }
-        var blocksPerMcu = 0;
-        for (var i = 0; i < components; i++) {
-          final sampling = bytes[offset + 9 + i * 3];
-          final horizontal = sampling >> 4;
-          final vertical = sampling & 15;
-          if (horizontal < 1 ||
-              horizontal > 4 ||
-              vertical < 1 ||
-              vertical > 4) {
-            throw const FormatException('Invalid JPEG sampling');
-          }
-          blocksPerMcu += horizontal * vertical;
-        }
-        if (blocksPerMcu > 10) {
-          throw const FormatException('Excessive JPEG sampling');
-        }
-        header = _PhotoHeader(_PhotoFormat.jpeg, data.getUint16(offset + 5),
-            data.getUint16(offset + 3));
-        _checkDimensions(header, prepared);
-      }
-      offset += length;
-    }
-    if (bytes[bytes.length - 2] != 0xff || bytes.last != 0xd9) {
-      throw const FormatException('Incomplete JPEG');
-    }
+    header = _walkJpeg(bytes, prepared: prepared);
   } else if (!prepared &&
       listEquals(
           bytes.sublist(0, 8), const [137, 80, 78, 71, 13, 10, 26, 10])) {
@@ -493,7 +625,7 @@ _PhotoHeader _inspect(Uint8List bytes, {required bool prepared}) {
       offset = start + length + (length & 1);
     }
   }
-  if (header == null) throw const FormatException('Unsupported photo format');
+  if (header == null) throw const InventoryPhotoUnsupportedException();
   _checkDimensions(header, prepared);
   return header;
 }
@@ -507,34 +639,25 @@ _PhotoHeader _inspect(Uint8List bytes, {required bool prepared}) {
   var orientation = 1;
   if (format == _PhotoFormat.jpeg) {
     output.add(source.sublist(0, 2));
-    var offset = 2;
-    while (offset + 3 < source.length) {
-      final markerStart = offset;
-      offset++;
-      while (source[offset] == 0xff) {
-        offset++;
-      }
-      final marker = source[offset++];
-      if (marker == 0xda || marker == 0xd9) {
-        output.add(source.sublist(markerStart));
-        break;
-      }
-      final length = data.getUint16(offset);
-      if (marker == 0xe1) {
-        final candidate =
-            _readOrientation(source.sublist(offset + 2, offset + length));
-        // A later APP1 segment can contain XMP instead of EXIF. It must not
-        // reset the orientation already found in the camera's EXIF segment.
-        if (candidate != 1) orientation = candidate;
-      }
-      // APP14 records the Adobe color transform for CMYK JPEGs. It is needed
-      // for decoding, and will not be carried into our fresh RGB JPEG.
-      if (!((marker >= 0xe1 && marker <= 0xef && marker != 0xee) ||
-          marker == 0xfe)) {
-        output.add(source.sublist(markerStart, offset + length));
-      }
-      offset += length;
-    }
+    _walkJpeg(source,
+        prepared: false,
+        entropy: (start, end) =>
+            output.add(Uint8List.sublistView(source, start, end)),
+        segment: (marker, start, lengthOffset, end) {
+          if (marker == 0xe1) {
+            final candidate =
+                _readOrientation(source.sublist(lengthOffset + 2, end));
+            // A later APP1 segment can contain XMP instead of EXIF. It must not
+            // reset the orientation already found in the camera's EXIF segment.
+            if (candidate != 1) orientation = candidate;
+          }
+          // APP14 records the Adobe color transform for CMYK JPEGs. It is needed
+          // for decoding, and will not be carried into our fresh RGB JPEG.
+          if (!((marker >= 0xe1 && marker <= 0xef && marker != 0xee) ||
+              marker == 0xfe)) {
+            output.add(Uint8List.sublistView(source, start, end));
+          }
+        });
     return (bytes: output.takeBytes(), orientation: orientation);
   }
   if (format == _PhotoFormat.png) {

@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:io';
+import 'dart:developer' as dev;
 
 import 'package:flutter/foundation.dart';
+import 'package:crypto/crypto.dart' as hashes;
 import 'package:hive/hive.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -10,6 +13,10 @@ import 'hive_restore_service.dart';
 import 'inventory_photo_store.dart';
 import 'journal_draft_store.dart';
 import 'picker_photo_cache_cleaner.dart';
+import 'android_photo_preparer.dart';
+import 'journal_photo_issue.dart';
+
+export 'journal_photo_issue.dart';
 
 /// The boundary used by the editor. Tests replace this, never the user's files.
 abstract class JournalAttachmentGateway {
@@ -24,12 +31,28 @@ abstract class JournalAttachmentGateway {
   Future<void> registerPickedPhoto(XFile file);
   Future<void> releasePickedPhoto(XFile file);
   Future<void> cleanupPickerCache();
+
+  Future<Uint8List> preparePickedPhoto(XFile file) async {
+    if (await file.length() > InventoryPhotoStore.maxSourceBytes) {
+      throw const InventoryPhotoSizeException();
+    }
+    return file.readAsBytes();
+  }
+
+  Future<String> importPreparedPhoto(Uint8List bytes) => importPhoto(bytes);
 }
 
-class DeviceJournalAttachmentGateway implements JournalAttachmentGateway {
-  DeviceJournalAttachmentGateway({ImagePicker? picker})
-      : _picker = picker ?? ImagePicker();
+class DeviceJournalAttachmentGateway extends JournalAttachmentGateway {
+  DeviceJournalAttachmentGateway(
+      {ImagePicker? picker,
+      AndroidPhotoPreparer? photoPreparer,
+      bool? useAndroidPhotoPreparer})
+      : _picker = picker ?? ImagePicker(),
+        _preparer = photoPreparer ?? const AndroidPhotoPreparer(),
+        _useAndroid = useAndroidPhotoPreparer ?? Platform.isAndroid;
   final ImagePicker _picker;
+  final AndroidPhotoPreparer _preparer;
+  final bool _useAndroid;
   static final _activePicks = <String>{};
   @override
   Future<JournalDraft?> loadDraft() => JournalDraftStore.instance.load();
@@ -51,6 +74,17 @@ class DeviceJournalAttachmentGateway implements JournalAttachmentGateway {
   @override
   Future<String> importPhoto(Uint8List bytes) =>
       InventoryPhotoStore.instance.importImage(bytes);
+  @override
+  Future<Uint8List> preparePickedPhoto(XFile file) =>
+      _useAndroid ? _preparer.prepare(file) : super.preparePickedPhoto(file);
+  @override
+  Future<String> importPreparedPhoto(Uint8List bytes) async {
+    if (!_useAndroid) return importPhoto(bytes);
+    final id = hashes.sha256.convert(bytes).toString();
+    await InventoryPhotoStore.instance.importPrepared(id, bytes);
+    return id;
+  }
+
   @override
   Future<Uint8List> readPhoto(String id) =>
       InventoryPhotoStore.instance.read(id);
@@ -104,6 +138,8 @@ class JournalComposerController extends ChangeNotifier {
   String? photoId;
   String? error;
   String? progress;
+  JournalPhotoIssue? photoIssue;
+  ImageSource? lastPhotoSource;
   String _entryKey = _newKey();
   bool _awaitingPhoto = false;
   Future<void> _writes = Future<void>.value();
@@ -270,24 +306,33 @@ class JournalComposerController extends ChangeNotifier {
     final key = _entryKey;
     busy = true;
     error = null;
+    photoIssue = null;
+    lastPhotoSource = source;
+    progress =
+        source == ImageSource.camera ? 'Abriendo cámara…' : 'Abriendo galería…';
     _awaitingPhoto = true;
     _notify();
     XFile? selected;
+    var stage = JournalPhotoStage.draft;
     try {
       // The durable marker is committed BEFORE opening another Android activity.
       await _persist(_snapshot(), generation);
       if (!_current(generation)) return;
+      stage = JournalPhotoStage.picker;
       selected = await gateway.pick(source);
+      stage = JournalPhotoStage.prepare;
       if (_current(generation) && selected != null) {
         await gateway.registerPickedPhoto(selected);
       }
-      await _acceptPhoto(selected, generation, key);
+      await _acceptPhoto(selected, generation, key,
+          onCommit: () => stage = JournalPhotoStage.commit);
     } catch (failure) {
-      await _photoFailed(generation, failure);
+      await _photoFailed(generation, failure, stage);
     } finally {
       await _releasePicked(selected);
       if (_current(generation)) {
         busy = false;
+        progress = null;
         _notify();
       }
     }
@@ -295,38 +340,54 @@ class JournalComposerController extends ChangeNotifier {
 
   Future<void> _recoverPhoto(int generation, String key) async {
     busy = true;
+    progress = 'Recuperando foto…';
     _notify();
     XFile? selected;
+    var stage = JournalPhotoStage.recovery;
     try {
       selected = await gateway.recoverLostPhoto();
+      stage = JournalPhotoStage.prepare;
       if (_current(generation) && selected != null) {
         await gateway.registerPickedPhoto(selected);
       }
-      await _acceptPhoto(selected, generation, key);
+      await _acceptPhoto(selected, generation, key,
+          onCommit: () => stage = JournalPhotoStage.commit);
     } catch (failure) {
-      await _photoFailed(generation, failure);
+      await _photoFailed(generation, failure, stage);
     } finally {
       await _releasePicked(selected);
       if (_current(generation)) {
         busy = false;
+        progress = null;
         _notify();
       }
     }
   }
 
-  Future<void> _acceptPhoto(XFile? selected, int generation, String key) async {
+  Future<void> _acceptPhoto(XFile? selected, int generation, String key,
+      {required void Function() onCommit}) async {
     if (!_current(generation) || key != _entryKey || !_awaitingPhoto) return;
     Uint8List? bytes;
     if (selected != null) {
-      if (await selected.length() > InventoryPhotoStore.maxSourceBytes) {
-        throw const InventoryPhotoSizeException();
-      }
-      bytes = await selected.readAsBytes();
+      progress = 'Preparando foto…';
+      _notify();
+      bytes = await gateway.preparePickedPhoto(selected);
     }
     if (!_current(generation) || key != _entryKey) return;
-    await restore.runExclusive(() async {
+    await _withStorage(() async {
       final oldId = photoId;
-      final newId = bytes == null ? oldId : await gateway.importPhoto(bytes);
+      String? newId = oldId;
+      if (bytes != null) {
+        try {
+          newId = await gateway.importPreparedPhoto(bytes);
+        } on FileSystemException {
+          // Reading the picker file has already finished. I/O here belongs
+          // to the encrypted private store, not to the chosen image format.
+          onCommit();
+          rethrow;
+        }
+      }
+      onCommit();
       // Keep the old attachment usable if writing the new draft fails.
       final next = JournalDraft(
           text: text,
@@ -336,6 +397,7 @@ class JournalComposerController extends ChangeNotifier {
           entryKey: _entryKey);
       await gateway.saveDraft(next);
       photoId = newId;
+      photoIssue = null;
       _awaitingPhoto = false;
       if (oldId != newId) {
         try {
@@ -344,7 +406,7 @@ class JournalComposerController extends ChangeNotifier {
           // Startup pruning retries an unreferenced encrypted file.
         }
       }
-    }, expectedGeneration: generation);
+    }, generation);
   }
 
   Future<void> _releasePicked(XFile? file) async {
@@ -357,7 +419,8 @@ class JournalComposerController extends ChangeNotifier {
     }
   }
 
-  Future<void> _photoFailed(int generation, Object failure) async {
+  Future<void> _photoFailed(
+      int generation, Object failure, JournalPhotoStage stage) async {
     if (!_current(generation)) return;
     _awaitingPhoto = false;
     try {
@@ -366,11 +429,32 @@ class JournalComposerController extends ChangeNotifier {
       // A durable pending marker can be safely retried at the next startup.
     }
     if (_current(generation)) {
-      error = failure is InventoryPhotoSizeException
-          ? '${failure.message} Tu mensaje se conserva.'
-          : 'No se pudo añadir la foto. Prueba con otra imagen o comprueba '
-              'el espacio disponible. Tu mensaje se conserva.';
+      if (JournalPhotoIssue.isCancellation(failure)) {
+        photoIssue = null;
+        return;
+      }
+      photoIssue = JournalPhotoIssue.fromFailure(failure,
+          stage: stage,
+          hasPreviousPhoto: photoId != null,
+          hasText: text.isNotEmpty,
+          canRetry: lastPhotoSource != null,
+          camera: lastPhotoSource == ImageSource.camera);
+      dev.log(
+          'Photo operation failed (${stage.name}/${photoIssue!.kind.name}).',
+          name: 'UnDiaMas');
     }
+  }
+
+  Future<void> retryPhoto() async {
+    final source = lastPhotoSource;
+    if (source != null && photoIssue?.canRetry == true) {
+      await choosePhoto(source);
+    }
+  }
+
+  void dismissPhotoIssue() {
+    photoIssue = null;
+    _notify();
   }
 
   Future<void> removePhoto() async {
@@ -378,6 +462,7 @@ class JournalComposerController extends ChangeNotifier {
     final generation = _generation;
     busy = true;
     error = null;
+    photoIssue = null;
     _draftTimer?.cancel();
     _draftTimer = null;
     _notify();
@@ -428,6 +513,7 @@ class JournalComposerController extends ChangeNotifier {
     final generation = _generation;
     busy = true;
     error = null;
+    photoIssue = null;
     progress = 'Guardando…';
     _notify();
     var committed = false;
@@ -487,6 +573,7 @@ class JournalComposerController extends ChangeNotifier {
     photoId = null;
     _awaitingPhoto = false;
     _entryKey = _newKey();
+    photoIssue = null;
   }
 
   void _restoreChanged() {

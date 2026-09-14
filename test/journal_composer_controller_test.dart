@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 import 'package:hive/hive.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:un_dia_mas/models/diary_entry.dart';
@@ -205,7 +205,7 @@ void main() {
     await editor.choosePhoto(ImageSource.camera);
     expect(gateway.pickCalls, 0);
     expect(editor.text, 'Texto importante');
-    expect(editor.error, isNotNull);
+    expect(editor.photoIssue!.kind, JournalPhotoIssueKind.storage);
   });
 
   test(
@@ -236,11 +236,167 @@ void main() {
     gateway.selected = XFile.fromData(Uint8List(16 * 1024 * 1024 + 1));
     await editor.choosePhoto(ImageSource.gallery);
     expect(editor.photoId, isNull);
-    expect(editor.error, isNotNull);
-    expect(editor.error, contains('16 MB'));
+    expect(editor.photoIssue!.kind, JournalPhotoIssueKind.tooLarge);
+    expect(editor.photoIssue!.canRetry, isFalse);
     expect(gateway.photos, isEmpty);
     expect(box.isEmpty, isTrue);
     expect(gateway.releasedPicks, [gateway.selected]);
+  });
+
+  test(
+      'failed native replacement keeps the old photo and retries the same source',
+      () async {
+    await editor.initialize();
+    editor.updateText('Conservar mis palabras');
+    editor.updateMood(3);
+    gateway.selected = XFile.fromData(Uint8List.fromList([1]));
+    await editor.choosePhoto(ImageSource.gallery);
+    final first = editor.photoId;
+    gateway.prepareOverride = (_) async => throw PlatformException(
+        code: 'photo_unreadable', message: '/private/user/image.jpg');
+    await editor.choosePhoto(ImageSource.gallery);
+    expect(editor.photoId, first);
+    expect(editor.text, 'Conservar mis palabras');
+    expect(editor.mood, 3);
+    expect(editor.canSave, isTrue);
+    expect(editor.photoIssue!.kind, JournalPhotoIssueKind.unreadable);
+    expect(editor.photoIssue!.message,
+        contains('La foto anterior y tu texto se conservan'));
+    expect(editor.photoIssue!.message, isNot(contains('/private')));
+    expect(gateway.draft!.photoId, first);
+    expect(gateway.deleted, isEmpty);
+    expect(gateway.releasedPicks.length, 2);
+
+    final sources = <ImageSource>[];
+    gateway.pickOverride = (source) async {
+      sources.add(source);
+      return XFile.fromData(Uint8List.fromList([2]));
+    };
+    gateway.prepareOverride = null;
+    await editor.retryPhoto();
+    expect(sources, [ImageSource.gallery]);
+    expect(editor.photoIssue, isNull);
+    expect(editor.photoId, isNot(first));
+    expect(gateway.photos.containsKey(first), isFalse);
+    expect(gateway.draft!.text, 'Conservar mis palabras');
+    expect(gateway.draft!.mood, 3);
+  });
+
+  test('camera failure can be dismissed and cancellation is not an error',
+      () async {
+    await editor.initialize();
+    editor.updateText('El borrador sigue aquí');
+    editor.updateMood(2);
+    gateway.pickOverride =
+        (_) async => throw PlatformException(code: 'no_available_camera');
+    await editor.choosePhoto(ImageSource.camera);
+    expect(editor.photoIssue!.kind, JournalPhotoIssueKind.unavailable);
+    expect(editor.photoIssue!.canChooseOther, isTrue);
+    expect(editor.busy, isFalse);
+    expect(editor.progress, isNull);
+    editor.dismissPhotoIssue();
+    expect(editor.photoIssue, isNull);
+    expect(editor.text, 'El borrador sigue aquí');
+    gateway.pickOverride =
+        (_) async => throw PlatformException(code: 'camera_cancelled');
+    await editor.choosePhoto(ImageSource.camera);
+    expect(editor.photoIssue, isNull);
+    expect(editor.error, isNull);
+    expect(gateway.draft!.awaitingPhoto, isFalse);
+    expect(editor.canSave, isTrue);
+  });
+
+  test('temporary storage activity during preparation queues the attachment',
+      () async {
+    await editor.initialize();
+    gateway.selected = XFile.fromData(Uint8List.fromList([1]));
+    final started = Completer<void>();
+    final prepared = Completer<Uint8List>();
+    gateway.prepareOverride = (_) {
+      started.complete();
+      return prepared.future;
+    };
+    final selecting = editor.choosePhoto(ImageSource.camera);
+    await started.future;
+    expect(editor.progress, 'Preparando foto…');
+    final releaseStorage = Completer<void>();
+    final storage = restore.runExclusive(() => releaseStorage.future);
+    prepared.complete(Uint8List.fromList([2]));
+    await Future<void>.delayed(Duration.zero);
+    expect(editor.busy, isTrue);
+    expect(gateway.photos, isEmpty);
+    releaseStorage.complete();
+    await storage;
+    await selecting;
+    expect(editor.photoId, isNotNull);
+    expect(editor.photoIssue, isNull);
+    expect(editor.busy, isFalse);
+    expect(gateway.draft!.awaitingPhoto, isFalse);
+  });
+
+  test('reset while the native decoder is pending cannot resurrect a draft',
+      () async {
+    await editor.initialize();
+    editor.updateText('Borrador anterior');
+    gateway.selected = XFile.fromData(Uint8List.fromList([1]));
+    final started = Completer<void>();
+    final prepared = Completer<Uint8List>();
+    gateway.prepareOverride = (_) {
+      started.complete();
+      return prepared.future;
+    };
+    final selecting = editor.choosePhoto(ImageSource.gallery);
+    await started.future;
+    await restore.runDeletion(() => gateway.clearDraft());
+    prepared.complete(Uint8List.fromList([2]));
+    await selecting;
+    expect(editor.photoId, isNull);
+    expect(editor.text, isEmpty);
+    expect(gateway.draft, isNull);
+    expect(gateway.photos, isEmpty);
+    expect(gateway.releasedPicks, [gateway.selected]);
+    expect(editor.photoIssue, isNull);
+  });
+
+  test('failed draft commit after preparation preserves the prior attachment',
+      () async {
+    await editor.initialize();
+    editor.updateText('Antes del cambio');
+    editor.updateMood(4);
+    gateway.selected = XFile.fromData(Uint8List.fromList([1]));
+    await editor.choosePhoto(ImageSource.gallery);
+    final first = editor.photoId;
+    gateway.prepareOverride = (_) async {
+      gateway.failDraftWrite = true;
+      return Uint8List.fromList([2]);
+    };
+    await editor.choosePhoto(ImageSource.gallery);
+    expect(editor.photoId, first);
+    expect(gateway.draft!.photoId, first);
+    expect(gateway.photos.containsKey(first), isTrue);
+    expect(editor.text, 'Antes del cambio');
+    expect(editor.mood, 4);
+    expect(editor.photoIssue!.kind, JournalPhotoIssueKind.storage);
+    expect(editor.photoIssue!.canChooseOther, isFalse);
+    gateway.failDraftWrite = false;
+    await editor.flushDraft();
+  });
+
+  test(
+      'private store write failure is storage feedback, not an unreadable source',
+      () async {
+    await editor.initialize();
+    gateway.selected = XFile.fromData(Uint8List.fromList([1]));
+    await editor.choosePhoto(ImageSource.gallery);
+    final first = editor.photoId;
+    gateway.importFailure = const FileSystemException(
+        'Cannot write', '/private/encrypted.udm', OSError('denied', 13));
+    await editor.choosePhoto(ImageSource.gallery);
+    expect(editor.photoId, first);
+    expect(gateway.draft!.photoId, first);
+    expect(editor.photoIssue!.kind, JournalPhotoIssueKind.storage);
+    expect(editor.photoIssue!.message, isNot(contains('/private')));
+    expect(editor.photoIssue!.canChooseOther, isFalse);
   });
 
   test('Drive upload reports a committed entry and prevents an undurable draft',

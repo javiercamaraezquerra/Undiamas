@@ -11,6 +11,7 @@ import '../services/encryption_service.dart';
 import '../services/hive_restore_service.dart';
 import '../services/journal_composer_controller.dart';
 import '../widgets/inventory_photo_attachment.dart';
+import '../widgets/journal_feedback_card.dart';
 
 class JournalScreen extends StatefulWidget {
   const JournalScreen({super.key, this.uploadBackup, this.attachmentGateway});
@@ -308,26 +309,75 @@ class _JournalScreenState extends State<JournalScreen> {
                   label: const Text('Quitar')),
             ])),
       ],
-      if (composer.busy)
-        const Padding(
-            padding: EdgeInsets.symmetric(vertical: 4),
-            child: LinearProgressIndicator()),
-      if (composer.progress != null)
+      if (composer.busy || composer.progress != null)
         Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Text(composer.progress!, textAlign: TextAlign.center)),
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: JournalFeedbackCard(
+                key: const ValueKey('journal-progress'),
+                message: composer.progress ?? 'Un momento…',
+                isBusy: true)),
+      if (composer.photoIssue != null)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: JournalFeedbackCard(
+            key: const ValueKey('journal-photo-issue'),
+            title: composer.photoIssue!.title,
+            message: composer.photoIssue!.message,
+            icon: Icons.photo_outlined,
+            isError: true,
+            onDismiss: composer.dismissPhotoIssue,
+            actions: [
+              if (composer.photoIssue!.canRetry)
+                TextButton.icon(
+                    key: const ValueKey('journal-retry-photo'),
+                    onPressed: enabled && composer.canAttach
+                        ? () async {
+                            FocusScope.of(context).unfocus();
+                            await composer.retryPhoto();
+                          }
+                        : null,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Reintentar')),
+              if (composer.photoIssue!.canChooseOther)
+                TextButton.icon(
+                    key: const ValueKey('journal-choose-other-photo'),
+                    onPressed: enabled && composer.canAttach
+                        ? () async {
+                            FocusScope.of(context).unfocus();
+                            await composer.choosePhoto(ImageSource.gallery);
+                          }
+                        : null,
+                    icon: const Icon(Icons.photo_library_outlined),
+                    label: const Text('Elegir otra')),
+            ],
+          ),
+        ),
       if (composer.error != null)
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Text(composer.error!,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          child: JournalFeedbackCard(
+              key: const ValueKey('journal-editor-issue'),
+              message: composer.error!,
+              icon: Icons.info_outline,
+              isError: true),
         ),
       if (!composer.ready)
         TextButton(
+            style: photoButtonStyle,
             onPressed: composer.initialize,
             child: const Text('Reintentar borrador')),
       const SizedBox(height: 8),
+      if (composer.ready &&
+          !composer.busy &&
+          composer.mood == null &&
+          (composer.text.trim().isNotEmpty || composer.photoId != null)) ...[
+        const JournalFeedbackCard(
+            key: ValueKey('journal-mood-hint'),
+            message: 'Elige cómo te sientes para guardar tu día.',
+            icon: Icons.mood_outlined,
+            compact: true),
+        const SizedBox(height: 8),
+      ],
       ElevatedButton(
         onPressed:
             composer.canSave && !_deleting ? () => _saveEntry(box) : null,

@@ -137,6 +137,147 @@ void main() {
   });
 
   test(
+      'imports the still photograph from JPEG motion-photo and padding trailers',
+      () async {
+    final jpeg = _photo();
+    final expected = await store.importImage(jpeg);
+    for (final trailer in [
+      <int>[0, 0, 0, 24, ...ascii.encode('ftypmp42'), ...List.filled(128, 42)],
+      <int>[0, 0, 0, 0, 0xff, 0xd9],
+      <int>[...ascii.encode('private trailing video'), ..._photo(red: 20)],
+    ]) {
+      final source = Uint8List.fromList([...jpeg, ...trailer]);
+      final original = Uint8List.fromList(source);
+      expect(await store.importImage(source), expected);
+      expect(source, original);
+      final normalized = await store.read(expected);
+      expect(normalized.sublist(normalized.length - 2), [0xff, 0xd9]);
+      expect(latin1.decode(normalized), isNot(contains('ftypmp42')));
+    }
+  });
+
+  test('ignores false EOI in EXIF embedded thumbnail, not the main photograph',
+      () async {
+    final jpeg = _photo();
+    final app1 = _jpegSegment(0xe1, [
+      ...ascii.encode('Exif\u0000\u0000embedded thumbnail'),
+      ..._photo(red: 20)
+    ]);
+    final source = Uint8List.fromList([
+      ...jpeg.sublist(0, 2),
+      ...app1,
+      ...jpeg.sublist(2),
+      ...ascii.encode('video')
+    ]);
+    expect(await store.importImage(source), await store.importImage(jpeg));
+  });
+
+  test(
+      'progressive scans and byte stuffing survive metadata removal and trailer trimming',
+      () async {
+    final jpeg = base64.decode(_progressiveJpeg);
+    expect(_pairCount(jpeg, 0xff, 0xda), greaterThan(1));
+    expect(_pairCount(jpeg, 0xff, 0x00), greaterThan(0));
+    final firstScan = _findPair(jpeg, 0xff, 0xda);
+    final betweenScans = _findPair(jpeg, 0xff, 0xc4, start: firstScan + 2);
+    expect(betweenScans, greaterThan(firstScan));
+    final metadata = _jpegSegment(
+        0xe1, [...ascii.encode('private interscan metadata'), 0xff, 0xd9]);
+    final source = Uint8List.fromList([
+      ...jpeg.sublist(0, betweenScans),
+      ...metadata,
+      ...jpeg.sublist(betweenScans),
+      ...ascii.encode('private trailing video')
+    ]);
+    final id = await store.importImage(source);
+    expect(id, await store.importImage(jpeg));
+    final normalized = await store.read(id);
+    expect(latin1.decode(normalized), isNot(contains('private')));
+    final decoded = img.decodeJpg(normalized)!;
+    expect((decoded.width, decoded.height), (16, 12));
+    expect(decoded.getPixel(4, 4).r, greaterThan(180));
+  });
+
+  test('restart markers remain within entropy and do not terminate JPEG early',
+      () async {
+    final jpeg = base64.decode(_restartJpeg);
+    expect(_pairCount(jpeg, 0xff, 0xd0), 1);
+    expect(_pairCount(jpeg, 0xff, 0xd1), 1);
+    final id =
+        await store.importImage(Uint8List.fromList([...jpeg, 0, 1, 2, 3]));
+    final decoded = img.decodeJpg(await store.read(id))!;
+    expect((decoded.width, decoded.height), (48, 16));
+    expect(decoded.getPixel(40, 8).r, greaterThan(180));
+    expect(await store.importImage(jpeg), id);
+  });
+
+  test(
+      'rejects missing EOI, truncated escapes, empty scans and invalid restarts',
+      () async {
+    final jpeg = _photo();
+    final sos = _findPair(jpeg, 0xff, 0xda);
+    final entropyStart =
+        sos + 2 + ByteData.sublistView(jpeg).getUint16(sos + 2);
+    final restart = base64.decode(_restartJpeg);
+    restart[_findPair(restart, 0xff, 0xd0) + 1] = 0xd3;
+    final malformed = <Uint8List>[
+      Uint8List.fromList([...jpeg.sublist(0, jpeg.length - 2), 0xff]),
+      Uint8List.fromList(
+          [...jpeg.sublist(0, jpeg.length - 2), 0xff, 0x00, 0xd9]),
+      Uint8List.fromList([...jpeg.sublist(0, entropyStart), 0xff, 0xd9]),
+      Uint8List.fromList([
+        ...jpeg.sublist(0, entropyStart),
+        0x11,
+        0xff,
+        0xd0,
+        0x11,
+        0xff,
+        0xd9
+      ]),
+      Uint8List.fromList([
+        ...jpeg.sublist(0, entropyStart),
+        0x11,
+        0xff,
+        0xff,
+        0x00,
+        0xff,
+        0xd9
+      ]),
+      restart,
+    ];
+    for (final source in malformed) {
+      await expectLater(store.importImage(source),
+          throwsA(isA<InventoryPhotoUnreadableException>()));
+    }
+    expect(await directory.list().length, 0);
+  });
+
+  test(
+      'prepared JPEGs reject trailers even when their full content hash matches',
+      () async {
+    for (final jpeg in [_photo(), base64.decode(_progressiveJpeg)]) {
+      await InventoryPhotoStore.validatePrepared(
+          hashes.sha256.convert(jpeg).toString(), jpeg);
+      final source = Uint8List.fromList([...jpeg, 0, 0, 0, 0xff, 0xd9]);
+      final id = hashes.sha256.convert(source).toString();
+      await expectLater(store.importPrepared(id, source),
+          throwsA(isA<InventoryPhotoException>()));
+    }
+    expect(await directory.list().length, 0);
+  });
+
+  test('unsupported format and unreadable JPEG have separate safe error types',
+      () async {
+    final unsupported =
+        Uint8List.fromList(ascii.encode('unsupported synthetic image'));
+    await expectLater(store.importImage(unsupported),
+        throwsA(isA<InventoryPhotoUnsupportedException>()));
+    await expectLater(store.importImage(_photo().sublist(0, 70)),
+        throwsA(isA<InventoryPhotoUnreadableException>()));
+    expect(await directory.list().length, 0);
+  });
+
+  test(
       'transparent screenshot uses white backing and strips ancillary PNG metadata',
       () async {
     final source = img.Image(width: 6, height: 6, numChannels: 4);
@@ -403,3 +544,35 @@ Uint8List _photo({int red = 200}) {
   img.fill(image, color: img.ColorRgb8(red, 70, 90));
   return img.encodeJpg(image);
 }
+
+Uint8List _jpegSegment(int marker, List<int> payload) {
+  final segment = Uint8List(payload.length + 4);
+  segment[0] = 0xff;
+  segment[1] = marker;
+  ByteData.sublistView(segment).setUint16(2, payload.length + 2);
+  segment.setRange(4, segment.length, payload);
+  return segment;
+}
+
+int _findPair(Uint8List bytes, int first, int second, {int start = 0}) {
+  for (var i = start; i + 1 < bytes.length; i++) {
+    if (bytes[i] == first && bytes[i + 1] == second) return i;
+  }
+  return -1;
+}
+
+int _pairCount(Uint8List bytes, int first, int second) {
+  var count = 0;
+  for (var i = 0; i + 1 < bytes.length; i++) {
+    if (bytes[i] == first && bytes[i + 1] == second) count++;
+  }
+  return count;
+}
+
+// Synthetic, uniformly colored fixtures generated locally with Pillow:
+// Image.new('RGB', (16,12)/(48,16), (200,70,90)).save(..., quality=85,
+// progressive=True / restart_marker_blocks=1). No user photographs.
+const _progressiveJpeg =
+    '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wgARCAAMABADASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAT/xAAVAQEBAAAAAAAAAAAAAAAAAAAEBv/aAAwDAQACEAMQAAABhBbL/8QAFBABAAAAAAAAAAAAAAAAAAAAIP/aAAgBAQABBQIf/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAIP/aAAgBAQAGPwIf/8QAFBABAAAAAAAAAAAAAAAAAAAAIP/aAAgBAQABPyEf/9oADAMBAAIAAwAAABD/AP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQMBAT8Qf//EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQIBAT8Qf//EABQQAQAAAAAAAAAAAAAAAAAAACD/2gAIAQEAAT8QH//Z';
+const _restartJpeg =
+    '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCAAQADADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/90ABAAB/9oADAMBAAIRAxEAPwDEooorzD9lP//QxKKKK8w/ZT//0cSiiivMP2U//9k=';

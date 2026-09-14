@@ -37,6 +37,9 @@ class MainActivity : FlutterFragmentActivity() {
         if (!flutterEngine.plugins.has(TzPlugin::class.java)) {
             flutterEngine.plugins.add(TzPlugin())
         }
+        if (!flutterEngine.plugins.has(PhotoImportPlugin::class.java)) {
+            flutterEngine.plugins.add(PhotoImportPlugin())
+        }
         notificationSettingsChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger, "undiamas/notifications"
         ).also { channel ->

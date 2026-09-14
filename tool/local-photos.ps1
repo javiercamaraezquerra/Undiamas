@@ -1,7 +1,7 @@
 param(
     [ValidateSet('Pub', 'Test', 'Analyze', 'Build', 'Dependencies')][string]$Mode = 'Test',
     [string[]]$TestTargets = @(),
-    [string]$TestLog = 'tests-v24.txt'
+    [string]$TestLog = 'tests-v25.txt'
 )
 
 # Local, isolated preview only. Uses the existing preview signing certificate.
@@ -54,11 +54,11 @@ try {
     Set-Location -LiteralPath $taskApp
     $taskFlutterCommand = Join-Path $taskFlutter 'bin\flutter.bat'
     if ($Mode -eq 'Pub') {
-        Invoke-PhotoCommand $taskFlutterCommand @('config', '--no-enable-windows-desktop', '--no-enable-linux-desktop') 'config-v24.txt'
-        Invoke-PhotoCommand $taskFlutterCommand @('pub', 'get', '--offline', '--enforce-lockfile') 'pub-v24.txt'
+        Invoke-PhotoCommand $taskFlutterCommand @('config', '--no-enable-windows-desktop', '--no-enable-linux-desktop') 'config-v25.txt'
+        Invoke-PhotoCommand $taskFlutterCommand @('pub', 'get', '--offline', '--enforce-lockfile') 'pub-v25.txt'
     }
     if ($Mode -eq 'Analyze') {
-        Invoke-PhotoCommand $taskFlutterCommand @('analyze', '--no-pub', '--no-fatal-infos', '--no-fatal-warnings') 'analyze-v24.txt'
+        Invoke-PhotoCommand $taskFlutterCommand @('analyze', '--no-pub', '--no-fatal-infos', '--no-fatal-warnings') 'analyze-v25.txt'
     }
     if ($Mode -eq 'Test') {
         Invoke-PhotoCommand $taskFlutterCommand (@('test', '--no-pub', '--concurrency=2', '--reporter', 'expanded') + $TestTargets) $TestLog
@@ -76,6 +76,14 @@ try {
             'flutter.versionName=' + $taskVersion.Groups[1].Value
             'flutter.versionCode=' + $taskVersion.Groups[2].Value
         ), [Text.UTF8Encoding]::new($false))
+        if ($Mode -eq 'Build') {
+            $taskInputs = @(Get-ChildItem -LiteralPath 'lib','assets','android/app/src' -Recurse -File) +
+                @(Get-Item -LiteralPath 'pubspec.yaml','pubspec.lock','android/app/build.gradle','android/build.gradle','android/settings.gradle','android/gradle.properties')
+            $taskHashes = @($taskInputs | Sort-Object FullName | ForEach-Object {
+                [ordered]@{ Path=$_.FullName.Substring($taskApp.Length + 1); SHA256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }
+            })
+            $taskHashes | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $taskLog 'source-before-build-v25.json') -Encoding UTF8
+        }
         Set-Location -LiteralPath (Join-Path $taskApp 'android')
         $taskDefine = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('UDM_PREVIEW=true'))
         $taskBuildArguments = @(
@@ -90,7 +98,7 @@ try {
         if ($Mode -eq 'Dependencies') {
             $taskBuildArguments += @(':app:dependencies', '--configuration', 'previewReleaseRuntimeClasspath')
         } else { $taskBuildArguments += 'assemblePreviewRelease' }
-        Invoke-PhotoCommand (Join-Path $taskRuntime 'gradle-8.11.1\bin\gradle.bat') $taskBuildArguments "$Mode-v24.txt"
+        Invoke-PhotoCommand (Join-Path $taskRuntime 'gradle-8.11.1\bin\gradle.bat') $taskBuildArguments "$Mode-v25.txt"
     }
 } finally {
     Set-Location -LiteralPath $taskLocation
