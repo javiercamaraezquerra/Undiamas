@@ -2,7 +2,7 @@ name: un_dia_mas
 description: Una app Flutter para apoyo en la recuperación de adicciones.
 publish_to: "none"
 
-version: 1.0.3+23        # Actualización de producción desde la prueba 22 aprobada
+version: 1.0.4+24        # Fase 1: fotografías opcionales en el Inventario
 
 environment:
   # Varias dependencias (google_mobile_ads 5.x, flutter_local_notifications 17.x, intl 0.20.x, etc.)
@@ -40,7 +40,14 @@ dependencies:
   googleapis: ^13.1.0
   http: ^1.1.0
   path_provider: ^2.1.1
+  path: 1.9.1
   encrypt: ^5.0.1
+  # Fotografías privadas y copias con adjuntos; compatibles con Flutter 3.32.8.
+  image_picker: 1.1.2
+  image: 4.5.4
+  cryptography: 2.7.0
+  crypto: ^3.0.6
+  archive: 4.0.7
 
 #########################
 #  DEPENDENCIAS DEV

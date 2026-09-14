@@ -37,11 +37,26 @@ void main() {
   });
 
   test('fresh installation creates and reuses one 32-byte key', () async {
-    final created = await EncryptionService.getRawKey();
+    final created = await EncryptionService.getRawKey(
+        supportDirectory: () async => directory);
     expect(created, hasLength(32));
     expect(await secure.read(key: 'hive_key'), base64UrlEncode(created));
     expect(await EncryptionService.getRawKey(), created);
   });
+
+  for (final folder in ['inventory_photos', 'journal_draft']) {
+    test('missing key preserves orphaned encrypted $folder files', () async {
+      final media = Directory('${directory.path}/$folder');
+      await media.create();
+      final encrypted = File('${media.path}/private.bin');
+      await encrypted.writeAsBytes([4, 2, 8, 1]);
+      await expectLater(
+          EncryptionService.getRawKey(supportDirectory: () async => directory),
+          throwsStateError);
+      expect(await secure.read(key: 'hive_key'), isNull);
+      expect(await encrypted.readAsBytes(), [4, 2, 8, 1]);
+    });
+  }
 
   for (final name in [
     'udm_secure',

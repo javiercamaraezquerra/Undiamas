@@ -20,6 +20,9 @@ import 'services/app_lock_controller.dart';
 import 'services/encryption_service.dart';
 import 'services/hive_restore_service.dart';
 import 'services/inventory_storage.dart';
+import 'services/inventory_backup_archive.dart';
+import 'services/inventory_photo_store.dart';
+import 'services/journal_draft_store.dart';
 import 'services/notification_plan.dart';
 import 'services/notification_refresh.dart';
 import 'services/native_tz.dart';
@@ -98,6 +101,8 @@ class _NotificationResumeObserver extends WidgetsBindingObserver {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  HiveRestoreService.instance.beforeApplyRestore =
+      JournalDraftStore.instance.clear;
   await AppLockController.instance.initialize();
   AppLockController.instance.addListener(_flushPendingReflection);
   HiveRestoreService.instance.addListener(_flushPendingReflection);
@@ -117,6 +122,21 @@ Future<void> main() async {
       settings = opened.settings;
       final result = await HiveRestoreService.instance
           .recoverInterrupted(settings, opened.diary);
+      if (result.ok) {
+        // Cleanup is optional. If the draft is unreadable, preserve every
+        // attachment rather than risk deleting the only recoverable copy.
+        try {
+          await InventoryBackupArchive().cleanAbandonedWorkspaces();
+          final draft = await JournalDraftStore.instance.load();
+          await InventoryPhotoStore.instance.prune({
+            for (final entry in opened.diary.values)
+              if (entry.photoId != null) entry.photoId!,
+            if (draft?.photoId != null) draft!.photoId!,
+          });
+        } catch (_) {
+          // A storage cleanup failure never hides otherwise readable entries.
+        }
+      }
       return result.ok ? null : result.message;
     } catch (_) {
       return 'No se pudo abrir el Inventario de forma segura. '

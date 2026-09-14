@@ -448,6 +448,145 @@ void main() {
         isFalse);
     expect(diary.isEmpty, isTrue);
   });
+
+  test('v2 rejects invalid photo IDs and unknown fields before writes', () {
+    for (final invalid in ['../photo', 'A' * 64, 'a' * 63, 123, '']) {
+      final data = {
+        'version': 2,
+        ..._copy(entries: [
+          {..._entry(), 'photoId': invalid}
+        ])
+      };
+      expect(() => HiveRestoreService.prepare(data), throwsFormatException);
+    }
+    expect(() => HiveRestoreService.prepare({'version': 3, ..._copy()}),
+        throwsFormatException);
+    expect(() => HiveRestoreService.prepare({'version': 2, ..._copy()}),
+        throwsFormatException);
+  });
+
+  test(
+      'missing photo prevents journal, generation, draft clearing and Hive writes',
+      () async {
+    final before = _snapshot(settings, diary);
+    var cleared = false;
+    final restorer = HiveRestoreService(
+        openRecoveryBox: () async => journal,
+        verifyPhoto: (_) async =>
+            throw const FileSystemException('Missing photo'),
+        beforeApplyRestore: () async {
+          cleared = true;
+        });
+    final data = {
+      'version': 2,
+      ..._copy(entries: [
+        {..._entry(), 'photoId': 'a' * 64}
+      ])
+    };
+    final result = await restorer.restore(
+        HiveRestoreService.prepare(data), settings, diary);
+    expect(result.ok, isFalse);
+    expect(result.recoveryRequired, isFalse);
+    expect(restorer.generation, 0);
+    expect(cleared, isFalse);
+    expect(journal.isEmpty, isTrue);
+    expect(_snapshot(settings, diary), before);
+  });
+
+  test(
+      'v2 restore retains attachment through failed apply, disk reopen and undo',
+      () async {
+    final originalId = 'a' * 64;
+    final incomingId = 'b' * 64;
+    await diary.put(
+        'photo-key',
+        DiaryEntry(
+            text: 'With photo',
+            mood: 4,
+            createdAt: DateTime(2026, 9, 14),
+            photoId: originalId));
+    await diary.flush();
+    final data = {
+      'version': 2,
+      ..._copy(entries: [
+        {..._entry(), 'photoId': incomingId}
+      ])
+    };
+    final restorer = HiveRestoreService(
+        openRecoveryBox: () async => journal,
+        verifyPhoto: (id) async {
+          expect(id, incomingId);
+        },
+        beforeStep: (step) async {
+          if (step == 'apply.flush.diary' || step == 'rollback.diary') {
+            throw StateError('Synthetic disk error');
+          }
+        });
+    expect(
+        (await restorer.restore(
+                HiveRestoreService.prepare(data), settings, diary))
+            .recoveryRequired,
+        isTrue);
+    await Hive.close();
+    await openBoxes();
+    final recovered = await service().recoverInterrupted(settings, diary);
+    expect(recovered.ok, isTrue);
+    expect(recovered.recovered, isTrue);
+    expect(diary.get('photo-key')!.photoId, originalId);
+    expect(diary.get('photo-key')!.text, 'With photo');
+    expect(diary.length, 4);
+  });
+
+  test(
+      'successful v2 restore verifies photos and clears draft after durable journal',
+      () async {
+    final id = 'a' * 64;
+    final calls = <String>[];
+    final restorer = HiveRestoreService(
+        openRecoveryBox: () async => journal,
+        verifyPhoto: (value) async {
+          expect(value, id);
+          calls.add('photo');
+        },
+        beforeApplyRestore: () async {
+          expect((journal.get('transaction') as Map)['phase'], 'pending');
+          calls.add('draft');
+        },
+        beforeStep: (step) async {
+          calls.add(step);
+        });
+    final data = {
+      'version': 2,
+      ..._copy(entries: [
+        {..._entry(), 'photoId': id}
+      ])
+    };
+    final result = await restorer.restore(
+        HiveRestoreService.prepare(data), settings, diary);
+    expect(result.ok, isTrue);
+    expect(calls.indexOf('photo'), lessThan(calls.indexOf('journal.prepare')));
+    expect(calls.indexOf('journal.prepare.flush'),
+        lessThan(calls.indexOf('draft')));
+    expect(calls.indexOf('draft'), lessThan(calls.indexOf('apply.settings')));
+    expect(diary.values.single.photoId, id);
+    await Hive.close();
+    await openBoxes();
+    expect(diary.values.single.photoId, id);
+  });
+
+  test('draft clearing failure rolls back before incoming settings are applied',
+      () async {
+    final before = _snapshot(settings, diary);
+    final restorer = HiveRestoreService(
+        openRecoveryBox: () async => journal,
+        beforeApplyRestore: () async => throw StateError('Draft disk error'));
+    final result = await restorer.restore(
+        HiveRestoreService.prepare(_copy()), settings, diary);
+    expect(result.ok, isFalse);
+    expect(result.recovered, isTrue);
+    expect(result.recoveryRequired, isFalse);
+    expect(_snapshot(settings, diary), before);
+  });
 }
 
 Map<String, dynamic> _copy(

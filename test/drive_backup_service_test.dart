@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:archive/archive.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:un_dia_mas/services/drive_backup_service.dart';
@@ -43,6 +44,7 @@ void main() {
   bool cancelWithNull = false;
   bool scopesGranted = true;
   late _MemoryHttpClient transport;
+  late Directory temporaryDirectory;
 
   setUp(() async {
     authCalls = [];
@@ -52,6 +54,8 @@ void main() {
     cancelWithNull = false;
     scopesGranted = true;
     transport = _MemoryHttpClient();
+    temporaryDirectory =
+        await Directory.systemTemp.createTemp('udm_drive_test_');
     binding.defaultBinaryMessenger.setMockMethodCallHandler(_signInChannel,
         (call) async {
       authCalls.add(call);
@@ -79,7 +83,10 @@ void main() {
     binding.defaultBinaryMessenger.setMockMethodCallHandler(_pathChannel,
         (call) async {
       pathCalls.add(call);
-      throw StateError('Drive uploads must not request a temporary directory.');
+      if (call.method == 'getTemporaryDirectory') {
+        return temporaryDirectory.path;
+      }
+      throw StateError('Unexpected path request: ${call.method}');
     });
     // The service singleton retains the GoogleSignIn object between tests.
     // Clear only that simulated session through its public API.
@@ -92,6 +99,13 @@ void main() {
     binding.defaultBinaryMessenger
         .setMockMethodCallHandler(_signInChannel, null);
     binding.defaultBinaryMessenger.setMockMethodCallHandler(_pathChannel, null);
+    final root = await Directory.systemTemp.resolveSymbolicLinks();
+    final actual = await temporaryDirectory.resolveSymbolicLinks();
+    expect(
+        actual.toLowerCase(),
+        startsWith(
+            '${root.toLowerCase()}${Platform.pathSeparator}udm_drive_test_'));
+    await temporaryDirectory.delete(recursive: true);
   });
 
   Future<T> withFakeNetwork<T>(Future<T> Function() action) =>
@@ -173,19 +187,18 @@ void main() {
 
   for (final update in [false, true]) {
     test(
-        '${update ? 'update' : 'create'} uploads unchanged UTF-8 JSON15 from memory',
+        '${update ? 'update' : 'create'} uploads v2 ZIP retaining legacy UTF-8 fields',
         () async {
       transport.existingIds = update ? ['fixture-existing'] : [];
       final json15 = _legacyJson();
-      final expected = utf8.encode(jsonEncode(json15));
       final result =
           await withFakeNetwork(() => DriveBackupService.uploadBackup(json15));
       expect(result.ok, isTrue, reason: result.message);
-      expect(pathCalls, isEmpty);
+      expect(await temporaryDirectory.list().toList(), isEmpty);
       final listing = transport.requests.first;
       expect(listing.uri.queryParameters['spaces'], 'appDataFolder');
       expect(listing.uri.queryParameters['q'],
-          "name='udm_backup.json' and trashed=false");
+          "name='udm_backup_v2.zip' and trashed=false");
       final upload = transport.requests.last;
       expect(upload.method, update ? 'PATCH' : 'POST');
       expect(upload.headers.value('authorization'),
@@ -201,7 +214,7 @@ void main() {
       final metadataPart = parts.firstWhere((part) => part.contains('"name"'));
       final metadata =
           jsonDecode(metadataPart.split('\r\n\r\n').last.trim()) as Map;
-      expect(metadata['name'], 'udm_backup.json');
+      expect(metadata['name'], 'udm_backup_v2.zip');
       expect(metadata['parents'], update ? isNull : ['appDataFolder']);
       final mediaPart = parts.firstWhere(
           (part) => part.contains('Content-Transfer-Encoding: base64'));
@@ -211,12 +224,18 @@ void main() {
       // decode that envelope to compare the actual stored JSON bytes.
       final exactBytes =
           base64.decode(payload.substring(0, payload.length - 2));
-      expect(exactBytes, expected,
-          reason:
-              'UTF-8 bytes, spaces inside text and legacy fields must be unchanged.');
-      final exactJson = utf8.decode(exactBytes);
+      final archive = ZipDecoder().decodeBytes(exactBytes, verify: true);
+      expect(archive.files, hasLength(1));
+      final exactJson = utf8.decode(archive.files.single.content);
       final decoded = jsonDecode(exactJson) as Map<String, dynamic>;
-      expect(decoded, json15);
+      expect(decoded, {
+        'version': 2,
+        'udm': json15['udm'],
+        'diary': [
+          for (final entry in json15['diary'] as List)
+            {...(entry as Map), 'photoId': null}
+        ]
+      });
       final compatible = HiveRestoreService.prepare(decoded);
       expect(compatible.entryCount, 2);
       expect(compatible.startDate, DateTime(2024, 2, 29, 9, 30, 0, 123));
@@ -229,15 +248,14 @@ void main() {
     });
   }
 
-  test(
-      'upload network failure leaves no temporary-file request and is reported',
+  test('upload network failure removes temporary archive and is reported',
       () async {
     transport.failUpload = true;
     final result = await withFakeNetwork(
         () => DriveBackupService.uploadBackup(_legacyJson()));
     expect(result.ok, isFalse);
     expect(result.message, contains('Error al subir'));
-    expect(pathCalls, isEmpty);
+    expect(await temporaryDirectory.list().toList(), isEmpty);
     expect(transport.requests, hasLength(2));
   });
 
@@ -252,6 +270,93 @@ void main() {
     expect(transport.requests, isEmpty);
     expect(pathCalls, isEmpty);
   });
+
+  test('preview and production backup filenames cannot overlap', () {
+    final production = [
+      DriveBackupService.archiveFileName(preview: false),
+      DriveBackupService.legacyFileName(preview: false)
+    ];
+    final preview = [
+      DriveBackupService.archiveFileName(preview: true),
+      DriveBackupService.legacyFileName(preview: true)
+    ];
+    expect(production.toSet().intersection(preview.toSet()), isEmpty);
+    expect(DriveBackupService.archiveFileName(preview: false),
+        isNot('udm_backup.json'));
+  });
+
+  test('download prefers v2 and never selects a newer legacy text-only copy',
+      () async {
+    final data = jsonDecode(jsonEncode({'version': 2, ..._legacyJson()}))
+        as Map<String, dynamic>;
+    for (final entry in data['diary'] as List) {
+      (entry as Map)['photoId'] = null;
+    }
+    final bytes = utf8.encode(jsonEncode(data));
+    final zip = Archive()
+      ..addFile(ArchiveFile('manifest.json', bytes.length, bytes)
+        ..compression = CompressionType.none);
+    transport.archiveIds = ['fixture-v2'];
+    transport.legacyIds = ['fixture-legacy'];
+    transport.downloadBytes = ZipEncoder().encodeBytes(zip);
+    final result = await withFakeNetwork(DriveBackupService.downloadBackup);
+    expect(result.ok, isTrue, reason: result.message);
+    expect(result.data, data);
+    expect(transport.requests, hasLength(2));
+    expect(transport.requests.first.uri.queryParameters['q'],
+        "name='udm_backup_v2.zip' and trashed=false");
+    expect(transport.requests.last.uri.path, '/drive/v3/files/fixture-v2');
+    expect(await temporaryDirectory.list().toList(), isEmpty);
+  });
+
+  test('download falls back to legacy JSON only when no v2 exists', () async {
+    transport.archiveIds = [];
+    transport.legacyIds = ['fixture-legacy'];
+    transport.downloadBytes =
+        Uint8List.fromList(utf8.encode(jsonEncode(_legacyJson())));
+    final result = await withFakeNetwork(DriveBackupService.downloadBackup);
+    expect(result.ok, isTrue, reason: result.message);
+    expect(result.data, _legacyJson());
+    expect(transport.requests, hasLength(3));
+    expect(transport.requests[1].uri.queryParameters['q'],
+        "name='udm_backup.json' and trashed=false");
+    expect(await temporaryDirectory.list().toList(), isEmpty);
+  });
+
+  test('invalid v2 fails without hiding the error by restoring legacy',
+      () async {
+    transport.archiveIds = ['fixture-v2'];
+    transport.legacyIds = ['fixture-legacy'];
+    transport.downloadBytes =
+        Uint8List.fromList(utf8.encode(jsonEncode(_legacyJson())));
+    final result = await withFakeNetwork(DriveBackupService.downloadBackup);
+    expect(result.ok, isFalse);
+    expect(transport.requests, hasLength(2));
+    expect(await temporaryDirectory.list().toList(), isEmpty);
+  });
+
+  test('download rejects oversized advertised copy before transferring media',
+      () async {
+    transport.archiveIds = ['fixture-v2'];
+    transport.declaredSize = 512 * 1024 * 1024 + 1;
+    final result = await withFakeNetwork(DriveBackupService.downloadBackup);
+    expect(result.ok, isFalse);
+    expect(transport.requests, hasLength(1));
+    expect(pathCalls, isEmpty);
+  });
+
+  test('download rejects truncated transfer rather than returning partial data',
+      () async {
+    transport.archiveIds = [];
+    transport.legacyIds = ['fixture-legacy'];
+    transport.downloadBytes =
+        Uint8List.fromList(utf8.encode(jsonEncode(_legacyJson())));
+    transport.declaredSize = transport.downloadBytes!.length + 10;
+    final result = await withFakeNetwork(DriveBackupService.downloadBackup);
+    expect(result.ok, isFalse);
+    expect(result.message, contains('incompleta'));
+    expect(await temporaryDirectory.list().toList(), isEmpty);
+  });
 }
 
 // Every HttpClient created in a test is replaced by this in-memory transport.
@@ -259,6 +364,10 @@ void main() {
 class _MemoryHttpClient implements HttpClient {
   final requests = <_MemoryRequest>[];
   List<String> existingIds = [];
+  List<String>? archiveIds;
+  List<String>? legacyIds;
+  Uint8List? downloadBytes;
+  int? declaredSize;
   bool failDelete = false;
   bool failUpload = false;
 
@@ -266,11 +375,23 @@ class _MemoryHttpClient implements HttpClient {
   Future<HttpClientRequest> openUrl(String method, Uri url) async {
     final request = _MemoryRequest(method, url, () {
       if (method == 'GET') {
+        if (url.path != '/drive/v3/files') {
+          return _MemoryResponse.binary(downloadBytes ?? Uint8List(0));
+        }
+        final query = url.queryParameters['q'] ?? '';
+        final ids = query.contains('v2.zip')
+            ? (archiveIds ?? existingIds)
+            : (legacyIds ?? existingIds);
         return _MemoryResponse(
             200,
             jsonEncode({
               'files': [
-                for (final id in existingIds) {'id': id}
+                for (final id in ids)
+                  {
+                    'id': id,
+                    if (declaredSize != null || downloadBytes != null)
+                      'size': '${declaredSize ?? downloadBytes!.length}'
+                  }
               ]
             }));
       }
@@ -352,6 +473,9 @@ class _MemoryHeaders implements HttpHeaders {
 class _MemoryResponse extends Stream<List<int>> implements HttpClientResponse {
   _MemoryResponse(this.statusCode, String body) : bytes = utf8.encode(body) {
     headers.set('content-type', 'application/json; charset=utf-8');
+  }
+  _MemoryResponse.binary(this.bytes) : statusCode = 200 {
+    headers.set('content-type', 'application/octet-stream');
   }
   final List<int> bytes;
   @override

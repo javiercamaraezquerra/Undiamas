@@ -11,6 +11,9 @@ import '../services/achievement_service.dart';
 import '../services/drive_backup_service.dart';
 import '../services/encryption_service.dart';
 import '../services/hive_restore_service.dart';
+import '../services/inventory_photo_store.dart';
+import '../services/journal_draft_store.dart';
+import '../services/picker_photo_cache_cleaner.dart';
 import '../services/notification_preferences_controller.dart';
 import '../services/notification_preference_storage.dart';
 import '../widgets/mood_trend_chart.dart';
@@ -303,9 +306,11 @@ class _ProfileScreenState extends State<ProfileScreen>
                   ? 'La app accederá a su carpeta privada de Drive para '
                       'descargar tu copia. Antes de cambiar datos, podrás '
                       'revisar su contenido y decidir si quieres restaurarla.'
-                  : 'La app necesitará acceder a tu carpeta privada de Drive para '
-                      'almacenar copias de seguridad. Si lo rechazas, podrías perder '
-                      'los datos al cambiar de dispositivo.',
+                  : 'Se guardarán tus entradas, incluidas sus fotos, y los datos '
+                      'de inicio en la carpeta privada de la app en Google Drive. '
+                      'La copia te permite recuperarlos en otro móvil. '
+                      'La conexión está protegida; el archivo no tiene cifrado '
+                      'propio de extremo a extremo.',
               textAlign: TextAlign.justify,
             ),
             actions: [
@@ -568,6 +573,12 @@ class _ProfileScreenState extends State<ProfileScreen>
           await box.clear();
           await box.deleteFromDisk();
         }
+
+        // Private attachments and drafts share the local key. Remove them
+        // before destroying it so a partial failure can still be retried.
+        await PickerPhotoCacheCleaner.instance.clear();
+        await JournalDraftStore.instance.clear();
+        await InventoryPhotoStore.instance.clear();
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.clear();

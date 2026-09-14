@@ -129,6 +129,19 @@ class _ProfilePrivacyLinksState extends State<ProfilePrivacyLinks> {
                 opening: _openingAdPrivacy,
                 onTap: _showAdPrivacy,
               ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              child: Text(
+                'Los anuncios ayudan a mantener Un día más gratuita y a seguir '
+                'mejorándola. Tus preferencias de publicidad no limitan las '
+                'funciones de la app.'
+                '${_consent.privacyOptionsRequired ? ' Puedes cambiarlas en Privacidad de anuncios.' : ''}',
+                key: const ValueKey('ad-funding-explanation'),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: widget.foreground.withValues(alpha: .8),
+                    ),
+              ),
+            ),
           ],
         ),
       );

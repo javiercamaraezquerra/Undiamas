@@ -1,5 +1,6 @@
 // lib/services/drive_backup_service.dart
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:google_sign_in/google_sign_in.dart';
@@ -10,6 +11,7 @@ import 'package:hive/hive.dart';
 
 import '../models/diary_entry.dart';
 import 'hive_restore_service.dart';
+import 'inventory_backup_archive.dart';
 
 class BackupResult<T> {
   final bool ok;
@@ -26,7 +28,15 @@ class BackupResult<T> {
 }
 
 class DriveBackupService {
-  static const _fileName = 'udm_backup.json';
+  static const isPreview = bool.fromEnvironment('UDM_PREVIEW');
+
+  // A trial APK must never update, restore or remove the production backup.
+  // Separate v2 names also prevent an older installed app from replacing a
+  // photo archive with its legacy text-only JSON.
+  static String archiveFileName({bool preview = isPreview}) =>
+      preview ? 'udm_preview_backup_v2.zip' : 'udm_backup_v2.zip';
+  static String legacyFileName({bool preview = isPreview}) =>
+      preview ? 'udm_preview_backup.json' : 'udm_backup.json';
 
   static const List<String> _scopes = <String>[
     drive.DriveApi.driveFileScope,
@@ -43,8 +53,7 @@ class DriveBackupService {
   static bool _isDeveloperError(PlatformException e) {
     // GoogleSignIn lanza PlatformException con code 'sign_in_failed'.
     // El DEVELOPER_ERROR suele dejar "status: 10" o "ApiException: 10" en message/details.
-    final msg =
-        ((e.message ?? '') + ' ' + (e.details ?? '').toString()).toLowerCase();
+    final msg = '${e.message ?? ''} ${e.details ?? ''}'.toLowerCase();
     if (e.code != 'sign_in_failed') return false;
     return msg.contains('status: 10') ||
         msg.contains('apiexception: 10') ||
@@ -73,7 +82,7 @@ class DriveBackupService {
 
   /* ───────────────────── Autenticación + scopes ───────────────── */
 
-  static Future<drive.DriveApi> _driveApi() async {
+  static Future<_DriveSession> _driveApi() async {
     GoogleSignInAccount? acc;
 
     // 1) Reutiliza sesión si existe o intenta silenciosamente
@@ -87,9 +96,9 @@ class DriveBackupService {
     if (acc == null) {
       try {
         acc = await _googleSignIn.signIn();
-      } on PlatformException catch (e) {
+      } on PlatformException {
         // propagamos para que upload/download muestren el motivo exacto
-        throw e;
+        rethrow;
       }
     }
 
@@ -111,12 +120,12 @@ class DriveBackupService {
           message: 'Permisos de Google Drive denegados por el usuario.',
         );
       }
-    } on PlatformException catch (e) {
-      throw e;
+    } on PlatformException {
+      rethrow;
     }
 
     final headers = await acc.authHeaders;
-    return drive.DriveApi(_AuthenticatedClient(IOClient(), headers));
+    return _DriveSession(_AuthenticatedClient(IOClient(), headers));
   }
 
   /* ─────────────────────────── PÚBLICO ────────────────────────── */
@@ -141,15 +150,19 @@ class DriveBackupService {
   static Future<void> deleteBackup() async {
     // Authentication failure/cancellation must reach the caller before it
     // deletes local data or reports that the cloud copy was removed.
-    final api = await _driveApi();
-
-    final res = await api.files.list(
-      spaces: 'appDataFolder',
-      q: "name='$_fileName' and trashed=false",
-      $fields: 'files(id)',
-    );
-    for (final f in res.files ?? <drive.File>[]) {
-      await api.files.delete(f.id!);
+    final session = await _driveApi();
+    try {
+      final api = session.api;
+      final res = await api.files.list(
+        spaces: 'appDataFolder',
+        q: "(name='${archiveFileName()}' or name='${legacyFileName()}') and trashed=false",
+        $fields: 'files(id)',
+      );
+      for (final f in res.files ?? <drive.File>[]) {
+        await api.files.delete(f.id!);
+      }
+    } finally {
+      session.close();
     }
   }
 
@@ -157,83 +170,138 @@ class DriveBackupService {
 
   static Future<BackupResult<void>> uploadBackup(
       Map<String, dynamic> json) async {
+    _DriveSession? session;
     try {
-      final api = await _driveApi();
+      session = await _driveApi();
+      final api = session.api;
 
-      // Preserve the legacy UTF-8 JSON format without leaving a plaintext
-      // Inventory copy in the application's temporary directory.
-      final bytes = utf8.encode(jsonEncode(json));
-      final media = drive.Media(Stream<List<int>>.value(bytes), bytes.length,
-          contentType: 'application/json');
-      final meta = drive.File()..name = _fileName;
-
-      final prev = await api.files.list(
-        spaces: 'appDataFolder',
-        q: "name='$_fileName' and trashed=false",
-        $fields: 'files(id)',
-      );
-
-      if (prev.files?.isNotEmpty == true) {
-        await api.files.update(meta, prev.files!.first.id!, uploadMedia: media);
-      } else {
-        meta.parents = ['appDataFolder'];
-        await api.files.create(meta, uploadMedia: media);
-      }
-      return const BackupResult.success();
+      final archives = InventoryBackupArchive();
+      return await archives.withWorkspace((workspace) async {
+        // Validate/build the complete archive before replacing anything remote.
+        final file = await archives.create(json, workspace);
+        final media = drive.Media(file.openRead(), await file.length(),
+            contentType: 'application/zip');
+        final meta = drive.File()..name = archiveFileName();
+        final prev = await api.files.list(
+          spaces: 'appDataFolder',
+          q: "name='${archiveFileName()}' and trashed=false",
+          orderBy: 'modifiedTime desc',
+          pageSize: 1,
+          $fields: 'files(id)',
+        );
+        if (prev.files?.isNotEmpty == true) {
+          await api.files
+              .update(meta, prev.files!.first.id!, uploadMedia: media);
+        } else {
+          meta.parents = ['appDataFolder'];
+          await api.files.create(meta, uploadMedia: media);
+        }
+        return const BackupResult<void>.success();
+      });
     } on PlatformException catch (e) {
       return _mapAuthError<void>(e);
     } catch (e) {
       return BackupResult.failure('Error al subir: $e');
+    } finally {
+      session?.close();
     }
   }
 
   /* ─────────────────────────── DESCARGAR ──────────────────────── */
 
   static Future<BackupResult<Map<String, dynamic>>> downloadBackup() async {
+    _DriveSession? session;
     try {
-      final api = await _driveApi();
+      session = await _driveApi();
+      final api = session.api;
 
-      final res = await api.files.list(
+      var res = await api.files.list(
         spaces: 'appDataFolder',
-        q: "name='$_fileName' and trashed=false",
+        q: "name='${archiveFileName()}' and trashed=false",
         orderBy: 'modifiedTime desc',
         pageSize: 1,
         $fields: 'files(id,size)',
       );
+      final version2 = res.files?.isNotEmpty == true;
+      if (!version2) {
+        res = await api.files.list(
+          spaces: 'appDataFolder',
+          q: "name='${legacyFileName()}' and trashed=false",
+          orderBy: 'modifiedTime desc',
+          pageSize: 1,
+          $fields: 'files(id,size)',
+        );
+      }
       if (res.files?.isEmpty ?? true) {
         return const BackupResult.failure('No hay copia en Drive.');
       }
-
+      final limit = version2
+          ? InventoryBackupArchive.maxArchiveBytes
+          : InventoryBackupArchive.maxManifestBytes;
+      final declaredSize = int.tryParse(res.files!.first.size ?? '');
+      if (declaredSize != null && (declaredSize <= 0 || declaredSize > limit)) {
+        return const BackupResult.failure(
+            'El tamaño de la copia no es válido.');
+      }
       final media = await api.files.get(
         res.files!.first.id!,
         downloadOptions: drive.DownloadOptions.fullMedia,
       ) as drive.Media;
 
-      final bytes = <int>[];
-      await media.stream.forEach(bytes.addAll);
-      if (bytes.isEmpty) {
-        return const BackupResult.failure('La copia está vacía.');
-      }
-
-      final decoded = utf8.decode(bytes);
-      final data = jsonDecode(decoded) as Map<String, dynamic>? ?? {};
-      return BackupResult.success(data);
+      final archives = InventoryBackupArchive();
+      return await archives.withWorkspace((workspace) async {
+        final file = File('${workspace.path}${Platform.pathSeparator}download');
+        final sink = file.openWrite();
+        var count = 0;
+        try {
+          await for (final chunk in media.stream) {
+            count += chunk.length;
+            if (count > limit) {
+              throw const FormatException(
+                  'La copia supera el tamaño admitido.');
+            }
+            sink.add(chunk);
+            // Backpressure prevents a fast network from accumulating the whole
+            // media archive in the IOSink queue on a slower device.
+            await sink.flush();
+          }
+        } finally {
+          await sink.close();
+        }
+        if (count == 0 || (declaredSize != null && declaredSize != count)) {
+          throw const FormatException(
+              'La descarga de la copia está incompleta.');
+        }
+        if (version2) return BackupResult.success(await archives.read(file));
+        final decoded = jsonDecode(utf8.decode(await file.readAsBytes()));
+        if (decoded is! Map<String, dynamic> ||
+            decoded.containsKey('version')) {
+          throw const FormatException(
+              'El formato de la copia antigua no es válido.');
+        }
+        HiveRestoreService.prepare(decoded);
+        return BackupResult.success(decoded);
+      });
     } on PlatformException catch (e) {
       return _mapAuthError<Map<String, dynamic>>(e);
     } catch (e) {
       return BackupResult.failure('Error al descargar: $e');
+    } finally {
+      session?.close();
     }
   }
 
   /* ────────────────────── EXPORT / IMPORT ─────────────────────── */
 
   static Map<String, dynamic> exportHive(Box udm, Box<DiaryEntry> diary) => {
+        'version': 2,
         'udm': udm.toMap(),
         'diary': diary.values
             .map((e) => {
                   'text': e.text,
                   'mood': e.mood,
                   'createdAt': e.createdAt.toIso8601String(),
+                  'photoId': e.photoId,
                 })
             .toList(),
       };
@@ -256,6 +324,13 @@ class DriveBackupService {
     }
     return HiveRestoreService.instance.restore(prepared, udm, diary);
   }
+}
+
+class _DriveSession {
+  _DriveSession(this.client) : api = drive.DriveApi(client);
+  final _AuthenticatedClient client;
+  final drive.DriveApi api;
+  void close() => client.close();
 }
 
 /* ── cliente autenticado ─ */

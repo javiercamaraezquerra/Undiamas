@@ -3,9 +3,11 @@ import 'package:hive/hive.dart';
 
 import '../models/diary_entry.dart';
 import 'encryption_service.dart';
+import 'inventory_photo_store.dart';
 import 'safe_hive_open.dart';
 
-/// A detached, fully validated legacy Drive copy. Preparing never opens a box.
+/// Detached, structurally validated Drive data. Photos are checked before any
+/// restore writes; preparing a confirmation dialog never opens or changes a box.
 class PreparedHiveBackup {
   PreparedHiveBackup._(this._settings, this._entries);
 
@@ -13,6 +15,9 @@ class PreparedHiveBackup {
   final List<DiaryEntry> _entries;
   int get entryCount => _entries.length;
   bool get isEmptyInventory => _entries.isEmpty;
+  Set<String> get photoIds =>
+      _entries.map((entry) => entry.photoId).whereType<String>().toSet();
+  int get photoCount => _entries.where((entry) => entry.photoId != null).length;
   DateTime? get startDate => _settings['startDate'] == null
       ? null
       : DateTime.parse(_settings['startDate'] as String);
@@ -42,11 +47,19 @@ class HiveRestoreService extends ChangeNotifier {
 
   HiveRestoreService({
     Future<Box<dynamic>> Function()? openRecoveryBox,
+    Future<void> Function(String id)? verifyPhoto,
+    this.beforeApplyRestore,
     @visibleForTesting Future<void> Function(String step)? beforeStep,
   })  : _openRecoveryBox = openRecoveryBox ?? _openEncryptedRecovery,
+        _verifyPhoto = verifyPhoto ?? _verifyStoredPhoto,
         _beforeStep = beforeStep;
 
   final Future<Box<dynamic>> Function() _openRecoveryBox;
+  final Future<void> Function(String id) _verifyPhoto;
+
+  /// Startup connects the encrypted composer draft's clear operation. Runs
+  /// only after confirmation, full validation and a durable undo journal.
+  Future<void> Function()? beforeApplyRestore;
   final Future<void> Function(String step)? _beforeStep;
   bool _busy = false;
   bool _recoveryRequired = false;
@@ -59,9 +72,17 @@ class HiveRestoreService extends ChangeNotifier {
       openHiveBoxSafely<dynamic>(recoveryBoxName,
           encryptionCipher: await EncryptionService.getCipher());
 
+  static Future<void> _verifyStoredPhoto(String id) async {
+    await InventoryPhotoStore.instance.read(id);
+  }
+
   static PreparedHiveBackup prepare(Map<String, dynamic> data) {
-    // Both sections are mandatory: {} must not masquerade as an empty copy.
-    if (data.length != 2 || data['udm'] is! Map || data['diary'] is! List) {
+    final legacy = !data.containsKey('version');
+    // An unknown version must never be interpreted as an empty legacy copy.
+    if ((!legacy && (data['version'] is! int || data['version'] != 2)) ||
+        data.length != (legacy ? 2 : 3) ||
+        data['udm'] is! Map ||
+        data['diary'] is! List) {
       throw const FormatException(
           'La copia no contiene las secciones de ajustes e Inventario esperadas.');
     }
@@ -75,16 +96,23 @@ class HiveRestoreService extends ChangeNotifier {
     final entries = <DiaryEntry>[];
     for (final value in data['diary'] as List) {
       if (value is! Map ||
-          value.length != 3 ||
+          value.length != (legacy ? 3 : 4) ||
           value['text'] is! String ||
           value['mood'] is! int ||
           (value['mood'] as int) < 0 ||
-          (value['mood'] as int) > 4) {
+          (value['mood'] as int) > 4 ||
+          (!legacy &&
+              (!value.containsKey('photoId') ||
+                  (value['photoId'] != null &&
+                      (value['photoId'] is! String ||
+                          !InventoryPhotoStore.isValidId(
+                              value['photoId'] as String)))))) {
         throw const FormatException('Una entrada del Inventario no es válida.');
       }
       entries.add(DiaryEntry(
           text: value['text'] as String,
           mood: value['mood'] as int,
+          photoId: legacy ? null : value['photoId'] as String?,
           createdAt: _date(value['createdAt'])));
     }
     return PreparedHiveBackup._(settings, entries);
@@ -215,8 +243,20 @@ class HiveRestoreService extends ChangeNotifier {
           message:
               'Hay otra operación o recuperación pendiente. Vuelve a intentarlo.');
     }
-    _generation++;
     try {
+      // Immutable media is imported before this call, without touching current
+      // Hive entries. A missing/corrupt attachment must not start a transaction.
+      try {
+        for (final id in prepared.photoIds) {
+          await _verifyPhoto(id);
+        }
+      } catch (_) {
+        return const HiveRestoreResult(
+            ok: false,
+            message: 'No se pueden comprobar todas las fotos de la copia. '
+                'No se han modificado tus datos.');
+      }
+      _generation++;
       final journal = await _openRecoveryBox();
       if (await _pendingAfterFlush(journal, udm, diary)) {
         _recoveryRequired = true;
@@ -247,6 +287,7 @@ class HiveRestoreService extends ChangeNotifier {
                 'No se ha iniciado la sustitución. Reintenta la recuperación.');
       }
       try {
+        await beforeApplyRestore?.call();
         await _step('apply.settings');
         await udm.putAll(prepared._settings);
         await diary.clear();
@@ -311,6 +352,7 @@ class HiveRestoreService extends ChangeNotifier {
       // Hive's memory cache. Confirm it on disk before ANY recovery writes.
       await _step('recovery.journal.flush');
       await journal.flush();
+      await beforeApplyRestore?.call();
       final result = await _rollback(journal, before, udm, diary);
       if (result.recovered) {
         return const HiveRestoreResult(
@@ -446,10 +488,14 @@ class HiveRestoreService extends ChangeNotifier {
         'text': entry.text,
         'mood': entry.mood,
         'createdAt': entry.createdAt,
+        if (entry.photoId != null) 'photoId': entry.photoId,
       };
 
   static DiaryEntry _cloneEntry(DiaryEntry entry) => DiaryEntry(
-      text: entry.text, mood: entry.mood, createdAt: entry.createdAt);
+      text: entry.text,
+      mood: entry.mood,
+      createdAt: entry.createdAt,
+      photoId: entry.photoId);
 
   static dynamic _copyLocalValue(dynamic value) {
     if (value is Map) {
@@ -480,7 +526,11 @@ class HiveRestoreService extends ChangeNotifier {
           value is! Map ||
           value['text'] is! String ||
           value['mood'] is! int ||
-          value['createdAt'] is! DateTime) {
+          value['createdAt'] is! DateTime ||
+          (value['photoId'] != null &&
+              (value['photoId'] is! String ||
+                  !InventoryPhotoStore.isValidId(
+                      value['photoId'] as String)))) {
         throw const FormatException('Invalid inventory recovery snapshot.');
       }
       // Preserve local legacy data exactly, even if a historical mood was
@@ -488,6 +538,7 @@ class HiveRestoreService extends ChangeNotifier {
       result[entry.key] = DiaryEntry(
           text: value['text'] as String,
           mood: value['mood'] as int,
+          photoId: value['photoId'] as String?,
           createdAt: value['createdAt'] as DateTime);
     }
     return result;

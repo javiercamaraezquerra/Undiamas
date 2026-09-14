@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/diary_entry.dart';
 import '../utils/mood_timeline.dart';
+import 'inventory_photo_attachment.dart';
 
 const moodEmojis = ['😢', '😕', '😐', '🙂', '😄'];
 const _moodLabels = ['Muy bajo', 'Bajo', 'Neutro', 'Bueno', 'Muy bueno'];
@@ -71,6 +72,7 @@ class _MoodEntryDetailSheetState extends State<MoodEntryDetailSheet> {
         point.localDateTime.month == widget.points.first.localDateTime.month &&
         point.localDateTime.day == widget.points.first.localDateTime.day);
     final compact = selected != null &&
+        selected.entry.photoId == null &&
         selected.entry.text.length < 300 &&
         MediaQuery.textScalerOf(context).scale(16) <= 20 &&
         MediaQuery.sizeOf(context).height >= 650;
@@ -161,6 +163,11 @@ class _MoodEntryDetailSheetState extends State<MoodEntryDetailSheet> {
                                                 'mood-entry-text'),
                                             style: theme.textTheme.bodyLarge
                                                 ?.copyWith(height: 1.5)),
+                                        if (selected.entry.photoId != null) ...[
+                                          const SizedBox(height: 16),
+                                          InventoryPhotoAttachment(
+                                              photoId: selected.entry.photoId!),
+                                        ],
                                         const SizedBox(height: 24),
                                       ]))),
                     ]))));

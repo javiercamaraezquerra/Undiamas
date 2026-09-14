@@ -13,6 +13,7 @@ import 'package:un_dia_mas/screens/profile_screen.dart';
 import 'package:un_dia_mas/services/hive_restore_service.dart';
 import 'package:un_dia_mas/services/notification_preferences_controller.dart';
 import 'package:un_dia_mas/widgets/mood_trend_chart.dart';
+import 'support/memory_journal_attachments.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -116,7 +117,8 @@ void main() {
   }
 
   Future<void> deleteThroughInventory(WidgetTester tester, Object key) async {
-    await tester.pumpWidget(const MaterialApp(home: JournalScreen()));
+    await tester.pumpWidget(MaterialApp(
+        home: JournalScreen(attachmentGateway: MemoryJournalAttachments())));
     await tester.pumpAndSettle();
     final menu = find.byKey(ValueKey('entry-menu-$key'));
     await tester.ensureVisible(menu);
@@ -124,24 +126,19 @@ void main() {
     await tester.pumpAndSettle();
     await tester.runAsync(() => tester.tap(find.text('Eliminar entrada')));
     await tester.pumpAndSettle();
-    await tester.runAsync(() async {
-      await tester.tap(find.text('Eliminar'));
-      final storage = HiveRestoreService.instance;
-      if (storage.busy) {
-        final completed = Completer<void>();
-        void changed() {
-          if (!storage.busy && !completed.isCompleted) completed.complete();
-        }
-
-        storage.addListener(changed);
-        try {
-          changed();
-          await completed.future.timeout(const Duration(seconds: 10));
-        } finally {
-          storage.removeListener(changed);
-        }
-      }
-    });
+    await tester.runAsync(() => tester.tap(find.text('Eliminar')));
+    final storage = HiveRestoreService.instance;
+    // Confirming first awaits the draft. The mutation lock may not yet be held
+    // when tap returns, and Hive's optimistic cache changes before disk flush.
+    // Advance UI microtasks and real I/O until both deletion and flush finish.
+    for (var attempt = 0; attempt < 1000; attempt++) {
+      await tester.pump();
+      if (!diary.containsKey(key) && !storage.busy) break;
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)));
+    }
+    expect(diary.containsKey(key), isFalse);
+    expect(storage.busy, isFalse);
     await tester.pumpAndSettle();
   }
 

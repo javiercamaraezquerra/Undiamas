@@ -14,6 +14,7 @@ import 'package:un_dia_mas/services/hive_restore_service.dart';
 import 'package:un_dia_mas/widgets/app_lock_gate.dart';
 
 import 'app_lock_widgets_test.dart' show DeviceChallenge, MemoryPrivacy;
+import 'support/memory_journal_attachments.dart';
 
 /// Real JournalScreen + encrypted Hive in a new, verified temporary directory.
 /// Only the device challenge and platform key storage are faked. This does not
@@ -102,7 +103,7 @@ void main() {
 
     await tester.pumpWidget(MaterialApp(
         builder: (_, child) => AppLockGate(controller: lock, child: child!),
-        home: const JournalScreen()));
+        home: JournalScreen(attachmentGateway: MemoryJournalAttachments())));
     await tester.pump();
     expect(challenge.attempts, 1);
     expect(find.byType(JournalScreen, skipOffstage: false), findsNothing);
@@ -173,16 +174,16 @@ void main() {
     // Start actual Hive IO in the real async zone, then wait for its queue.
     await tester.ensureVisible(save);
     await tester.pumpAndSettle();
-    await tester.runAsync(() async {
-      await tester.tap(save);
-      final elapsed = Stopwatch()..start();
-      while (diary.length != 3 || HiveRestoreService.instance.busy) {
-        if (elapsed.elapsed > const Duration(seconds: 5)) {
-          throw StateError('Inventory write did not complete.');
-        }
-        await Future<void>.delayed(const Duration(milliseconds: 10));
+    await tester.runAsync(() => tester.tap(save));
+    final elapsed = Stopwatch()..start();
+    while (diary.length != 3 || HiveRestoreService.instance.busy) {
+      if (elapsed.elapsed > const Duration(seconds: 5)) {
+        throw StateError('Inventory write did not complete.');
       }
-    });
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pump();
+    }
     await tester.pumpAndSettle();
     expect(diary.length, 3);
     expect(_entrySnapshot(diary).take(2).toList(), entriesBefore);

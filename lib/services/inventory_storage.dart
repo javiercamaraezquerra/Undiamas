@@ -54,6 +54,7 @@ class InventoryStorage {
               text: entry.value.text,
               mood: entry.value.mood,
               createdAt: entry.value.createdAt,
+              photoId: entry.value.photoId,
             ),
       });
       await beforeStep?.call('diary.flush');
@@ -92,7 +93,10 @@ class InventoryStorage {
   }
 
   static bool _sameEntry(DiaryEntry a, DiaryEntry b) =>
-      a.text == b.text && a.mood == b.mood && _equal(a.createdAt, b.createdAt);
+      a.text == b.text &&
+      a.mood == b.mood &&
+      a.photoId == b.photoId &&
+      _equal(a.createdAt, b.createdAt);
 
   static bool _equal(dynamic a, dynamic b) {
     if (a is DateTime && b is DateTime) {

@@ -10,6 +10,7 @@ import 'package:un_dia_mas/models/diary_entry.dart';
 import 'package:un_dia_mas/screens/journal_screen.dart';
 import 'package:un_dia_mas/services/drive_backup_service.dart';
 import 'package:un_dia_mas/services/hive_restore_service.dart';
+import 'support/memory_journal_attachments.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -68,8 +69,10 @@ void main() {
             createdAt: DateTime(2026, 8, 2), mood: 4, text: 'Anterior'),
       });
     });
-    await tester.pumpWidget(
-        MaterialApp(home: JournalScreen(uploadBackup: uploadBackup)));
+    await tester.pumpWidget(MaterialApp(
+        home: JournalScreen(
+            uploadBackup: uploadBackup,
+            attachmentGateway: MemoryJournalAttachments())));
     await tester.pumpAndSettle();
     return (directory: directory, diary: diary, settings: settings);
   }
@@ -91,15 +94,18 @@ void main() {
     expect(find.textContaining('copias automáticas'), findsNothing);
   }
 
-  Future<void> waitForMutation(bool Function() completed) async {
+  Future<void> waitForMutation(
+      WidgetTester tester, bool Function() completed) async {
     final elapsed = Stopwatch()..start();
     while (!completed() || HiveRestoreService.instance.busy) {
       if (elapsed.elapsed > const Duration(seconds: 5)) {
         throw StateError('The real inventory IO did not finish.');
       }
-      // This helper runs in tester.runAsync: await real disk completion, not
-      // just a frame or the optimistic in-memory Hive update.
-      await Future<void>.delayed(const Duration(milliseconds: 10));
+      // Draft persistence and Hive IO cross both zones. Advance UI microtasks
+      // as well as real disk completion; do not infer success from box.put alone.
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pump();
     }
   }
 
@@ -125,8 +131,8 @@ void main() {
     await askToDelete(tester, 4);
     await tester.runAsync(() async {
       await tester.tap(find.text('Eliminar'));
-      await waitForMutation(() => !f.diary.containsKey(4));
     });
+    await waitForMutation(tester, () => !f.diary.containsKey(4));
     await tester.pumpAndSettle();
     expect(f.diary.keys.toList(), [19]);
     expect(identical(f.diary.get(19), survivor), isTrue);
@@ -167,8 +173,8 @@ void main() {
       final callback = tester.widget<ElevatedButton>(save).onPressed!;
       callback();
       callback();
-      await waitForMutation(() => f.diary.length == 3);
     });
+    await waitForMutation(tester, () => f.diary.length == 3);
     await tester.pumpAndSettle();
     expect(f.diary.length, 3);
     final savedKey = f.diary.keys
@@ -176,8 +182,8 @@ void main() {
     await askToDelete(tester, savedKey);
     await tester.runAsync(() async {
       await tester.tap(find.text('Eliminar'));
-      await waitForMutation(() => !f.diary.containsKey(savedKey));
     });
+    await waitForMutation(tester, () => !f.diary.containsKey(savedKey));
     await tester.pumpAndSettle();
     expect(f.diary.keys.toList(), [4, 19]);
     expect(find.text('Recién guardada'), findsNothing);
@@ -194,6 +200,9 @@ void main() {
       await tester.tap(find.text('Eliminar'));
       await Future<void>.delayed(Duration.zero);
     });
+    await tester.pump();
+    await tester
+        .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
     await tester.pumpAndSettle();
     expect(f.diary.keys.toList(), [4, 19]);
     expect(find.textContaining('No se pudo completar la eliminación'),
@@ -216,8 +225,8 @@ void main() {
     await askToDelete(tester, 19);
     await tester.runAsync(() async {
       await tester.tap(find.text('Eliminar'));
-      await waitForMutation(() => !f.diary.containsKey(19));
     });
+    await waitForMutation(tester, () => !f.diary.containsKey(19));
     await tester.pumpAndSettle();
     expect(f.diary.keys.toList(), [4]);
     expect(uploaded, isNotNull);

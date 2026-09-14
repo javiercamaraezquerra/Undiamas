@@ -27,10 +27,15 @@ class RestoreBackupConfirmation extends StatelessWidget {
           Text('Inventario actual: $currentEntryCount entradas.'),
           const SizedBox(height: 8),
           Text('Inventario de la copia: ${backup.entryCount} entradas.'),
+          if (backup.photoCount > 0) ...[
+            const SizedBox(height: 8),
+            Text('Fotos incluidas: ${backup.photoCount}.'),
+          ],
           const SizedBox(height: 16),
           const Text(
             'La copia sustituirá tu inventario actual. Las entradas actuales '
-            'que no estén en la copia dejarán de aparecer.',
+            'que no estén en la copia dejarán de aparecer. '
+            'El borrador sin guardar se descartará.',
           ),
           if (backup.isEmptyInventory) ...[
             const SizedBox(height: 12),
