@@ -1,0 +1,4 @@
+Ahora puedes añadir una foto desde la cámara o la galería a tus entradas del Inventario y verla también desde la gráfica del Perfil.
+Tu borrador se conserva al cambiar de pantalla.
+Las copias de Drive incluyen las fotos y son compatibles con las copias de versiones anteriores.
+Mejoramos la importación de imágenes y los mensajes de error.

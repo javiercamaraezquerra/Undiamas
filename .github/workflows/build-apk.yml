@@ -3,7 +3,7 @@ name: Build signed production APK and AAB
 on:
   workflow_dispatch:
   push:
-    branches: [main, codex/undiamas-production-v23]
+    branches: [main, codex/undiamas-production-v23, codex/undiamas-production-v26]
     paths:
       - 'lib/**'
       - 'assets/**'
@@ -25,7 +25,9 @@ jobs:
   build-release:
     if: >-
       github.repository == 'javiercamaraezquerra/Undiamas' &&
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/undiamas-production-v23')
+      (github.ref == 'refs/heads/main' ||
+       github.ref == 'refs/heads/codex/undiamas-production-v23' ||
+       github.ref == 'refs/heads/codex/undiamas-production-v26')
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     defaults:
@@ -132,6 +134,50 @@ jobs:
           flutter build appbundle --release --flavor production --no-pub --dart-define=UDM_PREVIEW=false
           flutter build apk --release --flavor production --no-pub --dart-define=UDM_PREVIEW=false
 
+      - name: Verify native photo policy with the existing Kotlin compiler
+        run: |
+          # The preceding Android build resolves the same Kotlin 1.9.22
+          # compiler used locally. No extra SDK or compiler is installed.
+          python3 - <<'PY'
+          import os, pathlib, subprocess
+          cache = pathlib.Path(os.environ.get('GRADLE_USER_HOME', str(pathlib.Path.home() / '.gradle')))
+          cache = cache / 'caches/modules-2/files-2.1'
+          def jar(group, artifact, version):
+              matches = list((cache / group / artifact / version).glob(f'*/{artifact}-{version}.jar'))
+              if len(matches) != 1:
+                  raise SystemExit(f'Expected one resolved dependency: {group}:{artifact}:{version}')
+              return str(matches[0])
+          stdlib = jar('org.jetbrains.kotlin', 'kotlin-stdlib', '1.9.22')
+          compiler = os.pathsep.join([
+              jar('org.jetbrains.kotlin', 'kotlin-compiler-embeddable', '1.9.22'),
+              stdlib,
+              jar('org.jetbrains.kotlin', 'kotlin-script-runtime', '1.9.22'),
+              jar('org.jetbrains.kotlin', 'kotlin-reflect', '1.6.10'),
+              jar('org.jetbrains.intellij.deps', 'trove4j', '1.0.20200330'),
+              jar('org.jetbrains', 'annotations', '13.0'),
+          ])
+          output = pathlib.Path('build/validation')
+          classes = output / 'native-photo-policy-ci-classes'
+          classes.mkdir(parents=True, exist_ok=True)
+          commands = [
+              ['java', '-cp', compiler, 'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler',
+               '-no-stdlib', '-no-reflect', '-jvm-target', '17', '-classpath', stdlib,
+               '-d', str(classes),
+               'android/app/src/main/kotlin/com/celsoriaapps/undiamas/PhotoImportPolicy.kt',
+               'tool/native_photo_policy_test.kt'],
+              ['java', '-cp', os.pathsep.join([str(classes), stdlib]),
+               'com.celsoriaapps.undiamas.Native_photo_policy_testKt'],
+          ]
+          with (output / 'native-photo-policy-ci.txt').open('w', encoding='utf-8') as log:
+              for command in commands:
+                  result = subprocess.run(command, stdout=subprocess.PIPE,
+                                          stderr=subprocess.STDOUT, text=True, encoding='utf-8')
+                  log.write(result.stdout)
+                  log.flush()
+                  print(result.stdout, end='')
+                  result.check_returncode()
+          PY
+
       - name: Verify identity, signatures and provenance
         run: |
           git diff --exit-code HEAD -- lib assets android test tool pubspec.yaml pubspec.lock .github
@@ -166,3 +212,4 @@ jobs:
             build/app/outputs/mapping/productionRelease/mapping.txt
             build/validation/production-release.json
             build/validation/production-sha256.txt
+            build/validation/native-photo-policy-ci.txt
