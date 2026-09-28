@@ -1,11 +1,11 @@
-# Preparación de producción 1.0.7+27
+# Producción 1.0.7+27: enviada a revisión
 
 ## Base confirmada
 
-Play Console muestra **1.0.6 (26), disponible en Google Play, lanzamiento
+En la comprobación inicial, Play Console mostraba **1.0.6 (26), disponible en Google Play, lanzamiento
 completo**, con última actualización del canal el 15 de septiembre de 2026.
-No hay cambios pendientes de publicación. El código base local y `main`
-coinciden en `222e45f4fb9ad4b68eda81b9e6e662d89b31459b`.
+No había cambios pendientes de publicación. El código base local y `main`
+coincidían en `222e45f4fb9ad4b68eda81b9e6e662d89b31459b`.
 
 ## Cambio autorizado
 
@@ -38,9 +38,38 @@ Validación local completada:
 - `git diff --check` correcto y sin cambios en código de aplicación, Android,
   lockfile, workflow ni otros recursos.
 
-Pendientes: CI de producción, comparación del recurso empaquetado, firma y
-metadatos del AAB, compatibilidad y envío en Play Console. No se ha enviado
-todavía la versión 27.
+## Compilación y verificación final
+
+- Commit compilado: `c31b7abfde25a1757c1e9be4b737708c717b52b4`.
+- [GitHub Actions 36489097981](https://github.com/javiercamaraezquerra/Undiamas/actions/runs/36489097981),
+  intento 1: **SUCCESS**, 455 pruebas Flutter, 14 Python y 8 Kotlin/JVM aprobadas.
+- Verificación independiente posterior a la descarga: **PASS**. Identidad,
+  firmas APK/AAB, publicidad de producción, API mínima 24 y objetivo 36,
+  permisos, bibliotecas nativas y alineación estática de 16 KiB correctos.
+- Comparación con el APK 26: mismos requisitos de dispositivos y tres ABI.
+- Los 365 textos del APK y del AAB son exactamente los aprobados. Git normaliza
+  los 367 finales de línea externos del JSON de CRLF a LF; el contenido de las
+  cadenas no cambia. El hash del recurso empaquetado y del blob Git es
+  `9ec1625411852bda481bc543282a37f7a5024c023b013e13c27caec2e41340ba`.
+- SHA-256 AAB: `1416cde1c01895c83d41924a5a1738c8d76601d4e46842d047f73cf6064d15bf`.
+- SHA-256 APK: `3b2100045b50df96828fbac84a26df7b93b37aa4d6ba0fa817dd91643c582f58`.
+
+## Envío a Google Play
+
+Enviado el **29 de septiembre de 2026 (Europe/Madrid)**. Play Console muestra
+**Cambios en revisión**, producción **1.0.7 (27)** e **Iniciar lanzamiento completo**.
+Se conserva el 100 % de lanzamiento en los países de destino actuales, con
+publicación gestionada desactivada. Se publicará automáticamente tras aprobarse.
+
+Google aceptó el AAB, con archivo ReTrace y símbolos nativos adjuntos, y confirmó
+**0 dispositivos que pierden compatibilidad** (19.194 compatibles). Al cerrar
+esta tarea siguen en curso sus comprobaciones rápidas previas a la revisión.
+El envío no implica aprobación ni disponibilidad inmediata en la tienda.
+
+La entrega local `../UnDiaMas-entrega-produccion-v27` conserva APK, AAB, notas,
+mapping, hashes, informes de CI/verificación y captura del estado en Play.
+El código de aplicación corresponde al commit compilado; el registro posterior
+del envío solo modifica documentación.
 
 Las pruebas automatizadas no garantizan ausencia absoluta de fallos ni
 sustituyen la comprobación de una actualización distribuida por Google Play.

@@ -5,8 +5,9 @@ terapia cognitivo-conductual aplicados a la recuperación de adicciones.
 
 La base es el commit `222e45f4fb9ad4b68eda81b9e6e662d89b31459b` de la
 versión 1.0.6+26. Play Console confirma que esa versión está disponible en
-producción con lanzamiento completo. La actualización 27 está en preparación;
-su compilación y publicación se registrarán en [PRODUCCION-27.md](docs/PRODUCCION-27.md).
+producción con lanzamiento completo. La actualización 27 se ha enviado a
+revisión para producción el 29 de septiembre de 2026. Google aún debe
+completar sus comprobaciones y aprobarla; consulta [PRODUCCION-27.md](docs/PRODUCCION-27.md).
 
 ## Alcance de esta actualización
 
@@ -46,9 +47,10 @@ flutter build apk --release --flavor production --no-pub --dart-define=UDM_PREVI
 ```
 
 La firma requiere la configuración original preparada por CI. No se admite
-una clave de prueba para esta actualización. Después de compilar, además del
-verificador existente, se comparará el hash del JSON aprobado con el recurso
-incluido en el APK y el AAB.
+una clave de prueba para esta actualización. Después de compilar se verificaron
+los binarios y la igualdad de los 365 textos aprobados con el recurso incluido
+en el APK y el AAB; los hashes y la normalización de finales de línea por Git
+quedan registrados en el informe de producción.
 
 `test/reflections_asset_test.dart` verifica el calendario completo, los años
 bisiestos y la lectura del contenido real en 320×640, con escala de texto 1 y 2,
