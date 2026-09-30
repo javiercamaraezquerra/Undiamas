@@ -117,8 +117,13 @@ void main() {
     }
   });
 
-  // Two approved calendar entries and the longest entry by characters.
-  for (final index in [115, 175, 305]) {
+  // Keep the two approved calendar entries, a revised example, and whichever
+  // real entry is longest so that later editorial updates retain this check.
+  final catalog = _readCatalog();
+  final longestIndex = catalog.asMap().entries.reduce(
+        (a, b) => a.value.length >= b.value.length ? a : b,
+      ).key;
+  for (final index in {115, longestIndex, 272, 305}) {
     for (final variant in [
       (scale: 1.0, dark: false),
       (scale: 2.0, dark: false),
@@ -146,6 +151,10 @@ void main() {
             .substring(2)
             .trim();
         final question = lines.last.trim();
+        final paragraphs = _readCatalog()[index]
+            .trim()
+            .split(RegExp(r'\r?\n\s*\r?\n'));
+        final bodyParagraphs = paragraphs.sublist(2, paragraphs.length - 1);
 
         try {
           // ReflectionScreen loads the real bundled asset; no channel or
@@ -174,7 +183,7 @@ void main() {
           expect(headerText, findsOneWidget);
           _expectInsideViewport(tester, headerText);
 
-          for (final text in [title, question]) {
+          for (final text in [title, ...bodyParagraphs, question]) {
             final rendered = _renderedText(text);
             expect(rendered, findsOneWidget);
             await _expectReadableByScrolling(tester, rendered);

@@ -1,41 +1,39 @@
-# Un día más — actualización 1.0.7+27
+# Un día más — actualización 1.0.8+28
 
-Nueva colección de 365 reflexiones diarias, inspiradas en principios de la
-terapia cognitivo-conductual aplicados a la recuperación de adicciones.
+Reflexiones diarias revisadas para seguir mejor el hilo: escenas más concretas,
+ideas mejor conectadas y preguntas claras. Conservan su tono cercano y su
+inspiración en principios de la terapia cognitivo-conductual aplicados a la
+recuperación de adicciones.
 
-La base es el commit `222e45f4fb9ad4b68eda81b9e6e662d89b31459b` de la
-versión 1.0.6+26. Play Console confirma que esa versión está disponible en
-producción con lanzamiento completo. La actualización 27 se ha enviado a
-revisión para producción el 29 de septiembre de 2026. Google aún debe
-completar sus comprobaciones y aprobarla; consulta [PRODUCCION-27.md](docs/PRODUCCION-27.md).
+La base es `ae3358c62d4d521328dc5f14f0be68bfd330cc6f`, versión 1.0.7+27,
+confirmada como disponible en Google Play antes de preparar esta entrega.
+Estado de la actualización: [PRODUCCION-28.md](docs/PRODUCCION-28.md).
 
-## Alcance de esta actualización
+## Alcance
 
-- Se sustituye únicamente `assets/data/reflections.json` y se incrementa
-  la versión a `1.0.7+27`.
-- Se mantiene la lista de 365 textos Markdown en el mismo orden de calendario.
-  El 29 de febrero conserva la reflexión del 28 de febrero.
-- Se incluyen los textos aprobados del 26 de abril y del 2 de noviembre.
-- Los textos tienen 228–277 palabras, contando cuerpo y pregunta.
+Se sustituye `assets/data/reflections.json` por la colección aprobada y se
+incrementa la versión. Son 365 reflexiones: 183 revisadas y 182 conservadas,
+con 232–277 palabras de cuerpo y pregunta. Se mantienen fechas, títulos y
+orden, incluidos los textos especiales del 26 de abril y 2 de noviembre.
+El 29 de febrero sigue usando la reflexión del 28 de febrero.
 
-No hay cambios en el código de la aplicación, dependencias, permisos, firma,
-publicidad, consentimiento, inventario, fotografías, copias, bloqueo o
-notificaciones. Las frases breves de Inicio (`quotes.json`) también se conservan.
-La actualización no necesita migrar ni borrar datos.
+El código de aplicación, las dependencias, los permisos, el nombre, la firma,
+el Inventario, las fotos, Drive, la publicidad y las notificaciones se conservan.
+No hay migraciones ni borrado de datos. Las citas de Inicio siguen iguales.
 
-[Notas para Google Play](docs/release-notes-es-ES-27.txt).
+[Notas para Google Play](docs/release-notes-es-ES-28.txt).
 
 ## Compilación y comprobaciones
 
-Se conserva el workflow `.github/workflows/build-apk.yml`: desde `main`
-ejecuta análisis, pruebas Flutter/Python, compilación de producción, pruebas
-nativas Kotlin y verificación de firmas, identidad y contenido. Usa los
-secretos de firma existentes y no publica automáticamente en Play.
+Se conserva `.github/workflows/build-apk.yml`, que desde `main` ejecuta
+análisis, pruebas Flutter/Python, compilación firmada de producción, pruebas
+nativas Kotlin y verificación de identidad, firmas y contenido. No publica
+por sí solo en Google Play.
 
-- Paquete: `com.celsoriaapps.undiamas`; nombre: Un Día Más / One More Day.
+- Paquete `com.celsoriaapps.undiamas`; nombre Un Día Más / One More Day.
 - Flutter 3.32.8, Java 17, API de destino 36 y mínima 24.
-- Tres arquitecturas originales y dependencias fijadas por `pubspec.lock`.
-- Variante `production`, con `UDM_PREVIEW=false`.
+- Dependencias fijadas por `pubspec.lock`; tres arquitecturas originales.
+- Variante `production`, con `UDM_PREVIEW=false` y firma de subida existente.
 
 ```sh
 flutter pub get --enforce-lockfile
@@ -46,19 +44,13 @@ flutter build appbundle --release --flavor production --no-pub --dart-define=UDM
 flutter build apk --release --flavor production --no-pub --dart-define=UDM_PREVIEW=false
 ```
 
-La firma requiere la configuración original preparada por CI. No se admite
-una clave de prueba para esta actualización. Después de compilar se verificaron
-los binarios y la igualdad de los 365 textos aprobados con el recurso incluido
-en el APK y el AAB; los hashes y la normalización de finales de línea por Git
-quedan registrados en el informe de producción.
-
-`test/reflections_asset_test.dart` verifica el calendario completo, los años
-bisiestos y la lectura del contenido real en 320×640, con escala de texto 1 y 2,
-en modo claro y oscuro. Se mantienen las pruebas anteriores de notificaciones
-y conservación de datos.
+Las pruebas del recurso real comprueban calendario ordinario y bisiesto,
+contenido empaquetado y lectura completa de las entradas seleccionadas en
+320×640, con texto normal y ampliado, en temas claro y oscuro. Después de
+compilar se debe comparar el recurso del APK y AAB con la colección aprobada.
+La firma de subida difiere de la firma de distribución de Google Play; el APK
+firmado por CI no acredita una actualización sobre la instalación de Play.
 
 ## Historial
 
-La entrega anterior y sus comprobaciones están documentadas en
-[PRODUCCION-26.md](docs/PRODUCCION-26.md). Sus estados de envío a revisión
-describen aquella fecha; Play Console ya confirma su disponibilidad pública.
+[Versión 27](docs/PRODUCCION-27.md) · [Versión 26](docs/PRODUCCION-26.md)
