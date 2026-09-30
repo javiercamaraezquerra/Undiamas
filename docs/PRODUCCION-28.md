@@ -71,6 +71,6 @@ La carpeta de entrega conserva los binarios, notas, mapa R8, registro CI,
 `play-console-en-revision.png`. La firma de subida es distinta de la firma
 con la que Google Play distribuye la aplicación instalada.
 
-## Notas publicadas para esta versión
+## Notas enviadas para esta versión
 
 Reflexiones diarias revisadas para una lectura más clara y cercana, con ejemplos mejor conectados y preguntas más fáciles de comprender y comentar. Conservan su enfoque inspirado en principios de la terapia cognitivo-conductual aplicados a la recuperación de adicciones.

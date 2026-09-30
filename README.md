@@ -7,7 +7,9 @@ recuperación de adicciones.
 
 La base es `ae3358c62d4d521328dc5f14f0be68bfd330cc6f`, versión 1.0.7+27,
 confirmada como disponible en Google Play antes de preparar esta entrega.
-Estado de la actualización: [PRODUCCION-28.md](docs/PRODUCCION-28.md).
+La actualización se ha enviado a revisión para producción el 01/10/2026.
+Google completará las comprobaciones y, si la aprueba, se publicará al 100 %
+automáticamente. Estado y evidencias: [PRODUCCION-28.md](docs/PRODUCCION-28.md).
 
 ## Alcance
 
