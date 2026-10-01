@@ -1,28 +1,26 @@
-# Un día más — actualización oficial 1.0.9+30 en preparación
+# Un día más — actualización oficial 1.0.9+30
 
-La revisión 30 añade calendario a la izquierda de la lupa del Inventario:
-búsqueda por día o por palabras, de forma excluyente. Cancelar conserva la
-búsqueda anterior. [Alcance y comprobaciones](docs/MEJORAS-30.md).
+La nueva versión reúne acceso e invitación voluntarios para valorar la app,
+fecha de la última copia confirmada en Drive y búsqueda del Inventario por
+palabras o por un día del calendario, sin combinar ambos filtros.
+Se conservan las 365 reflexiones aprobadas y el esquema de los datos guardados.
 
-Javi ha autorizado publicar todas las mejoras de la revisión 29 más el
-calendario 30 en producción. Se conserva el workflow de firma oficial y la
-identidad `com.celsoriaapps.undiamas`. La base oficial 1.0.8 (28) se comprobó
-publicada al 100 % el 01/10/2026. El envío de 30 sigue pendiente de compilación.
+La compilación oficial está firmada y verificada: **534 pruebas Flutter,
+14 Python y 8 grupos nativos correctos en CI**. Las verificaciones independientes
+de APK/AAB y contenido han terminado con resultado **PASS**.
+Paquete `com.celsoriaapps.undiamas`, variante `production` y `UDM_PREVIEW=false`.
 
-## Mejoras de la revisión 29 incluidas
+**EstadoPlay: CAMBIOS EN REVISIÓN.** Enviada a producción el 01/10/2026 a las
+22:56 (Madrid), con despliegue al 100 % en los 17 países existentes y publicación
+gestionada desactivada. Google publicará cuando complete sus comprobaciones
+y apruebe la actualización; aún no se confirma su disponibilidad pública.
+La base 1.0.8 (28) ya estaba publicada. No se ha realizado una prueba nueva
+de esta revisión en móvil físico ni con una cuenta real de Drive.
 
-Mejoras autorizadas el 01/10/2026: acceso voluntario a Google Play desde
-Perfil, invitación opcional tras tres días distintos de uso, fecha de la
-última copia confirmada en Drive y búsqueda local en el Inventario.
-
-Base: `060b327cf793a24c4b226ff3b4d23ce6fed71f9a` (1.0.8+28).
-Esta candidata se desarrolla en una carpeta independiente y no se ha enviado
-a Google Play. Alcance, criterios y pruebas: [MEJORAS-29.md](docs/MEJORAS-29.md).
-La colección de reflexiones de v28 se conserva sin cambios.
-
-APK de prueba preparado y verificado: `dist/UnDiaMas-1.0.9-29-mejoras.apk`.
-523 pruebas Flutter correctas y 2 omitidas por limitación de Windows; 14 pruebas
-Python correctas. Pendiente la prueba en el móvil y con una cuenta real de Drive.
+[Entrega, hashes y comprobaciones](docs/PRODUCCION-30.md) ·
+[Calendario y criterios](docs/MEJORAS-30.md) ·
+[Mejoras de uso incluidas](docs/MEJORAS-29.md) ·
+[Notas para Google Play](docs/release-notes-es-ES-30.txt).
 
 ## Entrega anterior: 1.0.8+28
 

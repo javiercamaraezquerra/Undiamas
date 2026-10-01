@@ -50,7 +50,22 @@ Comprobaciones locales terminadas el 01/10/2026:
   workflow y recursos originales idénticos a la base v28. El JSON de las 365
   reflexiones conserva SHA-256 `450f6b756d2d80a6375f06f5477bf00104e00642eb892d98aaae2905703bdd2b`.
 
-Pendientes la compilación oficial, verificación de APK/AAB y envío a Play.
+Compilación oficial y verificación terminadas. La CI final
+[36923075991](https://github.com/javiercamaraezquerra/Undiamas/actions/runs/36923075991),
+intento 1, compiló `8181e2dc90aeb4001f65a37ba1da01b046d9b989` con resultado
+**SUCCESS**: 534 pruebas Flutter correctas, 0 omitidas y 0 fallos; 14 pruebas
+Python y 8 grupos nativos correctos. Los verificadores independientes de
+APK/AAB y contenido dieron **PASS**; las reflexiones y los cinco recursos
+propios empaquetados coinciden exactamente con v28 y el commit aprobado.
+
+**EstadoPlay: CAMBIOS EN REVISIÓN.** Enviada el 01/10/2026 a las 22:56
+(Madrid), al 100 % en los 17 países existentes, con publicación gestionada
+desactivada. Play confirmó 0 dispositivos que pierden compatibilidad y tiene
+ReTrace y símbolos nativos adjuntos. Las comprobaciones rápidas y la revisión
+de Google continúan; no se afirma aprobación ni disponibilidad pública.
+Detalles, hashes, límites y comandos: [PRODUCCION-30.md](PRODUCCION-30.md).
+
+Antecedentes de los fixtures de CI, resueltos antes de la compilación final:
 El primer intento de CI (36920925091) se detuvo antes de acceder a las claves:
 533 pruebas correctas y una prueba visual fallida porque el fixture buscaba
 Roboto en una ruta local de Windows. Se corrigió solo el fixture para usar
