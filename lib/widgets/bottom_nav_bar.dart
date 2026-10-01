@@ -7,6 +7,7 @@ import '../screens/reflection_screen.dart';
 import '../screens/resources_screen.dart';
 import '../screens/profile_screen.dart';
 import 'mountain_background.dart';
+import 'play_review_prompt.dart';
 
 const _bannerId = 'ca-app-pub-4402835110551152/9099084606';
 
@@ -38,52 +39,58 @@ class _BottomNavBarState extends State<BottomNavBar> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      extendBody: true,
-      backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          MountainBackground(pageIndex: _selectedIndex),
-          // ► cross‑fade entre páginas (elimina destello)
-          Positioned.fill(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              switchInCurve: Curves.easeOut,
-              switchOutCurve: Curves.easeIn,
-              transitionBuilder: (child, anim) =>
-                  FadeTransition(opacity: anim, child: child),
-              child: KeyedSubtree(
-                key: ValueKey<int>(_selectedIndex),
-                child: _pages[_selectedIndex],
+    return PlayReviewPromptHost(
+      tabIndex: _selectedIndex,
+      child: Scaffold(
+        extendBody: true,
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          children: [
+            MountainBackground(pageIndex: _selectedIndex),
+            // ► cross‑fade entre páginas (elimina destello)
+            Positioned.fill(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
+                transitionBuilder: (child, anim) =>
+                    FadeTransition(opacity: anim, child: child),
+                child: KeyedSubtree(
+                  key: ValueKey<int>(_selectedIndex),
+                  child: _pages[_selectedIndex],
+                ),
               ),
             ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (_shouldShowAds(_selectedIndex))
-            const AdBanner(adUnitId: _bannerId),
-          BottomNavigationBar(
-            type: BottomNavigationBarType.fixed,
-            backgroundColor: _barColor(context),
-            elevation: 0,
-            currentIndex: _selectedIndex,
-            selectedItemColor: Theme.of(context).colorScheme.primary,
-            unselectedItemColor: Colors.grey,
-            onTap: _onItemTapped,
-            items: const [
-              BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
-              BottomNavigationBarItem(icon: Icon(Icons.edit), label: 'Inventario'),
-              BottomNavigationBarItem(
-                  icon: Icon(Icons.auto_stories), label: 'Reflexión'),
-              BottomNavigationBarItem(
-                  icon: Icon(Icons.lightbulb_outline), label: 'Recursos'),
-              BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
-            ],
-          ),
-        ],
+          ],
+        ),
+        bottomNavigationBar: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_shouldShowAds(_selectedIndex))
+              const AdBanner(adUnitId: _bannerId),
+            BottomNavigationBar(
+              type: BottomNavigationBarType.fixed,
+              backgroundColor: _barColor(context),
+              elevation: 0,
+              currentIndex: _selectedIndex,
+              selectedItemColor: Theme.of(context).colorScheme.primary,
+              unselectedItemColor: Colors.grey,
+              onTap: _onItemTapped,
+              items: const [
+                BottomNavigationBarItem(
+                    icon: Icon(Icons.home), label: 'Inicio'),
+                BottomNavigationBarItem(
+                    icon: Icon(Icons.edit), label: 'Inventario'),
+                BottomNavigationBarItem(
+                    icon: Icon(Icons.auto_stories), label: 'Reflexión'),
+                BottomNavigationBarItem(
+                    icon: Icon(Icons.lightbulb_outline), label: 'Recursos'),
+                BottomNavigationBarItem(
+                    icon: Icon(Icons.person), label: 'Perfil'),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

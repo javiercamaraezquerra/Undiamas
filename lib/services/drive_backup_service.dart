@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:developer' as dev;
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
@@ -12,6 +13,7 @@ import 'package:http/io_client.dart' show IOClient;
 import 'package:hive/hive.dart';
 
 import '../models/diary_entry.dart';
+import 'drive_backup_status_store.dart';
 import 'hive_restore_service.dart';
 import 'inventory_backup_archive.dart';
 
@@ -191,7 +193,8 @@ class DriveBackupService {
       'Authorization': 'Bearer $token',
       'X-Goog-AuthUser': '0',
     };
-    return _DriveSession(_AuthenticatedClient(IOClient(), headers));
+    await DriveBackupStatusStore.instance.selectAccount(acc.id);
+    return _DriveSession(_AuthenticatedClient(IOClient(), headers), acc.id);
   }
 
   /* ─────────────────────────── PÚBLICO ────────────────────────── */
@@ -211,6 +214,7 @@ class DriveBackupService {
     } catch (_) {
       await _googleSignIn.signOut();
     }
+    await DriveBackupStatusStore.instance.clear();
   }
 
   static Future<void> deleteBackup() async {
@@ -228,6 +232,7 @@ class DriveBackupService {
       for (final f in res.files ?? <drive.File>[]) {
         await api.files.delete(f.id!);
       }
+      await DriveBackupStatusStore.instance.clear();
     } catch (error) {
       _recordFailure(error,
           operation: 'delete', authenticating: session == null);
@@ -241,15 +246,26 @@ class DriveBackupService {
 
   static Future<BackupResult<void>> uploadBackup(
       Map<String, dynamic> json) async {
+    final status = DriveBackupStatusStore.instance;
+    // Normal callers already own the inventory lock. This guard also prevents
+    // two direct uploads from finishing out of order and replacing a newer copy.
+    if (status.uploading) {
+      return const BackupResult.failure('Ya hay una copia en curso.');
+    }
+    status.setUploading(true);
     _DriveSession? session;
+    var remoteConfirmed = false;
     try {
       session = await _driveApi();
       final api = session.api;
+      // Capture exactly the same detached content for the ZIP and its receipt.
+      final snapshot = InventoryBackupArchive.version2(json);
+      final contentHash = await compute(backupContentFingerprint, snapshot);
 
       final archives = InventoryBackupArchive();
       return await archives.withWorkspace((workspace) async {
         // Validate/build the complete archive before replacing anything remote.
-        final file = await archives.create(json, workspace);
+        final file = await archives.create(snapshot, workspace);
         final media = drive.Media(file.openRead(), await file.length(),
             contentType: 'application/zip');
         final meta = drive.File()..name = archiveFileName();
@@ -267,12 +283,19 @@ class DriveBackupService {
           meta.parents = ['appDataFolder'];
           await api.files.create(meta, uploadMedia: media);
         }
+        remoteConfirmed = true;
+        await status.recordSuccess(session!.accountId, contentHash);
         return const BackupResult<void>.success();
       });
     } catch (e) {
+      // The archive workspace may fail to clean up after Drive has already
+      // acknowledged the upload. Do not relabel that cloud success as failure.
+      if (remoteConfirmed) return const BackupResult<void>.success();
+      await status.recordFailure(accountId: session?.accountId);
       return _failure(e, operation: 'upload', authenticating: session == null);
     } finally {
       session?.close();
+      status.setUploading(false);
     }
   }
 
@@ -395,8 +418,9 @@ class DriveBackupService {
 }
 
 class _DriveSession {
-  _DriveSession(this.client) : api = drive.DriveApi(client);
+  _DriveSession(this.client, this.accountId) : api = drive.DriveApi(client);
   final _AuthenticatedClient client;
+  final String accountId;
   final drive.DriveApi api;
   void close() => client.close();
 }

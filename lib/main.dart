@@ -25,11 +25,13 @@ import 'services/inventory_photo_store.dart';
 import 'services/journal_draft_store.dart';
 import 'services/notification_plan.dart';
 import 'services/notification_refresh.dart';
+import 'services/play_review_service.dart';
 import 'services/native_tz.dart';
 import 'theme/app_theme.dart';
 import 'widgets/bottom_nav_bar.dart';
 import 'widgets/app_lock_gate.dart';
 import 'widgets/inventory_recovery_app.dart';
+import 'widgets/play_review_prompt.dart';
 
 final themeNotifier = ValueNotifier<ThemeMode>(ThemeMode.light);
 final _navKey = GlobalKey<NavigatorState>(debugLabel: 'root_nav');
@@ -305,7 +307,8 @@ Future<void> main() async {
     notificationRefresh.requestRefresh();
     // Defer UMP until startup permission dialogs have finished. The controller
     // waits for an uncovered foreground before presenting any native form.
-    unawaited(AdConsentController.instance.initialize());
+    await AdConsentController.instance.initialize();
+    PlayReviewService.instance.finishStartup();
   });
 }
 
@@ -342,6 +345,7 @@ class UnDiaMasApp extends StatelessWidget {
       valueListenable: themeNotifier,
       builder: (_, mode, __) => MaterialApp(
         navigatorKey: _navKey,
+        navigatorObservers: [reviewNavigationObserver],
         title: 'Un Día Más',
         debugShowCheckedModeBanner: false,
         builder: (_, child) => AppLockGate(

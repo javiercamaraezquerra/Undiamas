@@ -5,7 +5,9 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:un_dia_mas/services/drive_backup_service.dart';
+import 'package:un_dia_mas/services/drive_backup_status_store.dart';
 import 'package:un_dia_mas/services/hive_restore_service.dart';
 
 const _signInChannel = MethodChannel('plugins.flutter.io/google_sign_in');
@@ -51,6 +53,7 @@ void main() {
   int networkClientCreations = 0;
 
   setUp(() async {
+    SharedPreferences.setMockInitialValues({});
     authCalls = [];
     pathCalls = [];
     interactiveError = null;
@@ -418,6 +421,66 @@ void main() {
     expect(transport.requests, hasLength(2));
   });
 
+  test('only an acknowledged upload records its date and exact content hash',
+      () async {
+    final store = DriveBackupStatusStore.instance;
+    final before = DateTime.now().toUtc();
+    expect((await store.read()).confirmedAt, isNull);
+    final source = _legacyJson();
+    final result =
+        await withFakeNetwork(() => DriveBackupService.uploadBackup(source));
+    expect(result.ok, isTrue);
+    final receipt = await store.read();
+    expect(receipt.confirmedAt, isNotNull);
+    expect(receipt.confirmedAt!.isBefore(before), isFalse);
+    expect(receipt.lastAttemptFailed, isFalse);
+    final normalized = <String, dynamic>{
+      'version': 2,
+      'udm': source['udm'],
+      'diary': [
+        for (final entry in source['diary'] as List)
+          {...(entry as Map), 'photoId': null},
+      ],
+    };
+    expect(receipt.contentHash, backupContentFingerprint(normalized));
+    transport.failUpload = true;
+    final later =
+        await withFakeNetwork(() => DriveBackupService.uploadBackup(source));
+    expect(later.ok, isFalse);
+    final afterFailure = await store.read();
+    expect(afterFailure.confirmedAt, receipt.confirmedAt);
+    expect(afterFailure.contentHash, receipt.contentHash);
+    expect(afterFailure.lastAttemptFailed, isTrue);
+    expect(store.uploading, isFalse);
+  });
+
+  test('cancelled authentication never records a successful backup', () async {
+    cancelWithNull = true;
+    await withFakeNetwork(() => DriveBackupService.uploadBackup(_legacyJson()));
+    final receipt = await DriveBackupStatusStore.instance.read();
+    expect(receipt.confirmedAt, isNull);
+    expect(receipt.contentHash, isNull);
+    expect(receipt.lastAttemptFailed, isTrue);
+  });
+
+  test('a second overlapping upload cannot replace the first upload', () async {
+    final gate = Completer<void>();
+    transport.uploadGate = gate.future;
+    final first =
+        withFakeNetwork(() => DriveBackupService.uploadBackup(_legacyJson()));
+    await Future<void>.delayed(Duration.zero);
+    final second = await withFakeNetwork(
+        () => DriveBackupService.uploadBackup(_legacyJson()));
+    expect(second.ok, isFalse);
+    expect(second.message, contains('en curso'));
+    expect((await DriveBackupStatusStore.instance.read()).confirmedAt, isNull);
+    gate.complete();
+    expect((await first).ok, isTrue);
+    expect(transport.requests.where((r) => r.method == 'POST'), hasLength(1));
+    expect((await DriveBackupStatusStore.instance.read()).lastAttemptFailed,
+        isFalse);
+  });
+
   test(
       'upload cancellation retains its failure result and performs no HTTP or temp IO',
       () async {
@@ -529,12 +592,14 @@ class _MemoryHttpClient implements HttpClient {
   int? declaredSize;
   bool failDelete = false;
   bool failUpload = false;
+  Future<void>? uploadGate;
   int listStatus = 200;
   int closeCount = 0;
 
   @override
   Future<HttpClientRequest> openUrl(String method, Uri url) async {
-    final request = _MemoryRequest(method, url, () {
+    final request = _MemoryRequest(method, url, () async {
+      if (method == 'POST' || method == 'PATCH') await uploadGate;
       if (method == 'GET') {
         if (url.path != '/drive/v3/files') {
           return _MemoryResponse.binary(downloadBytes ?? Uint8List(0));
@@ -595,7 +660,7 @@ class _MemoryRequest implements HttpClientRequest {
   final String method;
   @override
   final Uri uri;
-  final HttpClientResponse Function() response;
+  final Future<HttpClientResponse> Function() response;
   final body = <int>[];
   @override
   final headers = _MemoryHeaders();

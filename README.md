@@ -1,4 +1,19 @@
-# Un día más — actualización 1.0.8+28
+# Un día más — candidata local 1.0.9+29
+
+Mejoras autorizadas el 01/10/2026: acceso voluntario a Google Play desde
+Perfil, invitación opcional tras tres días distintos de uso, fecha de la
+última copia confirmada en Drive y búsqueda local en el Inventario.
+
+Base: `060b327cf793a24c4b226ff3b4d23ce6fed71f9a` (1.0.8+28).
+Esta candidata se desarrolla en una carpeta independiente y no se ha enviado
+a Google Play. Alcance, criterios y pruebas: [MEJORAS-29.md](docs/MEJORAS-29.md).
+La colección de reflexiones de v28 se conserva sin cambios.
+
+APK de prueba preparado y verificado: `dist/UnDiaMas-1.0.9-29-mejoras.apk`.
+523 pruebas Flutter correctas y 2 omitidas por limitación de Windows; 14 pruebas
+Python correctas. Pendiente la prueba en el móvil y con una cuenta real de Drive.
+
+## Entrega anterior: 1.0.8+28
 
 Reflexiones diarias revisadas para seguir mejor el hilo: escenas más concretas,
 ideas mejor conectadas y preguntas claras. Conservan su tono cercano y su

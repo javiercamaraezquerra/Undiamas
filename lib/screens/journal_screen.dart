@@ -10,6 +10,7 @@ import '../services/drive_backup_service.dart';
 import '../services/encryption_service.dart';
 import '../services/hive_restore_service.dart';
 import '../services/journal_composer_controller.dart';
+import '../services/journal_search_query.dart';
 import '../widgets/inventory_photo_attachment.dart';
 import '../widgets/journal_feedback_card.dart';
 
@@ -25,6 +26,10 @@ class JournalScreen extends StatefulWidget {
 
 class _JournalScreenState extends State<JournalScreen> {
   final TextEditingController _controller = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
+  JournalSearchQuery _searchQuery = JournalSearchQuery('');
+  bool _searchOpen = false;
   late final Future<Box<DiaryEntry>> _futureBox;
   late final JournalAttachmentGateway _attachments;
   JournalComposerController? _composer;
@@ -209,6 +214,8 @@ class _JournalScreenState extends State<JournalScreen> {
     _composer?.removeListener(_draftChanged);
     _composer?.dispose();
     _controller.dispose();
+    _searchController.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -397,33 +404,59 @@ class _JournalScreenState extends State<JournalScreen> {
       Box<DiaryEntry> box, Object key, DiaryEntry entry, bool dark) {
     const moods = ['😢', '😕', '😐', '🙂', '😄'];
     final date =
-        '${entry.createdAt.day}/${entry.createdAt.month}/${entry.createdAt.year} '
-        '${entry.createdAt.hour.toString().padLeft(2, '0')}:'
+        '${entry.createdAt.day}/${entry.createdAt.month}/${entry.createdAt.year}';
+    final time = '${entry.createdAt.hour.toString().padLeft(2, '0')}:'
         '${entry.createdAt.minute.toString().padLeft(2, '0')}';
+    final menu = PopupMenuButton<String>(
+      key: ValueKey('entry-menu-$key'),
+      tooltip: 'Opciones de la entrada',
+      enabled: !(_composer?.busy ?? true) && !_deleting,
+      onSelected: (action) =>
+          _deleteEntry(box, key, entry, photoOnly: action == 'remove-photo'),
+      itemBuilder: (_) => [
+        if (entry.photoId != null && entry.text.trim().isNotEmpty)
+          const PopupMenuItem(
+              value: 'remove-photo', child: Text('Quitar foto')),
+        const PopupMenuItem(value: 'delete', child: Text('Eliminar entrada')),
+      ],
+    );
+    final mood = Text(moods[entry.mood], style: const TextStyle(fontSize: 24));
     return Card(
+      key: ValueKey(key),
       color: dark ? Colors.black.withValues(alpha: .75) : null,
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        ListTile(
-          leading:
-              Text(moods[entry.mood], style: const TextStyle(fontSize: 24)),
-          title: entry.text.isEmpty ? null : Text(entry.text),
-          subtitle: Text(date),
-          trailing: PopupMenuButton<String>(
-            key: ValueKey('entry-menu-$key'),
-            tooltip: 'Opciones de la entrada',
-            enabled: !(_composer?.busy ?? true) && !_deleting,
-            onSelected: (action) => _deleteEntry(box, key, entry,
-                photoOnly: action == 'remove-photo'),
-            itemBuilder: (_) => [
-              if (entry.photoId != null && entry.text.trim().isNotEmpty)
-                const PopupMenuItem(
-                    value: 'remove-photo', child: Text('Quitar foto')),
-              const PopupMenuItem(
-                  value: 'delete', child: Text('Eliminar entrada')),
-            ],
-          ),
-        ),
+        LayoutBuilder(builder: (context, constraints) {
+          final largeText = MediaQuery.textScalerOf(context).scale(1) > 1.3;
+          if (!largeText && constraints.maxWidth >= 328) {
+            return ListTile(
+              leading: mood,
+              title: entry.text.isEmpty ? null : Text(entry.text),
+              subtitle: Text('$date $time'),
+              trailing: menu,
+            );
+          }
+          // Keep the reading width when larger type or a narrow phone would
+          // squeeze the message between its mood and menu into a slim column.
+          final textTheme = Theme.of(context).textTheme;
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(children: [mood, const Spacer(), menu]),
+                if (entry.text.isNotEmpty) ...[
+                  Text(entry.text, style: textTheme.bodyLarge),
+                  const SizedBox(height: 4),
+                ],
+                Wrap(spacing: 8, children: [
+                  Text(date, style: textTheme.bodyMedium),
+                  Text(time, style: textTheme.bodyMedium),
+                ]),
+              ],
+            ),
+          );
+        }),
         if (entry.photoId != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -431,6 +464,81 @@ class _JournalScreenState extends State<JournalScreen> {
                 photoId: entry.photoId!, readPhoto: _attachments.readPhoto),
           ),
       ]),
+    );
+  }
+
+  void _closeSearch() {
+    _searchFocus.unfocus();
+    _searchController.clear();
+    setState(() {
+      _searchOpen = false;
+      _searchQuery = JournalSearchQuery('');
+    });
+  }
+
+  Widget _historySearch(int resultCount) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.surface.withAlpha(235),
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            Expanded(
+                child: Text('Tus entradas', style: theme.textTheme.titleSmall)),
+            IconButton(
+              key: const ValueKey('journal-search-toggle'),
+              tooltip:
+                  _searchOpen ? 'Cerrar búsqueda' : 'Buscar en el Inventario',
+              onPressed: _searchOpen
+                  ? _closeSearch
+                  : () => setState(() => _searchOpen = true),
+              icon: Icon(_searchOpen ? Icons.close : Icons.search),
+            ),
+          ]),
+          if (_searchOpen) ...[
+            TextField(
+              key: const ValueKey('journal-search-field'),
+              controller: _searchController,
+              focusNode: _searchFocus,
+              autofocus: true,
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => _searchFocus.unfocus(),
+              onChanged: (value) =>
+                  setState(() => _searchQuery = JournalSearchQuery(value)),
+              decoration: InputDecoration(
+                labelText: 'Buscar texto',
+                filled: true,
+                fillColor: theme.colorScheme.surface,
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                suffixIcon: _searchController.text.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Limpiar búsqueda',
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = JournalSearchQuery(''));
+                          _searchFocus.requestFocus();
+                        },
+                        icon: const Icon(Icons.clear)),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 8, 4, 12),
+              child: Text(
+                _searchQuery.isEmpty
+                    ? 'Busca una palabra o varias en tus entradas guardadas.'
+                    : '$resultCount ${resultCount == 1 ? 'entrada encontrada' : 'entradas encontradas'}',
+                key: const ValueKey('journal-search-summary'),
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+          ],
+        ]),
+      ),
     );
   }
 
@@ -463,6 +571,11 @@ class _JournalScreenState extends State<JournalScreen> {
             // Their lexical order must never change the diary's chronology.
             keys.sort((a, b) =>
                 current.get(b)!.createdAt.compareTo(current.get(a)!.createdAt));
+            // Filter only the view. Actions keep the original Hive key, never
+            // a result index, and every box event refreshes the current results.
+            final visibleKeys = keys
+                .where((key) => _searchQuery.matches(current.get(key)!.text))
+                .toList();
             return Scaffold(
               extendBodyBehindAppBar: true,
               backgroundColor: Colors.transparent,
@@ -480,19 +593,35 @@ class _JournalScreenState extends State<JournalScreen> {
                     SliverPadding(
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                         sliver: SliverToBoxAdapter(child: _editor(box, dark))),
-                    if (keys.isEmpty)
-                      const SliverToBoxAdapter(
+                    if (keys.isNotEmpty || _searchOpen)
+                      SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                          sliver: SliverToBoxAdapter(
+                              child: _historySearch(visibleKeys.length))),
+                    if (visibleKeys.isEmpty)
+                      SliverToBoxAdapter(
                           child: Padding(
-                              padding: EdgeInsets.symmetric(vertical: 24),
-                              child:
-                                  Center(child: Text('No hay entradas aún.'))))
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 24, vertical: 24),
+                              child: _searchQuery.isEmpty
+                                  ? const Center(
+                                      child: Text('No hay entradas aún.'))
+                                  : const JournalFeedbackCard(
+                                      message:
+                                          'No hay entradas con esas palabras. '
+                                          'Prueba otra búsqueda o límpiala para verlas todas.',
+                                      icon: Icons.search_off,
+                                      compact: true)))
                     else
                       SliverPadding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         sliver: SliverList.builder(
-                            itemCount: keys.length,
-                            itemBuilder: (_, index) => _entryCard(current,
-                                keys[index], current.get(keys[index])!, dark)),
+                            itemCount: visibleKeys.length,
+                            itemBuilder: (_, index) => _entryCard(
+                                current,
+                                visibleKeys[index],
+                                current.get(visibleKeys[index])!,
+                                dark)),
                       ),
                     SliverToBoxAdapter(
                         child: SizedBox(

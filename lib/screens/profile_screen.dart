@@ -19,7 +19,9 @@ import '../services/notification_preference_storage.dart';
 import '../widgets/mood_trend_chart.dart';
 import '../widgets/restore_backup_dialog.dart';
 import '../widgets/app_lock_tile.dart';
+import '../widgets/drive_backup_status_text.dart';
 import '../widgets/profile_privacy_links.dart';
+import '../widgets/profile_review_tile.dart';
 import '../routes/fade_transparent_route.dart';
 import 'tutorial_screen.dart';
 
@@ -720,11 +722,29 @@ class _ProfileScreenState extends State<ProfileScreen>
                           : _toggleAutoBackup,
                       activeColor: Theme.of(context).colorScheme.primary),
                 ),
+                if (_prefsLoaded && Hive.isBoxOpen('udm_secure'))
+                  FutureBuilder<Box<DiaryEntry>>(
+                    future: _diaryBoxFuture,
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData || !snapshot.data!.isOpen) {
+                        return const SizedBox.shrink();
+                      }
+                      return DriveBackupStatusText(
+                        settings: Hive.box<dynamic>('udm_secure'),
+                        diary: snapshot.data!,
+                        foreground: fg,
+                      );
+                    },
+                  ),
                 AppLockTile(foreground: fg),
                 ProfilePrivacyLinks(
                   foreground: fg,
                   policyUri: Uri.parse(
                       'https://sites.google.com/view/undiamas-privacy'),
+                ),
+                ProfileReviewTile(
+                  foreground: fg,
+                  enabled: !_notificationControlsBusy,
                 ),
                 const Divider(),
                 _tile(
