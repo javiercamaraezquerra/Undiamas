@@ -31,8 +31,8 @@ void main() {
             ? '$sdkRoot/bin/cache/artifacts/material_fonts'
             : '../undiamas-runtime/flutter-3.32.8/bin/cache/artifacts/material_fonts');
     for (final font in {
-      'Roboto': '$root/roboto-regular.ttf',
-      'MaterialIcons': '$root/materialicons-regular.otf',
+      'Roboto': '$root/Roboto-Regular.ttf',
+      'MaterialIcons': '$root/MaterialIcons-Regular.otf',
       'Emoji': 'C:/Windows/Fonts/seguiemj.ttf',
     }.entries) {
       final file = File(font.value);

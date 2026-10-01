@@ -59,6 +59,11 @@ no construido. Se exigen las fuentes reales y se mantienen todas las
 comprobaciones de legibilidad. Las 7 pruebas del archivo pasan localmente
 con la resolución de fuentes de CI; la fuente artificial Ahem no se considera
 una comprobación válida de la geometría real.
+El segundo intento (36922469731) localizó además una diferencia de mayúsculas:
+el ZIP oficial de fuentes del SDK usa `Roboto-Regular.ttf` y
+`MaterialIcons-Regular.otf`, aunque Windows admite las rutas en minúsculas.
+Se adoptan los nombres exactos del ZIP para que Linux ejecute la misma prueba;
+no se cambia el producto ni el workflow para resolverlo.
 No se ha realizado una prueba nueva con teléfono o cuenta real de Drive;
 las comprobaciones locales no equivalen a una validación en dispositivo.
 
