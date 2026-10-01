@@ -30,6 +30,8 @@ class _JournalScreenState extends State<JournalScreen> {
   final FocusNode _searchFocus = FocusNode();
   JournalSearchQuery _searchQuery = JournalSearchQuery('');
   bool _searchOpen = false;
+  DateTime? _selectedDay;
+  bool _choosingDay = false;
   late final Future<Box<DiaryEntry>> _futureBox;
   late final JournalAttachmentGateway _attachments;
   JournalComposerController? _composer;
@@ -476,7 +478,80 @@ class _JournalScreenState extends State<JournalScreen> {
     });
   }
 
-  Widget _historySearch(int resultCount) {
+  void _openSearch() {
+    setState(() {
+      _selectedDay = null;
+      _searchOpen = true;
+    });
+  }
+
+  Future<void> _chooseDay(Box<DiaryEntry> box) async {
+    if (_choosingDay) return;
+    FocusScope.of(context).unfocus();
+    final today = DateUtils.dateOnly(DateTime.now());
+    var firstDay = today;
+    var lastDay = today;
+    // Include legacy/restored dates and the active filter, even if the last
+    // matching entry was deleted. Match the calendar date displayed on cards.
+    for (final day in [
+      if (_selectedDay != null) _selectedDay!,
+      ...box.values.map((entry) => DateUtils.dateOnly(entry.createdAt)),
+    ]) {
+      if (day.isBefore(firstDay)) firstDay = day;
+      if (day.isAfter(lastDay)) lastDay = day;
+    }
+    final compactLargeText = MediaQuery.sizeOf(context).width < 360 &&
+        MediaQuery.textScalerOf(context).scale(14) > 14 * 1.3;
+    final pickerMode = ValueNotifier(compactLargeText
+        ? DatePickerEntryMode.input
+        : DatePickerEntryMode.calendar);
+    setState(() => _choosingDay = true);
+    try {
+      final chosen = await showDatePicker(
+        context: context,
+        initialDate: _selectedDay ?? today,
+        firstDate: firstDay,
+        lastDate: lastDay,
+        initialEntryMode: pickerMode.value,
+        onDatePickerModeChange: (mode) => pickerMode.value = mode,
+        builder: compactLargeText
+            ? (context, child) => ValueListenableBuilder<DatePickerEntryMode>(
+                  valueListenable: pickerMode,
+                  child: child,
+                  builder: (context, mode, child) {
+                    final media = MediaQuery.of(context);
+                    // Keep the wrapper stable so switching modes preserves the
+                    // picker state. Only the seven-column grid limits scaling.
+                    return MediaQuery(
+                      data: media.copyWith(
+                        textScaler: mode == DatePickerEntryMode.calendar
+                            ? media.textScaler.clamp(maxScaleFactor: 1.4)
+                            : media.textScaler,
+                      ),
+                      child: child!,
+                    );
+                  },
+                )
+            : null,
+        helpText: 'Ver entradas de un día',
+        fieldLabelText: 'Fecha',
+        cancelText: 'Cancelar',
+        confirmText: 'Ver día',
+      );
+      if (!mounted || chosen == null) return;
+      _searchController.clear();
+      setState(() {
+        _searchOpen = false;
+        _searchQuery = JournalSearchQuery('');
+        _selectedDay = DateUtils.dateOnly(chosen);
+      });
+    } finally {
+      pickerMode.dispose();
+      if (mounted) setState(() => _choosingDay = false);
+    }
+  }
+
+  Widget _historySearch(Box<DiaryEntry> box, int resultCount) {
     final theme = Theme.of(context);
     return Material(
       color: theme.colorScheme.surface.withAlpha(235),
@@ -489,15 +564,44 @@ class _JournalScreenState extends State<JournalScreen> {
             Expanded(
                 child: Text('Tus entradas', style: theme.textTheme.titleSmall)),
             IconButton(
+              key: const ValueKey('journal-date-toggle'),
+              tooltip: 'Buscar por día',
+              isSelected: _selectedDay != null,
+              onPressed: _choosingDay ? null : () => _chooseDay(box),
+              icon: const Icon(Icons.calendar_month_outlined),
+              selectedIcon: const Icon(Icons.calendar_month),
+            ),
+            IconButton(
               key: const ValueKey('journal-search-toggle'),
               tooltip:
                   _searchOpen ? 'Cerrar búsqueda' : 'Buscar en el Inventario',
-              onPressed: _searchOpen
-                  ? _closeSearch
-                  : () => setState(() => _searchOpen = true),
+              onPressed: _searchOpen ? _closeSearch : _openSearch,
               icon: Icon(_searchOpen ? Icons.close : Icons.search),
             ),
           ]),
+          if (_selectedDay != null) ...[
+            Row(key: const ValueKey('journal-date-filter'), children: [
+              Expanded(
+                child: Text(
+                  'Día: ${MaterialLocalizations.of(context).formatShortDate(_selectedDay!)}',
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ),
+              IconButton(
+                key: const ValueKey('journal-date-clear'),
+                tooltip: 'Quitar filtro de fecha',
+                onPressed: () => setState(() => _selectedDay = null),
+                icon: const Icon(Icons.close),
+              ),
+            ]),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
+              child: Text(
+                '$resultCount ${resultCount == 1 ? 'entrada encontrada' : 'entradas encontradas'}',
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+          ],
           if (_searchOpen) ...[
             TextField(
               key: const ValueKey('journal-search-field'),
@@ -573,9 +677,12 @@ class _JournalScreenState extends State<JournalScreen> {
                 current.get(b)!.createdAt.compareTo(current.get(a)!.createdAt));
             // Filter only the view. Actions keep the original Hive key, never
             // a result index, and every box event refreshes the current results.
-            final visibleKeys = keys
-                .where((key) => _searchQuery.matches(current.get(key)!.text))
-                .toList();
+            final visibleKeys = keys.where((key) {
+              final entry = current.get(key)!;
+              return _selectedDay != null
+                  ? DateUtils.isSameDay(entry.createdAt, _selectedDay)
+                  : _searchQuery.matches(entry.text);
+            }).toList();
             return Scaffold(
               extendBodyBehindAppBar: true,
               backgroundColor: Colors.transparent,
@@ -593,25 +700,33 @@ class _JournalScreenState extends State<JournalScreen> {
                     SliverPadding(
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                         sliver: SliverToBoxAdapter(child: _editor(box, dark))),
-                    if (keys.isNotEmpty || _searchOpen)
+                    if (keys.isNotEmpty || _searchOpen || _selectedDay != null)
                       SliverPadding(
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                           sliver: SliverToBoxAdapter(
-                              child: _historySearch(visibleKeys.length))),
+                              child:
+                                  _historySearch(current, visibleKeys.length))),
                     if (visibleKeys.isEmpty)
                       SliverToBoxAdapter(
                           child: Padding(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 24, vertical: 24),
-                              child: _searchQuery.isEmpty
-                                  ? const Center(
-                                      child: Text('No hay entradas aún.'))
-                                  : const JournalFeedbackCard(
+                              child: _selectedDay != null
+                                  ? const JournalFeedbackCard(
                                       message:
-                                          'No hay entradas con esas palabras. '
-                                          'Prueba otra búsqueda o límpiala para verlas todas.',
-                                      icon: Icons.search_off,
-                                      compact: true)))
+                                          'No hay entradas guardadas este día. '
+                                          'Puedes elegir otro día o quitar el filtro de fecha.',
+                                      icon: Icons.calendar_month_outlined,
+                                      compact: true)
+                                  : _searchQuery.isEmpty
+                                      ? const Center(
+                                          child: Text('No hay entradas aún.'))
+                                      : const JournalFeedbackCard(
+                                          message:
+                                              'No hay entradas con esas palabras. '
+                                              'Prueba otra búsqueda o límpiala para verlas todas.',
+                                          icon: Icons.search_off,
+                                          compact: true)))
                     else
                       SliverPadding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),

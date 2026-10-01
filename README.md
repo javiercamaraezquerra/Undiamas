@@ -1,4 +1,15 @@
-# Un día más — candidata local 1.0.9+29
+# Un día más — actualización oficial 1.0.9+30 en preparación
+
+La revisión 30 añade calendario a la izquierda de la lupa del Inventario:
+búsqueda por día o por palabras, de forma excluyente. Cancelar conserva la
+búsqueda anterior. [Alcance y comprobaciones](docs/MEJORAS-30.md).
+
+Javi ha autorizado publicar todas las mejoras de la revisión 29 más el
+calendario 30 en producción. Se conserva el workflow de firma oficial y la
+identidad `com.celsoriaapps.undiamas`. La base oficial 1.0.8 (28) se comprobó
+publicada al 100 % el 01/10/2026. El envío de 30 sigue pendiente de compilación.
+
+## Mejoras de la revisión 29 incluidas
 
 Mejoras autorizadas el 01/10/2026: acceso voluntario a Google Play desde
 Perfil, invitación opcional tras tres días distintos de uso, fecha de la
