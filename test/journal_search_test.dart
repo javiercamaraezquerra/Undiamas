@@ -23,14 +23,23 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() async {
+    final sdkRoot = Platform.environment['FLUTTER_ROOT'];
+    // CI provides FLUTTER_ROOT; the local runtime lives beside this checkout.
+    // Geometry assertions need the same real fonts locally and in CI.
     final root = Platform.environment['UDM_QA_FONT_ROOT'] ??
-        '../undiamas-runtime/flutter-3.32.8/bin/cache/artifacts/material_fonts';
+        (sdkRoot != null && sdkRoot.isNotEmpty
+            ? '$sdkRoot/bin/cache/artifacts/material_fonts'
+            : '../undiamas-runtime/flutter-3.32.8/bin/cache/artifacts/material_fonts');
     for (final font in {
       'Roboto': '$root/roboto-regular.ttf',
       'MaterialIcons': '$root/materialicons-regular.otf',
       'Emoji': 'C:/Windows/Fonts/seguiemj.ttf',
     }.entries) {
       final file = File(font.value);
+      if (font.key != 'Emoji' && !await file.exists()) {
+        throw StateError('Required layout-test font is missing: ${file.path}. '
+            'Set FLUTTER_ROOT or UDM_QA_FONT_ROOT to the Flutter SDK fonts.');
+      }
       if (await file.exists()) {
         final bytes = await file.readAsBytes();
         await (FontLoader(font.key)
@@ -152,6 +161,18 @@ void main() {
   }
 
   Future<void> reveal(WidgetTester tester, Finder finder) async {
+    if (finder.evaluate().isEmpty) {
+      // Slivers outside the viewport/cache may not exist yet, particularly
+      // with the wider fallback font, enlarged text and the keyboard together.
+      final inventoryScroll = find
+          .descendant(
+              of: find.byType(CustomScrollView),
+              matching: find.byType(Scrollable))
+          .first;
+      await tester.scrollUntilVisible(finder, 180,
+          scrollable: inventoryScroll, maxScrolls: 30);
+      await settle(tester);
+    }
     await Scrollable.ensureVisible(tester.element(finder), alignment: .5);
     await settle(tester);
     expect(finder.hitTestable(), findsOneWidget);

@@ -51,6 +51,14 @@ Comprobaciones locales terminadas el 01/10/2026:
   reflexiones conserva SHA-256 `450f6b756d2d80a6375f06f5477bf00104e00642eb892d98aaae2905703bdd2b`.
 
 Pendientes la compilación oficial, verificación de APK/AAB y envío a Play.
+El primer intento de CI (36920925091) se detuvo antes de acceder a las claves:
+533 pruebas correctas y una prueba visual fallida porque el fixture buscaba
+Roboto en una ruta local de Windows. Se corrigió solo el fixture para usar
+`FLUTTER_ROOT` en CI y desplazar la lista antes de buscar un control todavía
+no construido. Se exigen las fuentes reales y se mantienen todas las
+comprobaciones de legibilidad. Las 7 pruebas del archivo pasan localmente
+con la resolución de fuentes de CI; la fuente artificial Ahem no se considera
+una comprobación válida de la geometría real.
 No se ha realizado una prueba nueva con teléfono o cuenta real de Drive;
 las comprobaciones locales no equivalen a una validación en dispositivo.
 
